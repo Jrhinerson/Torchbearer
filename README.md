@@ -6,22 +6,68 @@ The application uses React and TypeScript for its interface, Python and Django f
 
 The first implementation is described in [the foundation plan](docs/plans/001-app-foundation.md). Project planning conventions are recorded in [AGENTS.md](AGENTS.md).
 
-## Development foundation
+## Start locally
 
-Use Python 3.14 and Node.js 24 or newer. Create a virtual environment with `python -m venv .venv`, install `backend/requirements.txt` into it, and run `npm ci --prefix frontend`.
+Prerequisites: Python 3.14, Node.js 24 or newer, and npm. Local verification used Node.js 26. On macOS/Linux, use `python3.14` in place of `python` if necessary.
 
-Apply Django's migrations with `.venv\Scripts\python.exe backend/manage.py migrate` on Windows, or `.venv/bin/python backend/manage.py migrate` on macOS/Linux. The SQLite database defaults to `.local/torchbearer.sqlite3`; set `TORCHBEARER_DATA_DIR` to use a different local directory.
+From the repository root:
 
-Run Django at `127.0.0.1:8000` and Vite with `npm run dev --prefix frontend`. Vite forwards `/api/` to Django. The health endpoint is `/api/v1/health/`.
+```text
+python scripts/setup.py
+python scripts/dev.py
+```
 
-For repeatable setup on Windows, macOS, and Linux, run `python scripts/setup.py` from the repository root. Then use `python scripts/dev.py` to start both services; Ctrl+C stops both. Start only Django with `python scripts/dev.py --backend-only`.
+Open **http://127.0.0.1:5173**. Create a task with the form; it appears in Backlog and remains after a refresh or restart. Ctrl+C stops both services; Ctrl+Break is also supported on Windows. Start only Django with `python scripts/dev.py --backend-only`.
 
-Setup applies migrations without replacing existing data. Startup checks for pending migrations rather than applying them implicitly; rerun setup or apply migrations explicitly when a schema change is introduced. Django runs without its automatic reloader so the launcher can manage its process reliably; restart the launcher after editing Python code. Vite refreshes frontend changes automatically.
+Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations. After a schema change, rerun setup or apply migrations explicitly.
 
-## Verification
+Vite refreshes frontend edits automatically. Restart the launcher after editing Python code; Django's automatic reloader is disabled so the launcher can reliably manage its process tree. These commands start local development services.
 
-Run `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.venv/bin/python -m pytest -q` on macOS/Linux, for API checks. Run `python scripts/check_persistence.py` for a real backend restart check using a temporary SQLite database.
+## Configuration and data
 
-Install the browser once with `npx playwright install chromium` from `frontend/`, then run `npm run test:e2e --prefix frontend`. Browser tests live in `frontend/tests/e2e/` so they resolve the frontend's pinned testing dependencies; they start their own services and a fresh temporary database. Stop the regular development launcher before running them.
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `TORCHBEARER_DATA_DIR` | `.local/` | Local directory containing `torchbearer.sqlite3`. |
+| `DJANGO_DEBUG` | `1` | Django development diagnostics; use `0` to disable. |
+| `DJANGO_SECRET_KEY` | Local development value | Override Django's development signing key. |
 
-Run `python scripts/check_launcher.py` in a terminal to verify that the shared launcher starts and stops both services. This uses Ctrl+Break for its Windows shutdown check and requires a console; the regular launcher also accepts Ctrl+C.
+The backend listens at `127.0.0.1:8000`. Vite forwards `/api/` requests to it; its own port is fixed at `5173`. The service health endpoint is `/api/v1/health/`.
+
+SQLite files, environment files containing secrets, dependency directories, builds, and test artifacts are ignored by Git. Data persists on disk rather than in browser state. To back up the default database, stop the application and copy `.local/torchbearer.sqlite3`.
+
+## Verify changes
+
+Run the portable checks after setup:
+
+```text
+python scripts/check.py
+python scripts/check_persistence.py
+```
+
+The first command runs Python lint/format checks, Django system and migration checks, API tests, frontend format/lint checks, TypeScript checks, and a production build. The second creates a temporary database and verifies that a task survives a real backend process restart.
+
+To run Chromium integration checks on Windows:
+
+```powershell
+Set-Location frontend
+npx.cmd playwright install chromium
+npm.cmd run test:e2e
+```
+
+On macOS/Linux, run `npx playwright install chromium` and `npm run test:e2e` from `frontend/`. Linux may require `npx playwright install --with-deps chromium` to install browser system dependencies.
+
+Stop the regular development launcher before browser checks. They start their own services and a fresh temporary database. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
+
+Run `python scripts/check_launcher.py` from the repository root in a terminal to verify both services start and stop together. Its Windows check requires a console to send Ctrl+Break. The restart and launcher checks also use temporary databases, leaving normal local data alone.
+
+Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.venv/bin/python -m pytest -q` on macOS/Linux. Individual frontend commands include `npm run dev`, `npm run lint`, `npm run typecheck`, `npm run format:check`, and `npm run build` from `frontend/`; use `npm.cmd` in PowerShell if required by its script execution policy.
+
+## Structure and review
+
+- [Architecture](docs/architecture.md): application boundaries, API contract, persistence, and process lifecycle.
+- [Commit plan](docs/plans/001-app-foundation.md): frontend, backend, and database impacts for each planned commit.
+- [PR description draft](docs/pr-001-foundation.md): behavior, scope, and local validation results.
+
+The foundation supports creating and listing backlog tasks. Decision checkpoints, approvals, agent execution, and desktop packaging will be added in subsequent changes.
+
+GitHub Actions is configured for Windows and Linux. All work is committed locally; the user handles pushing and opening a PR after their approval. Hosted CI has not run as part of local implementation.
