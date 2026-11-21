@@ -1,8 +1,27 @@
+import Backlog from '../features/tasks/Backlog'
+
 export default function App() {
   return (
-    <main>
-      <h1>Torchbearer</h1>
-      <p>Own the decisions. Build with intention.</p>
-    </main>
+    <div className="app-shell">
+      <header className="app-header">
+        <a href="/" className="brand" aria-label="Torchbearer home">
+          <span className="brand-mark" aria-hidden="true">
+            t
+          </span>
+          Torchbearer<span className="local-label">LOCAL</span>
+        </a>
+        <span className="device-label">
+          <span className="device-dot" />
+          On this device
+        </span>
+      </header>
+      <main>
+        <Backlog />
+      </main>
+      <footer className="app-footer">
+        <span>Thoughtful work starts with a clear decision.</span>
+        <span>YOUR WORK. YOUR CALL.</span>
+      </footer>
+    </div>
   )
 }
