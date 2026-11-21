@@ -72,12 +72,6 @@ export default function Backlog() {
             Capture the work. Keep ownership of the decisions.
           </p>
         </div>
-        <button
-          className="primary-button heading-action"
-          onClick={() => titleInput.current?.focus()}
-        >
-          <span aria-hidden="true">+</span> New task
-        </button>
       </header>
 
       <div className="board-toolbar">
