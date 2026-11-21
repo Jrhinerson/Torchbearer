@@ -17,3 +17,11 @@ Run Django at `127.0.0.1:8000` and Vite with `npm run dev --prefix frontend`. Vi
 For repeatable setup on Windows, macOS, and Linux, run `python scripts/setup.py` from the repository root. Then use `python scripts/dev.py` to start both services; Ctrl+C stops both. Start only Django with `python scripts/dev.py --backend-only`.
 
 Setup applies migrations without replacing existing data. Startup checks for pending migrations rather than applying them implicitly; rerun setup or apply migrations explicitly when a schema change is introduced. Django runs without its automatic reloader so the launcher can manage its process reliably; restart the launcher after editing Python code. Vite refreshes frontend changes automatically.
+
+## Verification
+
+Run `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.venv/bin/python -m pytest -q` on macOS/Linux, for API checks. Run `python scripts/check_persistence.py` for a real backend restart check using a temporary SQLite database.
+
+Install the browser once with `npx playwright install chromium` from `frontend/`, then run `npm run test:e2e --prefix frontend`. Browser tests live in `frontend/tests/e2e/` so they resolve the frontend's pinned testing dependencies; they start their own services and a fresh temporary database. Stop the regular development launcher before running them.
+
+Run `python scripts/check_launcher.py` in a terminal to verify that the shared launcher starts and stops both services. This uses Ctrl+Break for its Windows shutdown check and requires a console; the regular launcher also accepts Ctrl+C.

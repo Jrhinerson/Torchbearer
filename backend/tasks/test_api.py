@@ -65,3 +65,42 @@ def test_cannot_assign_workflow_status(client):
     assert response.status_code == 400
     assert "status" in response.json()
     assert Task.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_wrong_csrf_token_is_rejected(client):
+    csrf_headers(client)
+    response = client.post(
+        reverse("task-list"),
+        {"title": "Unverified token"},
+        format="json",
+        HTTP_X_CSRFTOKEN="a" * 64,
+    )
+    assert response.status_code == 403
+    assert Task.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_untrusted_origin_is_rejected_even_with_valid_token(client):
+    response = client.post(
+        reverse("task-list"),
+        {"title": "Untrusted origin"},
+        format="json",
+        HTTP_ORIGIN="https://untrusted.example",
+        **csrf_headers(client),
+    )
+    assert response.status_code == 403
+    assert Task.objects.count() == 0
+
+
+@pytest.mark.django_db
+def test_new_client_can_read_saved_task(client):
+    response = client.post(
+        reverse("task-list"),
+        {"title": "Persist across requests"},
+        format="json",
+        **csrf_headers(client),
+    )
+    assert response.status_code == 201
+    separate_client = APIClient()
+    assert separate_client.get(reverse("task-list")).json()[0]["id"] == response.json()["id"]

@@ -74,8 +74,11 @@ def main():
     try:
         for command in commands:
             cwd = ROOT if command == commands[0] else ROOT / "frontend"
-            processes.append(subprocess.Popen(command, cwd=cwd, **options))
-        print("\nTorchbearer: http://127.0.0.1:5173\nPress Ctrl+C to stop.\n", flush=True)
+            processes.append(
+                subprocess.Popen(command, cwd=cwd, stdin=subprocess.DEVNULL, **options)
+            )
+        port = 8000 if args.backend_only else 5173
+        print(f"\nTorchbearer: http://127.0.0.1:{port}\nPress Ctrl+C to stop.\n", flush=True)
         while all(process.poll() is None for process in processes):
             time.sleep(0.2)
         exit_code = next(process.returncode for process in processes if process.poll() is not None)
