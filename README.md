@@ -13,3 +13,7 @@ Use Python 3.14 and Node.js 24 or newer. Create a virtual environment with `pyth
 Apply Django's migrations with `.venv\Scripts\python.exe backend/manage.py migrate` on Windows, or `.venv/bin/python backend/manage.py migrate` on macOS/Linux. The SQLite database defaults to `.local/torchbearer.sqlite3`; set `TORCHBEARER_DATA_DIR` to use a different local directory.
 
 Run Django at `127.0.0.1:8000` and Vite with `npm run dev --prefix frontend`. Vite forwards `/api/` to Django. The health endpoint is `/api/v1/health/`.
+
+For repeatable setup on Windows, macOS, and Linux, run `python scripts/setup.py` from the repository root. Then use `python scripts/dev.py` to start both services; Ctrl+C stops both. Start only Django with `python scripts/dev.py --backend-only`.
+
+Setup applies migrations without replacing existing data. Startup checks for pending migrations rather than applying them implicitly; rerun setup or apply migrations explicitly when a schema change is introduced. Django runs without its automatic reloader so the launcher can manage its process reliably; restart the launcher after editing Python code. Vite refreshes frontend changes automatically.
