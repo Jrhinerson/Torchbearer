@@ -15,3 +15,11 @@ class TaskListCreateView(generics.ListCreateAPIView):
     permission_classes = [AllowAny]
     queryset = Task.objects.all()
     serializer_class = TaskSerializer
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class TaskDeleteView(generics.DestroyAPIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    queryset = Task.objects.all()
+    serializer_class = TaskSerializer

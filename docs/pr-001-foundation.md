@@ -1,13 +1,13 @@
 # Scaffold local app with SQLite-backed backlog
 
-A fresh checkout can be installed and started as a local React/Django application. Developers can create backlog tasks, see useful validation or connection errors, and retrieve their tasks after a page reload or backend restart.
+A fresh checkout can be installed and started as a local React/Django application. Developers can create and delete backlog tasks, see useful validation or connection errors, and retrieve their tasks after a page reload or backend restart. Deletion requires confirmation and preserves the card with a retry action if the request fails.
 
 The backend owns task status and persists records through Django migrations to a configurable, ignored SQLite database. Anonymous local writes use explicit CSRF protection. A shared launcher starts both services and stops their process trees together.
 
 ## Validation performed locally on Windows
 
-- 10 API tests covering creation, listing, validation, backend-owned status, CSRF, and cross-request persistence.
-- 4 Chromium checks covering creation/reload, failed creation, connection recovery, and a narrow-screen layout.
+- 15 API tests covering creation, listing, deletion, validation, backend-owned status, CSRF, and cross-request persistence.
+- 6 Chromium checks covering creation/reload, failed creation, connection recovery, a narrow-screen layout, deletion confirmation/cancellation, persistent deletion, and deletion failure/retry.
 - A real backend restart against an isolated SQLite database retained the saved task.
 - The shared launcher started and stopped both services in a Windows console.
 - Python lint/format, Django system and migration checks, frontend lint/format, TypeScript checks, and the production build passed.
@@ -17,6 +17,6 @@ A GitHub Actions workflow is configured for Windows and Linux. Hosted CI has not
 
 ## Scope
 
-This foundation includes task creation and a backlog view. Agent execution, approval gates, decision history, drag-and-drop transitions, and desktop packaging follow in subsequent changes.
+This foundation includes task creation/deletion and a backlog view. Agent execution, approval gates, decision history, drag-and-drop transitions, and desktop packaging follow in subsequent changes.
 
 See the root README for setup and verification commands, `docs/architecture.md` for boundaries, and `docs/plans/001-app-foundation.md` for the commit plan.

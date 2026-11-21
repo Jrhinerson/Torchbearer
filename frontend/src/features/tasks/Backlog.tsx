@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { createTask, listTasks } from './api'
+import { createTask, deleteTask, listTasks } from './api'
 import type { Task } from './api'
 
 const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -17,6 +17,11 @@ export default function Backlog() {
   const [description, setDescription] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deleteError, setDeleteError] = useState<{
+    id: string
+    message: string
+  } | null>(null)
   const [announcement, setAnnouncement] = useState('')
   const titleInput = useRef<HTMLInputElement>(null)
 
@@ -59,6 +64,30 @@ export default function Backlog() {
       )
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleDelete(task: Task) {
+    if (!window.confirm(`Delete "${task.title}"? This cannot be undone.`))
+      return
+    setDeletingId(task.id)
+    setDeleteError(null)
+    setAnnouncement('')
+    try {
+      await deleteTask(task.id)
+      setTasks((current) => current.filter((item) => item.id !== task.id))
+      setAnnouncement(`Deleted ${task.title} from the backlog.`)
+      titleInput.current?.focus()
+    } catch (error) {
+      setDeleteError({
+        id: task.id,
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not delete your task.',
+      })
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -143,10 +172,21 @@ export default function Backlog() {
                           {dateFormat.format(new Date(task.created_at))}
                         </time>
                       </span>
-                      <span className="card-marker" aria-hidden="true">
-                        ↗
-                      </span>
+                      <button
+                        type="button"
+                        className="delete-task-button"
+                        aria-label={`Delete ${task.title}`}
+                        disabled={deletingId !== null}
+                        onClick={() => handleDelete(task)}
+                      >
+                        {deletingId === task.id ? 'Deleting…' : 'Delete'}
+                      </button>
                     </footer>
+                    {deleteError?.id === task.id && (
+                      <p className="form-error" role="alert">
+                        {deleteError.message}
+                      </p>
+                    )}
                   </article>
                 </li>
               ))}

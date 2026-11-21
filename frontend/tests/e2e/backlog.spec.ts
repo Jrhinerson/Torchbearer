@@ -91,3 +91,71 @@ test('supports task creation on a narrow screen', async ({
     fullPage: true,
   })
 })
+
+test('cancels deletion and then deletes a task persistently', async ({
+  page,
+}) => {
+  const title = `Delete this backlog task ${Date.now()}`
+  await page.goto('/')
+  await expect(
+    page.getByRole('button', { name: 'Add to backlog' }),
+  ).toBeEnabled()
+  await page.getByLabel('Title', { exact: false }).fill(title)
+  await page.getByRole('button', { name: 'Add to backlog' }).click()
+  const card = page.getByRole('article', { name: title, exact: true })
+  await expect(card).toBeVisible()
+
+  page.once('dialog', (dialog) => dialog.dismiss())
+  await card
+    .getByRole('button', { name: `Delete ${title}`, exact: true })
+    .click()
+  await page.reload()
+  await expect(card).toBeVisible()
+
+  page.once('dialog', (dialog) => dialog.accept())
+  await card
+    .getByRole('button', { name: `Delete ${title}`, exact: true })
+    .click()
+  await expect(card).toHaveCount(0)
+  await page.reload()
+  await expect(
+    page.getByRole('button', { name: 'Add to backlog' }),
+  ).toBeEnabled()
+  await expect(card).toHaveCount(0)
+})
+
+test('keeps a task when deletion fails and allows retrying', async ({
+  page,
+}) => {
+  const title = `Retry task deletion ${Date.now()}`
+  await page.goto('/')
+  await expect(
+    page.getByRole('button', { name: 'Add to backlog' }),
+  ).toBeEnabled()
+  await page.getByLabel('Title', { exact: false }).fill(title)
+  await page.getByRole('button', { name: 'Add to backlog' }).click()
+  const card = page.getByRole('article', { name: title, exact: true })
+  await expect(card).toBeVisible()
+  await page.route('**/api/v1/tasks/*/', (route) =>
+    route.fulfill({
+      status: 500,
+      json: { detail: 'Could not delete this task. Please try again.' },
+    }),
+  )
+  page.once('dialog', (dialog) => dialog.accept())
+  await card
+    .getByRole('button', { name: `Delete ${title}`, exact: true })
+    .click()
+  await expect(card.getByRole('alert')).toHaveText(
+    'Could not delete this task. Please try again.',
+  )
+  await expect(
+    card.getByRole('button', { name: `Delete ${title}`, exact: true }),
+  ).toBeEnabled()
+  await page.unroute('**/api/v1/tasks/*/')
+  page.once('dialog', (dialog) => dialog.accept())
+  await card
+    .getByRole('button', { name: `Delete ${title}`, exact: true })
+    .click()
+  await expect(card).toHaveCount(0)
+})

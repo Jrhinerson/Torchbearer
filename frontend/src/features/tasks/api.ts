@@ -24,3 +24,11 @@ export async function createTask(title: string, description: string) {
     }),
   })
 }
+
+export async function deleteTask(id: string) {
+  const { csrfToken } = await requestJson<{ csrfToken: string }>('csrf/')
+  return requestJson<void>(`tasks/${encodeURIComponent(id)}/`, {
+    method: 'DELETE',
+    headers: { 'X-CSRFToken': csrfToken },
+  })
+}

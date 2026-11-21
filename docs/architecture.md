@@ -21,10 +21,13 @@ During development, Vite serves `http://127.0.0.1:5173` and forwards `/api/` to 
 | GET | `/api/v1/csrf/` | CSRF token and corresponding cookie for the local browser. |
 | GET | `/api/v1/tasks/` | All tasks, newest first. |
 | POST | `/api/v1/tasks/` | Validate and create a backlog task. |
+| DELETE | `/api/v1/tasks/<uuid>/` | Permanently delete the selected task; return 204, or 404 if it is missing. |
 
 A task contains a UUID, title, description, status, and creation/update timestamps. Titles are required and limited to 200 characters; descriptions are optional and limited to 10,000 characters. Clients cannot assign status. New tasks begin in `backlog`; this does not authorize an agent to execute them.
 
-Django REST Framework serializers validate request data. Write requests explicitly use Django CSRF protection even for anonymous requests, and the React client retrieves a token before posting. The interface displays validation or connection errors and preserves an unsuccessful draft.
+Django REST Framework serializers validate request data. Write requests explicitly use Django CSRF protection even for anonymous requests, and the React client retrieves a token before creating or deleting a task. The interface displays validation or connection errors and preserves an unsuccessful draft.
+
+Each task has a Delete action with a confirmation prompt. Its card remains visible while the request is pending and is removed only after the backend confirms deletion. A failed deletion leaves the card visible with an error and an enabled retry action. Deletion removes the stored row; no schema migration is needed.
 
 ## Local persistence
 

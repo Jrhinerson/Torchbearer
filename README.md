@@ -17,7 +17,7 @@ python scripts/setup.py
 python scripts/dev.py
 ```
 
-Open **http://127.0.0.1:5173**. Create a task with the form; it appears in Backlog and remains after a refresh or restart. Ctrl+C stops both services; Ctrl+Break is also supported on Windows. Start only Django with `python scripts/dev.py --backend-only`.
+Open **http://127.0.0.1:5173**. Create a task with the form; it appears in Backlog and remains after a refresh or restart. Use a card's Delete button and confirm to permanently remove it. Ctrl+C stops both services; Ctrl+Break is also supported on Windows. Start only Django with `python scripts/dev.py --backend-only`.
 
 Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations. After a schema change, rerun setup or apply migrations explicitly.
 
@@ -68,6 +68,6 @@ Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.v
 - [Commit plan](docs/plans/001-app-foundation.md): frontend, backend, and database impacts for each planned commit.
 - [PR description draft](docs/pr-001-foundation.md): behavior, scope, and local validation results.
 
-The foundation supports creating and listing backlog tasks. Decision checkpoints, approvals, agent execution, and desktop packaging will be added in subsequent changes.
+The foundation supports creating, listing, and deleting backlog tasks. Decision checkpoints, approvals, agent execution, and desktop packaging will be added in subsequent changes.
 
 GitHub Actions is configured for Windows and Linux. All work is committed locally; the user handles pushing and opening a PR after their approval. Hosted CI has not run as part of local implementation.
