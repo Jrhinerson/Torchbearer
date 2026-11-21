@@ -1,4 +1,4 @@
-import Backlog from '../features/tasks/Backlog'
+import Board from '../features/tasks/Board'
 
 export default function App() {
   return (
@@ -16,7 +16,7 @@ export default function App() {
         </span>
       </header>
       <main>
-        <Backlog />
+        <Board />
       </main>
       <footer className="app-footer">
         <span>Thoughtful work starts with a clear decision.</span>

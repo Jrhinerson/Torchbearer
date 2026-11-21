@@ -5,13 +5,15 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 ## Boundaries
 
 - `frontend/src/app/`: application shell and shared styling.
-- `frontend/src/features/tasks/`: backlog presentation and task-specific API operations.
+- `frontend/src/features/tasks/`: five-column board, task-creation popup, and task-specific API operations.
 - `frontend/src/lib/api.ts`: same-origin requests and useful HTTP/connection errors.
 - `backend/config/`: local settings, routing, health, and CSRF bootstrap.
 - `backend/tasks/`: task models, serializers, views, migrations, and API tests.
 - `scripts/`: setup, process management, verification, and isolated test services.
 
 During development, Vite serves `http://127.0.0.1:5173` and forwards `/api/` to Django at `127.0.0.1:8000`. Both bind to loopback. Frontend code uses relative API URLs so a later desktop wrapper can reuse the interface and local service boundary.
+
+The board presents Backlog, Plan, Integrate, Test, and Final Approval in that order. The New Task button lives inside Backlog and opens a native modal dialog with focus management, Cancel/Escape dismissal, draft retention, and validation feedback. A successful save closes the dialog and adds the task to Backlog. The board scrolls horizontally on narrow screens; the popup stays within the viewport. The later-stage columns establish the layout while transitions and approval rules remain future work.
 
 ## API contract
 

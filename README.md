@@ -17,7 +17,7 @@ python scripts/setup.py
 python scripts/dev.py
 ```
 
-Open **http://127.0.0.1:5173**. Create a task with the form; it appears in Backlog and remains after a refresh or restart. Use a card's Delete button and confirm to permanently remove it. Ctrl+C stops both services; Ctrl+Break is also supported on Windows. Start only Django with `python scripts/dev.py --backend-only`.
+Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Test, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use a card's Delete button and confirm to permanently remove it. Ctrl+C stops both services; Ctrl+Break is also supported on Windows. Start only Django with `python scripts/dev.py --backend-only`.
 
 Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations. After a schema change, rerun setup or apply migrations explicitly.
 
