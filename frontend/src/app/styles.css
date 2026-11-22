@@ -1,44 +1,8 @@
 @import './styles/fonts.css';
 @import './styles/tokens.css';
 
-:root {
-  font-family: var(--font-sans);
-  font-size: 100%;
-  color: #202b26;
-  background: #f7f8f5;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  font-weight: var(--weight-regular);
-}
-* {
-  box-sizing: border-box;
-}
-body {
-  margin: 0;
-  min-width: 320px;
-  font-size: var(--text-body);
-  line-height: var(--leading-body);
-}
-button,
-input,
-textarea {
-  font: inherit;
-}
-button {
-  cursor: pointer;
-}
-button:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-textarea:focus-visible {
-  outline: 3px solid #a35d25;
-  outline-offset: 4px;
-}
+@import './styles/base.css';
+
 .app-shell {
   max-width: 1440px;
   margin: 0 auto;
@@ -49,7 +13,7 @@ textarea:focus-visible {
   align-items: center;
   gap: 16px;
   padding: 25px 32px;
-  border-bottom: 1px solid #dfe4dc;
+  border-bottom: 1px solid var(--color-border);
 }
 .brand {
   display: flex;
@@ -66,27 +30,27 @@ textarea:focus-visible {
   place-items: center;
   width: 31px;
   height: 34px;
-  color: #fff7e9;
-  background: #b05c2e;
+  color: var(--color-primary-text);
+  background: var(--color-primary);
   border-radius: 9px 9px 4px 9px;
   font-family: var(--font-sans);
   font-size: var(--text-title);
 }
 .local-label {
   margin-left: 5px;
-  border: 1px solid #d7ded2;
+  border: 1px solid var(--color-border);
   border-radius: 5px;
   padding: 3px 6px;
   font-size: var(--text-meta);
   letter-spacing: 0.04em;
-  color: #657262;
+  color: var(--color-text-muted);
 }
 .device-label {
   display: flex;
   align-items: center;
   gap: 7px;
   font-size: var(--text-meta);
-  color: #657262;
+  color: var(--color-text-muted);
 }
 .device-dot,
 .status-dot {
@@ -94,7 +58,7 @@ textarea:focus-visible {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #718568;
+  background: var(--color-success);
   flex-shrink: 0;
 }
 main {
@@ -105,17 +69,17 @@ main {
   font-size: var(--text-meta);
   font-weight: var(--weight-semibold);
   letter-spacing: 0.04em;
-  color: #667462;
+  color: var(--color-text-muted);
 }
 .primary-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 16px;
-  border: 1px solid #254c35;
+  border: 1px solid var(--color-primary);
   border-radius: 7px;
-  background: #254c35;
-  color: white;
+  background: var(--color-primary);
+  color: var(--color-primary-text);
   padding: 12px 18px;
   font-size: var(--text-body);
   font-weight: var(--weight-medium);
@@ -123,7 +87,7 @@ main {
   transition: background 0.15s ease;
 }
 .primary-button:hover:not(:disabled) {
-  background: #193c28;
+  background: var(--color-primary-hover);
 }
 .board-scroll {
   overflow-x: auto;
@@ -137,8 +101,8 @@ main {
   align-items: stretch;
 }
 .workflow-column {
-  background: #edf0e9;
-  border: 1px solid #e1e6dc;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 10px;
   padding: 16px;
   min-width: 0;
@@ -159,7 +123,7 @@ main {
   font-weight: var(--weight-semibold);
 }
 .status-dot {
-  background: #899480;
+  background: var(--color-text-muted);
 }
 .task-count {
   display: grid;
@@ -167,16 +131,16 @@ main {
   min-width: 23px;
   height: 22px;
   padding: 0 5px;
-  border: 1px solid #d6dece;
+  border: 1px solid var(--color-border);
   border-radius: 5px;
-  color: #626e5d;
+  color: var(--color-text-muted);
   font-size: var(--text-meta);
 }
 .column-empty-state {
   margin: 24px 0;
   font-size: var(--text-meta);
   line-height: 1.7;
-  color: #6b7765;
+  color: var(--color-text-muted);
   text-align: center;
 }
 .new-task-button {
@@ -187,14 +151,14 @@ main {
   width: 100%;
   min-height: 44px;
   margin-bottom: 14px;
-  border: 1px dashed #bbc9b2;
+  border: 1px dashed var(--color-input-border);
   border-radius: 6px;
-  background: #f8faf5;
-  color: #365436;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
   font-size: var(--text-meta);
 }
 .new-task-button:hover:not(:disabled) {
-  background: #fff;
+  background: var(--color-surface-hover);
 }
 .task-list {
   list-style: none;
@@ -205,10 +169,10 @@ main {
 }
 .task-card {
   padding: 14px;
-  border: 1px solid #dbe2d5;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 2px 3px #20302104;
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-card);
   overflow-wrap: anywhere;
 }
 .task-card h3 {
@@ -221,7 +185,7 @@ main {
   margin: 8px 0 18px;
   font-size: var(--text-body);
   line-height: 1.7;
-  color: #687262;
+  color: var(--color-text-muted);
   white-space: pre-wrap;
 }
 .task-footer {
@@ -230,35 +194,35 @@ main {
   align-items: center;
   margin-top: 20px;
   padding-top: 12px;
-  border-top: 1px solid #edf0e9;
+  border-top: 1px solid var(--color-surface);
   font-size: var(--text-meta);
-  color: #737e6d;
+  color: var(--color-text-muted);
 }
 .delete-task-button {
   border: none;
   border-radius: 5px;
   background: transparent;
-  color: #953f2f;
+  color: var(--color-error);
   padding: 8px 10px;
   min-height: 44px;
   font-size: var(--text-meta);
 }
 .delete-task-button:hover:not(:disabled) {
-  background: #fbefeb;
+  background: var(--color-error-surface);
 }
 .task-dialog {
   width: min(480px, calc(100vw - 32px));
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
-  color: #202b26;
-  background: #fff;
+  color: var(--color-text);
+  background: var(--color-surface-overlay);
   padding: 28px;
-  border: 1px solid #dfe4da;
+  border: 1px solid var(--color-border);
   border-radius: 12px;
-  box-shadow: 0 20px 80px #17251a30;
+  box-shadow: var(--shadow-dialog);
 }
 .task-dialog::backdrop {
-  background: #18241f70;
+  background: var(--color-backdrop);
 }
 .dialog-heading {
   display: flex;
@@ -275,11 +239,11 @@ main {
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #657262;
+  color: var(--color-text-muted);
   font-size: var(--text-icon);
 }
 .close-dialog-button:hover:not(:disabled) {
-  background: #f0f3eb;
+  background: var(--color-surface-hover);
 }
 .task-dialog .eyebrow {
   font-size: var(--text-meta);
@@ -294,7 +258,7 @@ main {
 .composer-description {
   font-size: var(--text-meta);
   line-height: 1.7;
-  color: #6c7766;
+  color: var(--color-text-muted);
   margin: 9px 0 24px;
 }
 form {
@@ -307,11 +271,11 @@ label {
   font-weight: var(--weight-medium);
 }
 .required-mark {
-  color: #a35d25;
+  color: var(--color-warning);
 }
 .optional {
   float: right;
-  color: #7b8576;
+  color: var(--color-text-muted);
   font-size: var(--text-meta);
   font-weight: var(--weight-regular);
 }
@@ -319,9 +283,9 @@ input,
 textarea {
   width: 100%;
   padding: 11px 12px;
-  color: #263325;
-  background: #fcfdfb;
-  border: 1px solid #dce3d5;
+  color: var(--color-text);
+  background: var(--color-input);
+  border: 1px solid var(--color-input-border);
   border-radius: 6px;
   font-size: var(--text-body);
   line-height: 1.6;
@@ -335,7 +299,7 @@ textarea {
 }
 input::placeholder,
 textarea::placeholder {
-  color: #7c8676;
+  color: var(--color-text-muted);
 }
 .dialog-actions {
   display: flex;
@@ -346,28 +310,28 @@ textarea::placeholder {
 .secondary-button {
   min-height: 44px;
   padding: 10px 16px;
-  border: 1px solid #dce3d5;
+  border: 1px solid var(--color-input-border);
   border-radius: 7px;
-  background: #fff;
-  color: #3f513c;
+  background: var(--color-surface-raised);
+  color: var(--color-text);
   font-size: var(--text-body);
 }
 .secondary-button:hover:not(:disabled) {
-  background: #f7f8f5;
+  background: var(--color-canvas);
 }
 .composer-footnote {
   margin: 19px 0 0;
   padding-top: 16px;
-  border-top: 1px solid #edf0e9;
+  border-top: 1px solid var(--color-surface);
   font-size: var(--text-meta);
   line-height: 1.8;
-  color: #77816f;
+  color: var(--color-text-muted);
 }
 .form-error,
 .error-state {
   font-size: var(--text-body);
   line-height: 1.6;
-  color: #953f2f;
+  color: var(--color-error);
 }
 .text-button {
   padding: 8px 0;
@@ -379,17 +343,17 @@ textarea::placeholder {
 .state-message {
   padding: 40px 0;
   text-align: center;
-  color: #697469;
+  color: var(--color-text-muted);
   font-size: var(--text-body);
 }
 .app-footer {
   margin: 0 32px;
   padding: 20px 0;
-  border-top: 1px solid #dfe4dc;
+  border-top: 1px solid var(--color-border);
   display: flex;
   justify-content: space-between;
   gap: 16px;
-  color: #788271;
+  color: var(--color-text-muted);
   font-size: var(--text-meta);
   line-height: 1.6;
 }
