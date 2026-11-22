@@ -4,12 +4,14 @@ from django.db import IntegrityError, transaction
 from .conftest import csrf
 from .models import AgentRun, ColumnAssignment, Decision, Task
 from .workflow import Conflict, act, cancel
+from .workspaces import ensure_workspace, fingerprint
 
 pytestmark = pytest.mark.django_db
 
 
 @pytest.fixture
-def task(repository, monkeypatch):
+def task(repository, monkeypatch, settings, tmp_path):
+    settings.DATA_DIR = tmp_path / "data"
     monkeypatch.setattr("tasks.workflow.resolve_command", lambda agent: ["test-agent"])
     for stage in ColumnAssignment.Stage:
         ColumnAssignment.objects.create(stage=stage, agent="codex")
@@ -17,10 +19,12 @@ def task(repository, monkeypatch):
 
 
 def succeed(task):
+    task.refresh_from_db()
+    ensure_workspace(task)
     run = task.runs.first()
     run.state = "succeeded"
     run.result = {"outcome": "complete", "summary": "Done"}
-    run.review_fingerprint = "a" * 64
+    run.review_fingerprint = fingerprint(task)
     run.save()
     return run
 

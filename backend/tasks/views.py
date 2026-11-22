@@ -18,6 +18,7 @@ from .serializers import (
     TaskSerializer,
 )
 from .workflow import Conflict, act, cancel
+from .workspaces import changes
 
 
 @method_decorator(csrf_protect, name="dispatch")
@@ -124,3 +125,12 @@ class TaskRunsView(LocalView):
 class CancelRunView(LocalView):
     def post(self, request, pk, run_id):
         return Response(TaskSerializer(cancel(pk, run_id)).data)
+
+
+class WorkspaceView(LocalView):
+    def get(self, request, pk):
+        task = get_object_or_404(Task, pk=pk)
+        try:
+            return Response(changes(task))
+        except (OSError, ValueError) as error:
+            raise Conflict(str(error)) from error

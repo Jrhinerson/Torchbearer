@@ -67,14 +67,36 @@ class TaskSerializer(serializers.ModelSerializer):
             "latest_run",
             "created_at",
             "updated_at",
+            "workspace_path",
+            "branch",
+            "base_commit",
         ]
-        read_only_fields = ["id", "status", "revision", "completed_at", "created_at", "updated_at"]
+        read_only_fields = [
+            "id",
+            "status",
+            "revision",
+            "completed_at",
+            "created_at",
+            "updated_at",
+            "workspace_path",
+            "branch",
+            "base_commit",
+        ]
 
     def to_internal_value(self, data):
         # Reject workflow assignments rather than silently accepting an ignored field.
         if (
             isinstance(data, dict)
-            and {"status", "revision", "completed_at", "latest_run"} & data.keys()
+            and {
+                "status",
+                "revision",
+                "completed_at",
+                "latest_run",
+                "workspace_path",
+                "branch",
+                "base_commit",
+            }
+            & data.keys()
         ):
             raise serializers.ValidationError(
                 {"status": ["Task status is managed by Torchbearer."]}

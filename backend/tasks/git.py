@@ -3,14 +3,12 @@ import subprocess
 from pathlib import Path
 
 
-def git(path, *args, timeout=30):
+def git_bytes(path, *args, timeout=30):
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
     try:
         result = subprocess.run(
             ["git", "-C", str(path), *args],
             capture_output=True,
-            encoding="utf-8",
-            errors="replace",
             timeout=timeout,
             env=env,
             check=False,
@@ -18,8 +16,15 @@ def git(path, *args, timeout=30):
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError("Git could not complete the operation.") from error
     if result.returncode:
-        raise ValueError(result.stderr.strip()[:1000] or "Git operation failed.")
-    return result.stdout.strip()
+        raise ValueError(
+            result.stderr.decode("utf-8", errors="replace").strip()[:1000]
+            or "Git operation failed."
+        )
+    return result.stdout
+
+
+def git(path, *args, timeout=30):
+    return git_bytes(path, *args, timeout=timeout).decode("utf-8", errors="replace").strip()
 
 
 def repository_path(value):

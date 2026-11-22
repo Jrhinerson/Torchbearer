@@ -46,6 +46,9 @@ class Task(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     revision = models.PositiveIntegerField(default=0)
     completed_at = models.DateTimeField(null=True, blank=True)
+    workspace_path = models.CharField(max_length=2000, blank=True)
+    branch = models.CharField(max_length=100, blank=True)
+    base_commit = models.CharField(max_length=64, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
@@ -75,6 +78,7 @@ class AgentRun(models.Model):
     log = models.TextField(blank=True)
     error = models.TextField(blank=True)
     review_fingerprint = models.CharField(max_length=64, blank=True)
+    input_fingerprint = models.CharField(max_length=64, blank=True)
     cancel_requested = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)

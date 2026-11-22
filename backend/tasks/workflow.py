@@ -8,6 +8,7 @@ from rest_framework.exceptions import APIException
 
 from .cli import resolve_command
 from .models import AgentRun, ColumnAssignment, Decision, Task
+from .workspaces import fingerprint as workspace_fingerprint
 
 ACTIVE = [AgentRun.State.QUEUED, AgentRun.State.RUNNING]
 NEXT = {"plan": "integrate", "integrate": "test", "test": "final_approval"}
@@ -26,6 +27,14 @@ def validate_review(task, run, fingerprint):
         or fingerprint != run.review_fingerprint
     ):
         raise Conflict("Review the latest successful result before approving.")
+    try:
+        current = workspace_fingerprint(task)
+    except (OSError, ValueError) as error:
+        raise Conflict(str(error)) from error
+    if current != run.review_fingerprint:
+        raise Conflict(
+            "Workspace changes made this review stale. Request a new run before approving."
+        )
 
 
 def assigned_agent(stage):
@@ -104,12 +113,17 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
     task.status = target
     task.save(update_fields=["status", "completed_at", "updated_at"])
     if agent:
+        try:
+            baseline = workspace_fingerprint(task) if task.workspace_path else ""
+        except (OSError, ValueError) as error:
+            raise Conflict(str(error)) from error
         AgentRun.objects.create(
             task=task,
             sequence=(run.sequence + 1 if run else 1),
             stage=target,
             agent=agent,
             feedback=feedback,
+            input_fingerprint=baseline,
         )
     return task
 
