@@ -17,9 +17,9 @@ python scripts/setup.py
 python scripts/dev.py
 ```
 
-Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Test, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use a card's Delete button and confirm to permanently remove it. Ctrl+C stops both services; Ctrl+Break is also supported on Windows. Start only Django with `python scripts/dev.py --backend-only`.
+Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Test, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use a backlog card's Delete button and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
 
-Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations. After a schema change, rerun setup or apply migrations explicitly.
+Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations, then starts Django, the agent worker, and Vite together. After a schema change, rerun setup or apply migrations explicitly. Use `--backend-port` and `--frontend-port` with the launcher when the default ports are occupied; separate app instances also need separate data directories.
 
 Vite refreshes frontend edits automatically. Restart the launcher after editing Python code; Django's automatic reloader is disabled so the launcher can reliably manage its process tree. These commands start local development services.
 
@@ -30,10 +30,33 @@ Vite refreshes frontend edits automatically. Restart the launcher after editing 
 | `TORCHBEARER_DATA_DIR` | `.local/` | Local directory containing `torchbearer.sqlite3`. |
 | `DJANGO_DEBUG` | `1` | Django development diagnostics; use `0` to disable. |
 | `DJANGO_SECRET_KEY` | Local development value | Override Django's development signing key. |
+| `TORCHBEARER_RUN_TIMEOUT` | `1800` | Maximum CLI execution time in seconds for a single run. |
 
 The backend listens at `127.0.0.1:8000`. Vite forwards `/api/` requests to it; its own port is fixed at `5173`. The service health endpoint is `/api/v1/health/`.
 
-SQLite files, environment files containing secrets, dependency directories, builds, and test artifacts are ignored by Git. Data persists on disk rather than in browser state. To back up the default database, stop the application and copy `.local/torchbearer.sqlite3`.
+SQLite files, environment files containing secrets, dependency directories, builds, and test artifacts are ignored by Git. Data persists on disk rather than in browser state. To back up backlog records and routing configuration, stop the application and copy `.local/torchbearer.sqlite3`. Started tasks also need their worktrees and the original repositories' Git metadata; back up those together with the database to preserve executable workspaces.
+
+## Agent routing
+
+Plan, Integrate, and Test each have a small agent selector at the top of the column. Choose Codex CLI, Claude Code CLI, Pi, or Unassigned. Assignments persist across restarts and apply to future runs; changing a selector does not replace an agent already queued or running. Backlog and Final Approval remain human-only.
+
+Install and authenticate each CLI you want to use, and configure its default model in that CLI. Torchbearer uses the CLI's existing authentication and model configuration. The dropdown identifies missing installations; outdated versions, missing authentication, and permission denials appear as run errors. Current adapter version requirements are Codex CLI 0.162.0+, Claude Code 2.1.259+, and Pi 0.74.0+.
+
+1. Create a task and choose its local Git repository, using **Add repository** to register a repository root. Existing backlog tasks can choose their repository directly on the card.
+2. Choose the Plan agent and click **Start planning**. Torchbearer creates a branch and worktree from that repository's committed HEAD; uncommitted changes and ignored dependencies in the original checkout are not copied.
+3. Open **Review step** to read the result, execution log, and code changes. **Approve plan & start Integrate** queues the implementation agent; approval of Integrate queues Test. Each stage reuses the task's worktree and receives the approved plan, prior results, and human feedback, even when the agent changes.
+4. Test runs validation and reports results. Failures stay in Test until you retry or provide instructions and choose **Send back to Integrate**. Test never automatically advances or starts repair work.
+5. Review the passing Test result, continue to Final Approval, and choose **Give final approval**. The task remains in the final column with an Approved badge and its history. Merging and worktree cleanup remain manual.
+
+**Request revision** reruns the current stage with your instructions. Integrate can also return to Plan; Test and Final Approval can return to Integrate. **Cancel run** stops the running process tree or removes a queued attempt from execution. Started tasks retain their history and workspace; only backlog tasks can be deleted.
+
+The worker processes one run at a time. Queued runs survive shutdown, while runs interrupted by a worker crash require explicit retry after reviewing the workspace. An offline notice appears when no worker is available; start with `python scripts/dev.py`, or run `.venv/Scripts/python.exe backend/manage.py runagentworker` separately on Windows (`.venv/bin/python` on macOS/Linux). Running Django alone does not start the worker.
+
+Approvals are bound to both the latest result and the code snapshot. Edits after review invalidate approval, and edits after queuing block the next run. Plan and Test results are blocked if tracked or untracked non-ignored workspace files change; ignored test caches can be generated. CLI tool permissions still apply, and CLIs run as the current OS user. Worktrees containing submodules or nested repositories are not supported yet. Required dependencies must be prepared in the task worktree before validation can succeed.
+
+Logs retain the last 128,000 characters per run. JSONL records are limited to 2 MiB and total CLI output to 20 MiB; exceeding these limits fails the run. The review dialog previews up to 64,000 characters of code changes and identifies truncated diffs so the full workspace can be reviewed separately.
+
+Adapters use [Codex non-interactive JSON output](https://learn.chatgpt.com/docs/non-interactive-mode), [Claude Code's structured headless interface](https://code.claude.com/docs/en/headless), and [Pi's JSON mode](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md). Windows npm wrappers are resolved to their underlying Node entry points, keeping prompts off command shells. For nonstandard installations, `TORCHBEARER_CODEX_COMMAND`, `TORCHBEARER_CLAUDE_COMMAND`, and `TORCHBEARER_PI_COMMAND` accept JSON arrays containing an executable and fixed arguments; shell-script overrides are rejected. Set these only in the launcher's environment, never through the task UI.
 
 ## Verify changes
 
@@ -56,9 +79,9 @@ npm.cmd run test:e2e
 
 On macOS/Linux, run `npx playwright install chromium` and `npm run test:e2e` from `frontend/`. Linux may require `npx playwright install --with-deps chromium` to install browser system dependencies.
 
-Stop the regular development launcher before browser checks. They start their own services and a fresh temporary database. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
+Browser checks use separate ports (frontend `15173`, backend `18000`), their own services, a fresh temporary database and repository, and deterministic fake agent CLIs. They never invoke authenticated models or use the developer's normal data. Override test ports with `TORCHBEARER_TEST_FRONTEND_PORT` and `TORCHBEARER_TEST_BACKEND_PORT`. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
 
-Run `python scripts/check_launcher.py` from the repository root in a terminal to verify both services start and stop together. Its Windows check requires a console to send Ctrl+Break. The restart and launcher checks also use temporary databases, leaving normal local data alone.
+Run `python scripts/check_launcher.py` from the repository root in a terminal to verify the backend, frontend, and worker start and stop together. Its Windows check requires a console to send Ctrl+Break. The restart and launcher checks also use temporary databases and available ports, leaving normal local data alone. Backend tests include killing a real worker process to verify child cleanup, queue persistence, and explicit retry of interrupted work.
 
 Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.venv/bin/python -m pytest -q` on macOS/Linux. Individual frontend commands include `npm run dev`, `npm run lint`, `npm run typecheck`, `npm run format:check`, and `npm run build` from `frontend/`; use `npm.cmd` in PowerShell if required by its script execution policy.
 
@@ -66,8 +89,9 @@ Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.v
 
 - [Architecture](docs/architecture.md): application boundaries, API contract, persistence, and process lifecycle.
 - [Commit plan](docs/plans/001-app-foundation.md): frontend, backend, and database impacts for each planned commit.
+- [Agent routing plan](docs/plans/004-agentic-routing.md): agreed stage behavior, commit sequence, and verification scope.
 - [PR description draft](docs/pr-001-foundation.md): behavior, scope, and local validation results.
 
-The foundation supports creating, listing, and deleting backlog tasks. Decision checkpoints, approvals, agent execution, and desktop packaging will be added in subsequent changes.
+The application supports backlog tasks, per-column agent routing, isolated task worktrees, reviewed stage transitions, execution history, and final human approval. Desktop packaging, automatic merging, custom stage prompts, model selectors, and parallel execution remain future work.
 
 GitHub Actions is configured for Windows and Linux. All work is committed locally; the user handles pushing and opening a PR after their approval. Hosted CI has not run as part of local implementation.
