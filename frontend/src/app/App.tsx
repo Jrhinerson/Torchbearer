@@ -8,7 +8,7 @@ export default function App() {
           <span className="brand-mark" aria-hidden="true">
             t
           </span>
-          Torchbearer<span className="local-label">LOCAL</span>
+          Torchbearer<span className="badge local-label">LOCAL</span>
         </a>
         <span className="device-label">
           <span className="device-dot" />

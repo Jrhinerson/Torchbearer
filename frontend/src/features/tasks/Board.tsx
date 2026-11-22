@@ -125,6 +125,7 @@ export default function Board() {
             return (
               <section
                 className="workflow-column"
+                data-stage={column.id}
                 key={column.id}
                 aria-labelledby={`${column.id}-heading`}
                 aria-busy={isBacklog && loading}
@@ -135,7 +136,7 @@ export default function Board() {
                     {column.title}
                   </h2>
                   <span
-                    className="task-count"
+                    className="badge task-count"
                     aria-label={`${columnTasks.length} ${column.title} tasks`}
                   >
                     {columnTasks.length}
@@ -144,7 +145,8 @@ export default function Board() {
                 {isBacklog && (
                   <button
                     type="button"
-                    className="new-task-button"
+                    className="button button-secondary new-task-button"
+                    aria-busy={loading}
                     ref={newTaskButton}
                     onClick={openComposer}
                     disabled={loading || Boolean(loadError)}
@@ -157,10 +159,13 @@ export default function Board() {
                     Loading your tasks…
                   </p>
                 ) : isBacklog && loadError ? (
-                  <div className="error-state" role="alert">
+                  <div
+                    className="feedback feedback-error error-state"
+                    role="alert"
+                  >
                     <p>{loadError}</p>
                     <button
-                      className="text-button"
+                      className="button button-link"
                       onClick={() => {
                         setLoading(true)
                         setLoadError('')
@@ -176,7 +181,10 @@ export default function Board() {
                   <ul className="task-list">
                     {columnTasks.map((task) => (
                       <li key={task.id}>
-                        <article className="task-card" aria-label={task.title}>
+                        <article
+                          className="surface surface-raised task-card"
+                          aria-label={task.title}
+                        >
                           <h3>{task.title}</h3>
                           {task.description && (
                             <p className="task-description">
@@ -192,7 +200,8 @@ export default function Board() {
                             </span>
                             <button
                               type="button"
-                              className="delete-task-button"
+                              className="button button-destructive delete-task-button"
+                              aria-busy={deletingId === task.id}
                               aria-label={`Delete ${task.title}`}
                               disabled={deletingId !== null}
                               onClick={() => handleDelete(task)}
@@ -201,7 +210,10 @@ export default function Board() {
                             </button>
                           </footer>
                           {deleteError?.id === task.id && (
-                            <p className="form-error" role="alert">
+                            <p
+                              className="feedback feedback-error form-error"
+                              role="alert"
+                            >
                               {deleteError.message}
                             </p>
                           )}
@@ -218,7 +230,7 @@ export default function Board() {
 
       <dialog
         ref={composer}
-        className="task-dialog"
+        className="surface surface-overlay task-dialog"
         aria-labelledby="new-task-heading"
         aria-describedby="new-task-description"
         onCancel={(event) => {
@@ -233,7 +245,7 @@ export default function Board() {
           </div>
           <button
             type="button"
-            className="close-dialog-button"
+            className="button button-quiet button-icon close-dialog-button"
             aria-label="Close new task"
             onClick={() => composer.current?.close()}
             disabled={saving}
@@ -244,12 +256,17 @@ export default function Board() {
         <p id="new-task-description" className="composer-description">
           Give the work a name and a little context.
         </p>
-        <form onSubmit={handleSubmit} aria-labelledby="new-task-heading">
-          <label htmlFor="task-title">
+        <form
+          className="task-form"
+          onSubmit={handleSubmit}
+          aria-labelledby="new-task-heading"
+        >
+          <label className="field-label" htmlFor="task-title">
             Title <span className="required-mark">*</span>
           </label>
           <input
             id="task-title"
+            className="field"
             ref={titleInput}
             value={title}
             onChange={(event) => setTitle(event.target.value)}
@@ -258,11 +275,12 @@ export default function Board() {
             required
             disabled={saving}
           />
-          <label htmlFor="task-description">
+          <label className="field-label" htmlFor="task-description">
             Description <span className="optional">optional</span>
           </label>
           <textarea
             id="task-description"
+            className="field"
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             placeholder="Describe the goal, context, or a useful starting point."
@@ -271,20 +289,25 @@ export default function Board() {
             disabled={saving}
           />
           {saveError && (
-            <p className="form-error" role="alert">
+            <p className="feedback feedback-error form-error" role="alert">
               {saveError}
             </p>
           )}
           <div className="dialog-actions">
             <button
               type="button"
-              className="secondary-button"
+              className="button button-secondary"
               onClick={() => composer.current?.close()}
               disabled={saving}
             >
               Cancel
             </button>
-            <button type="submit" className="primary-button" disabled={saving}>
+            <button
+              type="submit"
+              className="button button-primary"
+              aria-busy={saving}
+              disabled={saving}
+            >
               {saving ? 'Adding task…' : 'Add to backlog'}
               <span aria-hidden="true">↗</span>
             </button>
