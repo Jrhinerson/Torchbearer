@@ -7,6 +7,21 @@ const sampleTask = {
   description:
     'Clarify the goal, context, and approval criteria before implementation.',
   status: 'backlog',
+  routing_mode: 'frontier',
+  frontier_agent: 'codex',
+  stage_agents: {
+    plan: 'codex',
+    integrate: 'codex',
+    test: 'codex',
+    code_review: 'codex',
+  },
+  repository: null,
+  revision: 0,
+  completed_at: null,
+  latest_run: null,
+  workspace_path: '',
+  branch: '',
+  base_commit: '',
   created_at: '2026-11-21T12:00:00Z',
   updated_at: '2026-11-21T12:00:00Z',
 }

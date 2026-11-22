@@ -11,7 +11,7 @@ async function openComposer(page: Page) {
   return dialog
 }
 
-test('shows five workflow columns and creates a task through the popup', async ({
+test('shows six workflow columns and creates a task through the popup', async ({
   page,
 }, testInfo) => {
   const title = `Define acceptance criteria ${Date.now()}`
@@ -21,6 +21,7 @@ test('shows five workflow columns and creates a task through the popup', async (
     'Plan',
     'Integrate',
     'Test',
+    'Code Review',
     'Final Approval',
   ])
   await expect(

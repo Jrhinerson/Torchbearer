@@ -26,7 +26,7 @@ def main():
         from pathlib import Path
 
         from tasks.git import git
-        from tasks.models import Repository
+        from tasks.models import AgentRun, Repository, Task
 
         repository = Path(data_dir) / "browser repository"
         repository.mkdir()
@@ -43,7 +43,23 @@ def main():
             "-m",
             "Initial",
         )
-        Repository.objects.create(name="Browser fixture repository", path=str(repository))
+        registered = Repository.objects.create(
+            name="Browser fixture repository", path=str(repository)
+        )
+        legacy = Task.objects.create(
+            title="Existing task needs routing",
+            repository=registered,
+            status="plan",
+            routing_mode=None,
+            frontier_agent=None,
+        )
+        AgentRun.objects.create(
+            task=legacy,
+            stage="plan",
+            agent="claude",
+            sequence=1,
+            state="interrupted",
+        )
         for agent in ["codex", "claude", "pi"]:
             os.environ[f"TORCHBEARER_{agent.upper()}_COMMAND"] = json.dumps(
                 [sys.executable, str(ROOT / "backend/tasks/fixtures/fake_cli.py"), agent, "browser"]

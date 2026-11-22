@@ -1,9 +1,47 @@
 import pytest
+from django.db import IntegrityError, transaction
 
 from .conftest import csrf
 from .models import AgentRun, Repository, Task
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.mark.parametrize(
+    ("mode", "agent"),
+    [(None, "codex"), ("frontier", None), ("local_only", "claude"), ("bad", None)],
+)
+def test_database_rejects_inconsistent_routing(mode, agent):
+    with transaction.atomic(), pytest.raises(IntegrityError):
+        Task.objects.create(
+            title="Invalid database policy", routing_mode=mode, frontier_agent=agent
+        )
+
+
+def test_legacy_task_cannot_progress_before_routing_choice(repository):
+    from .workflow import Conflict, act
+
+    task = Task.objects.create(
+        title="Legacy backlog", repository=repository, routing_mode=None, frontier_agent=None
+    )
+    with pytest.raises(Conflict, match="Choose a routing approach"):
+        act(task.id, action="start", revision=0)
+    task.refresh_from_db()
+    assert task.revision == 0
+    assert not task.runs.exists()
+
+
+def test_started_task_cannot_change_repository_even_after_run_finishes(local_client, repository):
+    task = Task.objects.create(title="Started", repository=repository, status="plan")
+    response = local_client.patch(
+        f"/api/v1/tasks/{task.id}/",
+        {"revision": 0, "repository": None},
+        format="json",
+        **csrf(local_client),
+    )
+    assert response.status_code == 409
+    task.refresh_from_db()
+    assert task.repository == repository and task.revision == 0
 
 
 def test_catalog_classifies_agents_without_global_assignments(local_client):
