@@ -67,22 +67,31 @@ test('defaults to Frontier and Codex and edits only the chosen backlog task', as
   const card = await backlog(page, title, 'frontier')
   const otherTitle = `Independent routing ${Date.now()}`
   await backlog(page, otherTitle, 'frontier', 'claude')
-  await card.getByText('Edit routing', { exact: true }).click()
-  await card.getByLabel('Approach', { exact: true }).selectOption('local_only')
-  await expect(card.getByLabel('Frontier agent')).toHaveCount(0)
-  await card.getByRole('button', { name: 'Save routing' }).click()
+  await expect(card.getByLabel('Approach')).toHaveCount(0)
+  await expect(card.getByLabel('Repository', { exact: true })).toHaveCount(0)
+  await expect(card.getByText('Edit routing', { exact: true })).toHaveCount(0)
   await expect(
-    card.getByRole('button', { name: 'Save routing', includeHidden: true }),
+    card.getByRole('button', { name: 'Add repository', exact: true }),
+  ).toHaveCount(0)
+  await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  const settings = page.getByRole('dialog', { name: title, exact: true })
+  await settings
+    .getByLabel('Approach', { exact: true })
+    .selectOption('local_only')
+  await expect(settings.getByLabel('Frontier agent')).toHaveCount(0)
+  await settings.getByRole('button', { name: 'Save routing' }).click()
+  await expect(
+    settings.getByRole('button', { name: 'Save routing' }),
   ).toBeDisabled()
-  await page.reload()
-  await expect(card.getByLabel('Approach', { exact: true })).toHaveValue(
-    'local_only',
-  )
+  await settings.getByRole('button', { name: 'Close task settings' }).click()
   await expect(
-    page
-      .getByRole('article', { name: otherTitle, exact: true })
-      .getByLabel('Frontier agent'),
-  ).toHaveValue('claude')
+    card.getByRole('button', { name: `Open ${title}`, exact: true }),
+  ).toBeFocused()
+  await page.reload()
+  await expect(card).toContainText('Local Only')
+  await expect(
+    page.getByRole('article', { name: otherTitle, exact: true }),
+  ).toContainText('Frontier - Claude Code')
 })
 
 test('retains routing drafts and reports failed saves', async ({ page }) => {
@@ -94,18 +103,57 @@ test('retains routing drafts and reports failed saves', async ({ page }) => {
       ? route.fulfill({ status: 500, json: { detail: 'Routing save failed' } })
       : route.continue(),
   )
-  await card.getByText('Edit routing', { exact: true }).click()
-  await card.getByLabel('Approach', { exact: true }).selectOption('local_only')
-  await card.getByRole('button', { name: 'Save routing' }).click()
-  await expect(card.getByRole('alert')).toContainText('Routing save failed')
-  await expect(card.getByLabel('Approach', { exact: true })).toHaveValue(
+  await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  const settings = page.getByRole('dialog', { name: title, exact: true })
+  await settings
+    .getByLabel('Approach', { exact: true })
+    .selectOption('local_only')
+  await settings.getByRole('button', { name: 'Save routing' }).click()
+  await expect(settings.getByRole('alert')).toContainText('Routing save failed')
+  await expect(settings.getByLabel('Approach', { exact: true })).toHaveValue(
     'local_only',
   )
   await page.unroute('**/api/v1/tasks/*/')
-  await card.getByRole('button', { name: 'Save routing' }).click()
+  await settings.getByRole('button', { name: 'Save routing' }).click()
   await expect(
-    card.getByRole('button', { name: 'Save routing', includeHidden: true }),
+    settings.getByRole('button', { name: 'Save routing' }),
   ).toBeDisabled()
+})
+
+test('chooses a missing repository in settings while keeping card controls compact', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const title = `Repository settings ${Date.now()}`
+  await page.getByRole('button', { name: 'New Task', exact: true }).click()
+  const composer = page.getByRole('dialog', { name: 'New task', exact: true })
+  await composer.getByLabel('Title', { exact: false }).fill(title)
+  await composer.getByRole('button', { name: 'Add to backlog' }).click()
+  const card = page.getByRole('article', { name: title, exact: true })
+  await expect(card.getByRole('combobox')).toHaveCount(0)
+  await expect(
+    card.getByRole('button', { name: 'Start planning', exact: true }),
+  ).toBeDisabled()
+  await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  const settings = page.getByRole('dialog', { name: title, exact: true })
+  const repository = settings.getByRole('combobox', {
+    name: 'Repository',
+    exact: true,
+  })
+  const id = await repository.locator('option').nth(1).getAttribute('value')
+  await repository.selectOption(id!)
+  await expect(repository).toHaveValue(id!)
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+  await expect(
+    card.getByRole('button', { name: `Open ${title}`, exact: true }),
+  ).toBeFocused()
+  await expect(
+    card.getByRole('button', { name: 'Start planning', exact: true }),
+  ).toBeEnabled()
+  await page.reload()
+  await expect(card).toContainText('Browser fixture repository')
+  await expect(card.getByRole('combobox')).toHaveCount(0)
 })
 
 for (const policy of [
@@ -170,19 +218,20 @@ test('requires one routing choice before continuing an existing started task', a
     name: 'Existing task needs routing',
     exact: true,
   })
-  await expect(card).toContainText('Choose routing before continuing')
-  await card.getByLabel('Approach', { exact: true }).focus()
-  await card.getByLabel('Approach', { exact: true }).press('End')
-  await expect(card.getByLabel('Approach', { exact: true })).toHaveValue(
-    'local_only',
-  )
-  await card.getByRole('button', { name: 'Save routing' }).click()
   await expect(card.getByLabel('Approach')).toHaveCount(0)
   await card.getByRole('button', { name: 'Review step' }).click()
   const review = page.getByRole('dialog', {
     name: 'Existing task needs routing',
     exact: true,
   })
+  await expect(review).toContainText('Choose routing before continuing')
+  await review.getByLabel('Approach', { exact: true }).focus()
+  await review.getByLabel('Approach', { exact: true }).press('End')
+  await expect(review.getByLabel('Approach', { exact: true })).toHaveValue(
+    'local_only',
+  )
+  await review.getByRole('button', { name: 'Save routing' }).click()
+  await expect(review.getByLabel('Approach')).toHaveCount(0)
   await advance(review, 'Retry step')
   await expect(
     review.getByText('Plan completed by pi', { exact: true }),

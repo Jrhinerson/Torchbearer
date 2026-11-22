@@ -9,7 +9,11 @@ import {
 } from './api'
 import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
 import { RoutingFields } from './TaskRouting'
-import { CardWorkflow, WorkflowDialog } from './TaskWorkflow'
+import {
+  CardWorkflow,
+  TaskSettingsDialog,
+  WorkflowDialog,
+} from './TaskWorkflow'
 import ProjectPicker from '../projects/ProjectPicker'
 import type { Project } from '../projects/api'
 
@@ -287,7 +291,16 @@ export default function Board() {
                           className="surface surface-raised task-card"
                           aria-label={task.title}
                         >
-                          <h3>{task.title}</h3>
+                          <h3>
+                            <button
+                              type="button"
+                              className="task-title-button"
+                              aria-label={`Open ${task.title}`}
+                              onClick={() => setSelectedId(task.id)}
+                            >
+                              {task.title}
+                            </button>
+                          </h3>
                           {task.project && (
                             <p
                               className="task-project"
@@ -312,7 +325,6 @@ export default function Board() {
                             repositories={repositories}
                             routing={routing}
                             onTask={updateTask}
-                            onAdded={repositoryAdded}
                             onReview={() => setSelectedId(task.id)}
                           />
                           <footer className="task-footer">
@@ -469,7 +481,17 @@ export default function Board() {
           A task captures intent. You decide when it is ready to move forward.
         </p>
       </dialog>
-      {selectedTask && (
+      {selectedTask?.status === 'backlog' ? (
+        <TaskSettingsDialog
+          key={selectedTask.id}
+          task={selectedTask}
+          repositories={repositories}
+          routing={routing}
+          onTask={updateTask}
+          onAdded={repositoryAdded}
+          onClose={() => setSelectedId(null)}
+        />
+      ) : selectedTask ? (
         <WorkflowDialog
           key={selectedTask.id}
           task={selectedTask}
@@ -477,7 +499,7 @@ export default function Board() {
           onTask={updateTask}
           onClose={() => setSelectedId(null)}
         />
-      )}
+      ) : null}
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>

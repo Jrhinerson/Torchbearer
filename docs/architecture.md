@@ -17,6 +17,8 @@ During development, Vite serves `http://127.0.0.1:5173` and forwards `/api/` to 
 
 The board presents Backlog, Plan, Integrate, Test, Code Review, and Final Approval in that order. The New Task button opens a native modal with draft retention, saved-project selection, and task routing. Frontier defaults to Codex, with Claude Code also available; Hybrid uses the frontier agent for Plan and Code Review and Pi for Integrate and Test; Local Only uses Pi throughout. Routing is editable in Backlog and locked when planning starts; Backlog and Final Approval are human-only. Cards show execution state and open a review dialog containing results, logs, code changes, human decisions, and approval/rework controls. The board and review poll every two seconds without overlapping requests; failed polls preserve the last known state and retry. Accessible labels stay inside positioned column containers to prevent narrow-screen overflow.
 
+Task cards contain read-only task context and workflow actions. Clicking a Backlog task's title opens its routing and repository settings in a native dialog; titles on started tasks open the review dialog. Legacy tasks that still need an initial routing choice configure it inside that review dialog. Routing fields and repository selection/registration controls are kept off the cards, and dismissing settings returns keyboard focus to the task title.
+
 ## API contract
 
 | Method | Path | Behavior |

@@ -152,6 +152,21 @@ main {
   font-weight: var(--weight-semibold);
   line-height: var(--leading-body);
 }
+.task-title-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-weight: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.task-title-button:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
 .task-description {
   margin: var(--space-2) 0 var(--space-4);
   color: var(--color-text-muted);

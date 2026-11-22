@@ -36,14 +36,12 @@ export function CardWorkflow({
   repositories,
   routing,
   onTask,
-  onAdded,
   onReview,
 }: {
   task: Task
   repositories: Repository[]
   routing: Routing | null
   onTask: (task: Task) => void
-  onAdded: (repository: Repository) => void
   onReview: () => void
 }) {
   const [busy, setBusy] = useState(false)
@@ -72,29 +70,8 @@ export function CardWorkflow({
           ? ` - ${agentLabel(task.frontier_agent, routing)}`
           : ''}
       </p>
-      {!task.completed_at &&
-        (task.status === 'backlog' || !task.routing_mode) && (
-          <TaskRoutingEditor
-            key={`${task.id}:${task.routing_mode}:${task.frontier_agent}`}
-            task={task}
-            routing={routing}
-            disabled={busy || isActive(task)}
-            onTask={onTask}
-          />
-        )}
-
       {task.status === 'backlog' ? (
         <>
-          <RepositoryPicker
-            repositories={repositories}
-            value={task.repository ?? ''}
-            onChange={(id) => {
-              if (id)
-                void change(() => updateTaskSettings(task, { repository: id }))
-            }}
-            onAdded={onAdded}
-            disabled={busy || !task.routing_mode}
-          />
           <button
             type="button"
             className="button button-secondary step-button"
@@ -104,7 +81,14 @@ export function CardWorkflow({
             {busy ? 'Starting…' : 'Start planning'}
           </button>
           {!task.routing_mode && (
-            <p className="workflow-hint">Choose task routing to begin.</p>
+            <p className="workflow-hint">
+              Open the task title to choose routing.
+            </p>
+          )}
+          {!task.repository && (
+            <p className="workflow-hint">
+              Open the task title to choose a repository.
+            </p>
           )}
         </>
       ) : (
@@ -150,6 +134,95 @@ export function CardWorkflow({
         </p>
       )}
     </div>
+  )
+}
+
+export function TaskSettingsDialog({
+  task,
+  repositories,
+  routing,
+  onTask,
+  onAdded,
+  onClose,
+}: {
+  task: Task
+  repositories: Repository[]
+  routing: Routing | null
+  onTask: (task: Task) => void
+  onAdded: (repository: Repository) => void
+  onClose: () => void
+}) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const closeButton = useRef<HTMLButtonElement>(null)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const previous = document.activeElement
+    dialog.current?.showModal()
+    closeButton.current?.focus()
+    return () => {
+      if (previous instanceof HTMLElement) previous.focus()
+    }
+  }, [])
+
+  async function chooseRepository(id: string) {
+    if (!id) return
+    setBusy(true)
+    setError('')
+    try {
+      onTask(await updateTaskSettings(task, { repository: id }))
+    } catch (cause) {
+      setError(
+        cause instanceof Error ? cause.message : 'Could not update task.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <dialog
+      ref={dialog}
+      className="surface surface-overlay task-dialog"
+      aria-labelledby="task-settings-heading"
+      onClose={onClose}
+    >
+      <div className="dialog-heading">
+        <div>
+          <p className="eyebrow">Task settings</p>
+          <h2 id="task-settings-heading">{task.title}</h2>
+        </div>
+        <button
+          ref={closeButton}
+          type="button"
+          className="button button-quiet button-icon close-dialog-button"
+          aria-label="Close task settings"
+          onClick={() => dialog.current?.close()}
+        >
+          ×
+        </button>
+      </div>
+      <TaskRoutingEditor
+        key={`${task.id}:${task.routing_mode}:${task.frontier_agent}`}
+        task={task}
+        routing={routing}
+        disabled={busy}
+        onTask={onTask}
+      />
+      <RepositoryPicker
+        repositories={repositories}
+        value={task.repository ?? ''}
+        onChange={(id) => void chooseRepository(id)}
+        onAdded={onAdded}
+        disabled={busy || !task.routing_mode}
+      />
+      {error && (
+        <p role="alert" className="feedback feedback-error form-error">
+          {error}
+        </p>
+      )}
+    </dialog>
   )
 }
 
@@ -316,6 +389,14 @@ export function WorkflowDialog({
         <p className="run-state state-approved">
           Approved · {new Date(task.completed_at).toLocaleString()}
         </p>
+      )}
+      {!task.completed_at && !task.routing_mode && (
+        <TaskRoutingEditor
+          task={task}
+          routing={routing}
+          disabled={busy || active}
+          onTask={onTask}
+        />
       )}
       <p className="workflow-hint">
         {task.branch}

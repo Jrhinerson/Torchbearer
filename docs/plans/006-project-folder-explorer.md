@@ -34,3 +34,13 @@ Base: local `main`. No prerequisite commits outside this change. Commit locally 
 - Desktop (1280px) and narrow (390px) explorer screenshots were visually inspected. The explorer uses a focused native dialog to keep its list and selection controls accessible above the task composer.
 - Python lint/format, Django system checks, migration consistency, frontend formatting/lint, TypeScript, and the production build pass.
 - Restart persistence verification passes for the task, saved project, and association using a disposable database. No schema migrations were added.
+
+## Follow-up commit: `refactor: move task configuration off board cards`
+
+This follows the two explorer commits above; no additional prerequisites are needed.
+
+- **Frontend:** Remove inline routing and repository editors from task cards, including Edit routing and Add repository. Open Backlog settings through the task title, retain initial routing configuration for legacy tasks in review dialogs, and verify saving, focus restoration, and existing workflow actions.
+- **Backend:** No changes.
+- **Database:** No changes.
+
+Verification: all 38 Chromium tests pass, including routing/repository edits through settings, error recovery, reload persistence, keyboard focus restoration, legacy routing recovery, and the full reviewed workflow. Frontend formatting, lint, TypeScript, and production build pass. The shared preview confirms zero inline fields on the card and a working settings dialog from its title.

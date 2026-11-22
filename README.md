@@ -50,11 +50,11 @@ SQLite files, environment files containing secrets, dependency directories, buil
 
 Choose an approach for each task in **New Task**. **Frontier** is the default, with **Codex** selected; **Claude Code** is the other frontier agent. **Hybrid** uses the selected frontier agent for detailed planning and Code Review, while **Pi** implements and tests. **Local Only** routes all four stages to Pi using its existing model configuration; local inference setup is separate.
 
-Routing can change in Backlog using **Save routing** and is locked when planning starts. Each queued attempt records its own agent. Missing installations or execution failures never substitute another agent. Backlog and Final Approval remain human-controlled.
+Click a Backlog task's title to open its settings and change routing with **Save routing**, or select/add an execution repository. Cards show the selected approach and workflow actions. Routing is locked when planning starts. Each queued attempt records its own agent. Missing installations or execution failures never substitute another agent. Backlog and Final Approval remain human-controlled.
 
 Install and authenticate each CLI you want to use, and configure its default model in that CLI. Torchbearer uses the CLI's existing authentication and model configuration. The dropdown identifies missing installations; outdated versions, missing authentication, and permission denials appear as run errors. Current adapter version requirements are Codex CLI 0.162.0+, Claude Code 2.1.259+, and Pi 0.74.0+.
 
-1. Create a task, choose its approach and frontier agent when applicable, and select a saved Git project. Use **Add Project** to register a local folder or clone a Git URL; existing Backlog tasks can also select an execution repository on the card.
+1. Create a task, choose its approach and frontier agent when applicable, and select a saved Git project. Use **Add Project** to register a local folder or clone a Git URL; click an existing Backlog task's title to select its execution repository in settings.
 2. Click **Start planning**. Torchbearer creates a branch and worktree from the repository's committed HEAD; uncommitted changes and ignored dependencies in the original checkout are not copied.
 3. Open **Review step** to read the detailed plan, logs, and changes. Approving Plan queues Integrate; approving Integrate queues Test. Required artifacts are passed in full, independently of the bounded recent-run history.
 4. Test runs validation and reports actual command outcomes. Approve passing results to start Code Review, which inspects the complete task changes against the approved plan and test evidence. Every successful stage waits for human approval before advancing.
@@ -62,7 +62,7 @@ Install and authenticate each CLI you want to use, and configure its default mod
 
 **Request revision** reruns the current stage with your instructions. Integrate can return to Plan; Test, Code Review, and Final Approval can return to Integrate. Rework must pass Test and Code Review again. **Cancel run** stops the running process tree or removes a queued attempt from execution. Started tasks retain their history and workspace; only backlog tasks can be deleted.
 
-When upgrading from column routing, stop the launcher before applying migrations and restart afterward. Unfinished existing tasks display **Choose routing before continuing**; choose once after queued or running work finishes or is cancelled. Existing attempt agents and history are retained. Unfinished tasks formerly awaiting Final Approval return to Test so their result can be approved to start Code Review. Completed tasks remain unchanged.
+When upgrading from column routing, stop the launcher before applying migrations and restart afterward. Open an unfinished existing task through its title or **Review step** to choose routing once after queued or running work finishes or is cancelled. Existing attempt agents and history are retained. Unfinished tasks formerly awaiting Final Approval return to Test so their result can be approved to start Code Review. Completed tasks remain unchanged.
 
 The worker processes one run at a time. Queued runs survive shutdown, while runs interrupted by a worker crash require explicit retry after reviewing the workspace. An offline notice appears when no worker is available; start with `python scripts/dev.py`, or run `.venv/Scripts/python.exe backend/manage.py runagentworker` separately on Windows (`.venv/bin/python` on macOS/Linux). Running Django alone does not start the worker.
 
