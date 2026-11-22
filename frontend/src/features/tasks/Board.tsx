@@ -8,7 +8,7 @@ import {
   listTasks,
 } from './api'
 import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
-import { RepositoryPicker } from './RoutingControls'
+import { RepositoryPicker } from './RepositoryPicker'
 import { RoutingFields } from './TaskRouting'
 import { CardWorkflow, WorkflowDialog } from './TaskWorkflow'
 

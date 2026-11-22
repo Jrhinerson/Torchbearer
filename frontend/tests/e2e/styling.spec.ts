@@ -9,6 +9,7 @@ const sampleTask = {
   status: 'backlog',
   routing_mode: 'frontier',
   frontier_agent: 'codex',
+  next_stage: null,
   stage_agents: {
     plan: 'codex',
     integrate: 'codex',

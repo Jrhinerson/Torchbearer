@@ -8,16 +8,10 @@ from rest_framework.exceptions import APIException, ValidationError
 
 from .cli import resolve_command
 from .models import AgentRun, Decision, Task
-from .routing import Agent, Approach, agent_for, validate_routing
+from .routing import NEXT_STAGE, Agent, Approach, agent_for, validate_routing
 from .workspaces import fingerprint as workspace_fingerprint
 
 ACTIVE = [AgentRun.State.QUEUED, AgentRun.State.RUNNING]
-NEXT = {
-    "plan": "integrate",
-    "integrate": "test",
-    "test": "code_review",
-    "code_review": "final_approval",
-}
 
 
 class Conflict(APIException):
@@ -43,7 +37,7 @@ def validate_review(task, run, fingerprint):
         )
 
 
-def assigned_agent(task, stage):
+def available_agent(task, stage):
     try:
         agent = agent_for(task, stage)
         available = resolve_command(agent)
@@ -107,7 +101,7 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
             raise Conflict("Only a backlog task can start planning.")
         target = "plan"
     elif action in {"retry", "revise"}:
-        if previous not in NEXT or run.stage != previous:
+        if previous not in NEXT_STAGE or run.stage != previous:
             raise Conflict("This step cannot be rerun here.")
         if action == "retry" and run.state == AgentRun.State.SUCCEEDED:
             raise Conflict("Use Request Revision to replace a successful result.")
@@ -129,16 +123,16 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
             task.completed_at = timezone.now()
             target = previous
         else:
-            if previous not in NEXT or run.stage != previous:
+            if previous not in NEXT_STAGE or run.stage != previous:
                 raise Conflict("This result does not belong to the current step.")
-            target = NEXT[previous]
+            target = NEXT_STAGE[previous]
     else:
         raise Conflict("Unknown workflow action.")
     agent = None
-    if target in NEXT and not task.completed_at:
+    if target in NEXT_STAGE and not task.completed_at:
         if not task.repository:
             raise Conflict("Choose a repository before starting planning.")
-        agent = assigned_agent(task, target)
+        agent = available_agent(task, target)
     Decision.objects.create(
         task=task,
         run=run,

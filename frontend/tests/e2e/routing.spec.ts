@@ -66,11 +66,12 @@ test('defaults to Frontier and Codex and edits only the chosen backlog task', as
   const card = await backlog(page, title, 'frontier')
   const otherTitle = `Independent routing ${Date.now()}`
   await backlog(page, otherTitle, 'frontier', 'claude')
+  await card.getByText('Edit routing', { exact: true }).click()
   await card.getByLabel('Approach', { exact: true }).selectOption('local_only')
   await expect(card.getByLabel('Frontier agent')).toHaveCount(0)
   await card.getByRole('button', { name: 'Save routing' }).click()
   await expect(
-    card.getByRole('button', { name: 'Save routing' }),
+    card.getByRole('button', { name: 'Save routing', includeHidden: true }),
   ).toBeDisabled()
   await page.reload()
   await expect(card.getByLabel('Approach', { exact: true })).toHaveValue(
@@ -92,6 +93,7 @@ test('retains routing drafts and reports failed saves', async ({ page }) => {
       ? route.fulfill({ status: 500, json: { detail: 'Routing save failed' } })
       : route.continue(),
   )
+  await card.getByText('Edit routing', { exact: true }).click()
   await card.getByLabel('Approach', { exact: true }).selectOption('local_only')
   await card.getByRole('button', { name: 'Save routing' }).click()
   await expect(card.getByRole('alert')).toContainText('Routing save failed')
@@ -101,7 +103,7 @@ test('retains routing drafts and reports failed saves', async ({ page }) => {
   await page.unroute('**/api/v1/tasks/*/')
   await card.getByRole('button', { name: 'Save routing' }).click()
   await expect(
-    card.getByRole('button', { name: 'Save routing' }),
+    card.getByRole('button', { name: 'Save routing', includeHidden: true }),
   ).toBeDisabled()
 })
 
@@ -148,7 +150,7 @@ for (const policy of [
       await advance(review, buttons[index])
     }
     await advance(review, 'Give final approval')
-    await expect(review.getByText(/^Approved ?/)).toBeVisible()
+    await expect(review.getByText(/^Approved/)).toBeVisible()
     await review.getByRole('button', { name: 'Close task review' }).click()
     await page.reload()
     await expect(card).toContainText('Approved')
@@ -216,7 +218,7 @@ for (const failure of ['test', 'review']) {
       await advance(review, 'Approve test & start Code Review')
       await advance(review, 'Approve code review & continue')
       await advance(review, 'Give final approval')
-      await expect(review.getByText(/^Approved ?/)).toBeVisible()
+      await expect(review.getByText(/^Approved/)).toBeVisible()
       await expect(
         review.getByLabel('Run history').locator('option'),
       ).toHaveCount(7)

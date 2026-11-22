@@ -32,7 +32,7 @@ The board presents Backlog, Plan, Integrate, Test, Code Review, and Final Approv
 | POST | `/api/v1/tasks/<uuid>/runs/<run_uuid>/cancel/` | Cancel queued work or request active-run cancellation. |
 | GET | `/api/v1/tasks/<uuid>/workspace/` | Current code-change preview and fingerprint. |
 
-A task contains a UUID, title, description, repository, routing mode, optional frontier agent, resolved stage agents, stage, revision, workspace metadata, completion timestamp, and creation/update timestamps. Titles are limited to 200 characters and descriptions to 10,000. New tasks always begin in `backlog`; creating a task or choosing routing never starts execution. Clients cannot directly set stage, revision, workspace metadata, or completion. Existing tasks can remain without a repository until planning starts.
+A task contains a UUID, title, description, repository, routing mode, optional frontier agent, resolved stage agents, next stage, current stage, revision, workspace metadata, completion timestamp, and creation/update timestamps. Titles are limited to 200 characters and descriptions to 10,000. New tasks always begin in `backlog`; creating a task or choosing routing never starts execution. Clients cannot directly set stage, revision, workspace metadata, or completion. Existing tasks can remain without a repository until planning starts.
 
 Django REST Framework serializers validate request data. Write requests explicitly use Django CSRF protection even for anonymous requests, and the React client retrieves a token before creating or deleting a task. The interface displays validation or connection errors and preserves an unsuccessful draft.
 

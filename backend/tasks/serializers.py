@@ -2,7 +2,15 @@ from rest_framework import serializers
 
 from .git import repository_path
 from .models import AgentRun, Decision, Repository, Task
-from .routing import FRONTIER_AGENTS, Agent, Approach, Stage, agent_for, validate_routing
+from .routing import (
+    FRONTIER_AGENTS,
+    NEXT_STAGE,
+    Agent,
+    Approach,
+    Stage,
+    agent_for,
+    validate_routing,
+)
 
 
 class RunSerializer(serializers.ModelSerializer):
@@ -50,6 +58,10 @@ class RepositorySerializer(serializers.ModelSerializer):
 class TaskSerializer(serializers.ModelSerializer):
     latest_run = serializers.SerializerMethodField()
     stage_agents = serializers.SerializerMethodField()
+    next_stage = serializers.SerializerMethodField()
+
+    def get_next_stage(self, obj):
+        return NEXT_STAGE.get(obj.status)
 
     def get_stage_agents(self, obj):
         if obj.routing_mode is None:
@@ -81,6 +93,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "routing_mode",
             "frontier_agent",
             "stage_agents",
+            "next_stage",
             "status",
             "revision",
             "completed_at",
@@ -117,6 +130,7 @@ class TaskSerializer(serializers.ModelSerializer):
                 "branch",
                 "base_commit",
                 "stage_agents",
+                "next_stage",
             }
             & data.keys()
         ):

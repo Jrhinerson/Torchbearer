@@ -45,5 +45,6 @@ def test_upgrade_requires_routing_preserves_runs_and_reopens_unreviewed_tasks():
         assert Task.objects.get(pk=completed.id).status == "final_approval"
         assert Task.objects.get(pk=completed.id).revision == 5
         assert Task.objects.get(pk=completed.id).completed_at == completed.completed_at
+        assert "tasks_columnassignment" not in connection.introspection.table_names()
     finally:
         MigrationExecutor(connection).migrate(latest)

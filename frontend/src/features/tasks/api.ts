@@ -17,7 +17,6 @@ export interface Routing {
     available: boolean
   }[]
   approaches: { id: Approach; label: string }[]
-  assignments?: Record<Stage, Agent | ''>
   worker: {
     available: boolean
     heartbeat: string | null
@@ -83,6 +82,7 @@ export interface Task {
   routing_mode: Approach | null
   frontier_agent: FrontierAgent | null
   stage_agents: Partial<Record<Stage, Agent>>
+  next_stage: Stage | 'final_approval' | null
   status: 'backlog' | Stage | 'final_approval'
   revision: number
   completed_at: string | null
@@ -133,12 +133,12 @@ export function deleteTask(id: string) {
 
 export const getRouting = (signal?: AbortSignal) =>
   requestJson<Routing>('routing/', { signal })
+export const agentLabel = (agent: Agent, routing: Routing | null) =>
+  routing?.agents.find((entry) => entry.id === agent)?.label ?? agent
 export const listRepositories = (signal?: AbortSignal) =>
   requestJson<Repository[]>('repositories/', { signal })
 export const addRepository = (path: string) =>
   writeJson<Repository>('repositories/', 'POST', { path })
-export const assignAgent = (stage: Stage, agent: Agent | '') =>
-  writeJson(`routing/${stage}/`, 'PATCH', { agent })
 export const updateTaskSettings = (
   task: Task,
   settings: {

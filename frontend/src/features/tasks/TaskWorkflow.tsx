@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  agentLabel,
   cancelRun,
   getRuns,
   getWorkspace,
@@ -15,7 +16,7 @@ import type {
   TaskAction,
   WorkspaceChanges,
 } from './api'
-import { RepositoryPicker } from './RoutingControls'
+import { RepositoryPicker } from './RepositoryPicker'
 import { TaskRoutingEditor } from './TaskRouting'
 
 const states: Record<RunState, string> = {
@@ -27,7 +28,6 @@ const states: Record<RunState, string> = {
   cancelled: 'Cancelled',
   interrupted: 'Interrupted',
 }
-const labels = { codex: 'Codex CLI', claude: 'Claude Code CLI', pi: 'Pi' }
 const isActive = (task: Task) =>
   task.latest_run?.state === 'queued' || task.latest_run?.state === 'running'
 
@@ -68,7 +68,9 @@ export function CardWorkflow({
       <p className="workflow-hint">
         {routing?.approaches.find((mode) => mode.id === task.routing_mode)
           ?.label ?? 'Routing needed'}
-        {task.frontier_agent ? ` ? ${labels[task.frontier_agent]}` : ''}
+        {task.frontier_agent
+          ? ` - ${agentLabel(task.frontier_agent, routing)}`
+          : ''}
       </p>
       {!task.completed_at &&
         (task.status === 'backlog' || !task.routing_mode) && (
@@ -122,7 +124,7 @@ export function CardWorkflow({
                   : 'Ready'}
             {run && (
               <span>
-                {labels[run.agent]} · Run {run.sequence}
+                {agentLabel(run.agent, routing)} · Run {run.sequence}
               </span>
             )}
           </p>
@@ -189,16 +191,10 @@ export function WorkflowDialog({
     reviewCurrent &&
     !active &&
     !task.completed_at
-  const next =
-    task.status === 'plan'
-      ? 'integrate'
-      : task.status === 'integrate'
-        ? 'test'
-        : task.status === 'test'
-          ? 'code_review'
-          : null
+  const next = task.next_stage
   const missingAgent =
     next &&
+    next !== 'final_approval' &&
     (!task.stage_agents[next] ||
       routing?.agents.find((agent) => agent.id === task.stage_agents[next])
         ?.available === false)
@@ -354,7 +350,7 @@ export function WorkflowDialog({
             {history.runs.map((attempt) => (
               <option key={attempt.id} value={attempt.id}>
                 Run {attempt.sequence} · {attempt.stage} ·{' '}
-                {labels[attempt.agent]} · {states[attempt.state]}
+                {agentLabel(attempt.agent, routing)} · {states[attempt.state]}
               </option>
             ))}
           </select>
@@ -363,7 +359,7 @@ export function WorkflowDialog({
               <p className={`run-state state-${run.state}`}>
                 {states[run.state]}{' '}
                 <span>
-                  {labels[run.agent]} {run.cli_version}
+                  {agentLabel(run.agent, routing)} {run.cli_version}
                 </span>
               </p>
               {run.error && (

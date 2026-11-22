@@ -10,7 +10,7 @@ INSTRUCTIONS = {
         "the repository planning format. Include scope, acceptance criteria, repository findings, "
         "concrete file paths and symbols, ordered steps and dependencies, effects on the "
         "frontend, backend, and database, "
-        "effects, API and data contracts, migrations and existing-data handling, error behavior, "
+        "API and data contracts, migrations and existing-data handling, error behavior, "
         "edge cases, validation commands, fixtures, environment prerequisites, expected outcomes, "
         "and code review criteria. The plan must be sufficient for a local agent to implement "
         "without guessing product or architectural decisions. Report blocked for unresolved "
@@ -168,7 +168,8 @@ def prompt_for(run):
     if len(json.dumps(context, ensure_ascii=False)) > 200000:
         raise RunnerFailure(
             "Required handoff context exceeds the supported limit. Revise the plan or reports "
-            "while retaining implementation details and review evidence; nothing was truncated.",
+            "while retaining implementation details and review evidence. Required artifacts "
+            "were not truncated.",
             "blocked",
         )
     return context

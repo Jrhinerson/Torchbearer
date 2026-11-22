@@ -41,11 +41,6 @@ class RoutingView(LocalView):
         )
 
 
-class AssignmentView(LocalView):
-    def patch(self, request, stage):
-        return Response({"detail": "Choose routing on each task instead."}, status=410)
-
-
 @method_decorator(csrf_protect, name="dispatch")
 class RepositoryListView(generics.ListCreateAPIView):
     authentication_classes = []

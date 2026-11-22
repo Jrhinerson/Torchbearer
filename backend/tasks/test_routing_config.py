@@ -52,6 +52,12 @@ def test_catalog_classifies_agents_without_global_assignments(local_client):
         "claude": "frontier",
         "pi": "local",
     }
+    assert (
+        local_client.patch(
+            "/api/v1/routing/plan/", {"agent": "codex"}, format="json", **csrf(local_client)
+        ).status_code
+        == 404
+    )
 
 
 @pytest.mark.parametrize(

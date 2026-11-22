@@ -15,6 +15,7 @@ from django.utils import timezone
 from .adapters import RunnerFailure, execute
 from .models import AgentRun, Task, WorkerStatus
 from .prompts import prompt_for
+from .routing import REPORT_ONLY_STAGES
 from .workspaces import ensure_workspace, fingerprint
 
 
@@ -165,7 +166,7 @@ class Worker:
                 timeout=settings.TORCHBEARER_RUN_TIMEOUT,
             )
             snapshot = fingerprint(run.task)
-            if run.stage in {"plan", "test", "code_review"} and snapshot != before:
+            if run.stage in REPORT_ONLY_STAGES and snapshot != before:
                 raise RunnerFailure(
                     f"The {run.stage.title()} agent changed workspace files. "
                     "Review them before requesting another run.",

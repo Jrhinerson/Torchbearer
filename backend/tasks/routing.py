@@ -23,6 +23,13 @@ class Approach(models.TextChoices):
 
 
 FRONTIER_AGENTS = [Agent.CODEX, Agent.CLAUDE]
+NEXT_STAGE = {
+    Stage.PLAN: Stage.INTEGRATE,
+    Stage.INTEGRATE: Stage.TEST,
+    Stage.TEST: Stage.CODE_REVIEW,
+    Stage.CODE_REVIEW: "final_approval",
+}
+REPORT_ONLY_STAGES = {Stage.PLAN, Stage.TEST, Stage.CODE_REVIEW}
 
 
 def validate_routing(mode, frontier_agent):

@@ -1,6 +1,6 @@
 # Task agent routing and code review
 
-Status: Proposed implementation plan.
+Status: Implemented locally. Verification and implementation notes are recorded below; commits remain local for the user to publish.
 
 Replace the shared column assignments with routing chosen for each task when it is created. Each task follows Frontier, Hybrid, or Local Only through planning, implementation, testing, and a new Code Review column before human Final Approval.
 
@@ -127,7 +127,17 @@ Each commit depends on the preceding commit. Implementation commits remain local
 - A successful workflow records Plan, Integrate, Test, and Code Review attempts before final approval. Failed Test or Code Review results require human-directed rework, followed by fresh testing and review.
 - Required handoff artifacts remain available after more than six attempts. Missing or oversized required context blocks clearly, and reviews cannot substitute stale Test evidence for the current implementation.
 - Plan, Test, and Code Review cannot succeed after changing covered workspace files. Stale approvals, duplicate actions, cancelled runs, and worker interruption retain their existing protections.
-- After cleanup, search the runtime source, active tests, and current operational documentation for old assignment names and endpoints; only historical migrations and the earlier implemented plan may retain them. Confirm that no global assignments are queried or written.
+- After cleanup, search the runtime source, active tests, and current operational documentation for old assignment names and endpoints; only historical migrations, upgrade test fixtures, and earlier implemented plans may retain them. Confirm that no global assignments are queried or written.
 - Run the portable checks with `python scripts/check.py`, restart persistence with `python scripts/check_persistence.py`, Chromium coverage with `npm.cmd run test:e2e` from `frontend`, and launcher verification with `python scripts/check_launcher.py` in a supported terminal. Use isolated databases and fake CLIs, and rerun the relevant checks after the final cleanup commit.
 
 All feature commits include focused tests for the behavior they introduce. The verification commit adds cross-feature and upgrade coverage; cleanup preserves the resulting behavior.
+
+## Implementation and verification
+
+- Added task policies with Frontier and Codex defaults, Backlog editing, immutable routing after start, and an initial routing choice for unfinished legacy tasks. Resolved stage agents and the next stage come from the backend.
+- Added detailed planning instructions, explicit approved artifacts and rework findings in persisted handoffs, and Code Review with passing Test evidence tied to the current implementation and workspace.
+- Added forward migrations that preserve recorded attempts and completed tasks, require routing choices for legacy tasks, return unfinished Final Approval tasks to Test, and remove the obsolete column assignment table.
+- Removed the assignment API, column selector, unused agent icon assets, and selector styles. The repository picker is independent, and Backlog routing edits use an expandable control with the existing form primitives.
+- The complete backend suite passed 87 tests after cleanup, including upgrades from the previous schema, database constraints, durable handoffs, stale evidence, cancellation, and hard worker-death recovery. Portable static, formatting, migration, TypeScript, lint, and production-build checks passed; frontend lint was rerun cleanly after moving the shared label helper out of the component file.
+- Restart persistence and launcher startup/shutdown passed against the final migrations using isolated data. Agent execution tests use deterministic fake CLIs; authenticated real-model runs were not performed.
+- All 27 Chromium browser tests passed after cleanup, covering all approaches and both frontier agents, Backlog edits and save recovery, legacy routing selection, Code Review rework, cancellation, stale approvals, keyboard use, narrow screens, and increased text size. Reviewed the resulting desktop board and mobile task popup screenshots.

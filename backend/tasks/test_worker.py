@@ -138,6 +138,16 @@ def test_cancelled_run_is_never_claimed(queued_task):
     assert not Worker().run_once()
 
 
+def test_legacy_queued_attempt_keeps_agent_and_can_finish_before_routing_choice(queued_task):
+    Task.objects.filter(pk=queued_task.pk).update(routing_mode=None, frontier_agent=None)
+    assert Worker().run_once()
+    queued_task.refresh_from_db()
+    run = queued_task.runs.first()
+    assert run.agent == "codex" and run.state == "succeeded"
+    with pytest.raises(Conflict, match="Choose a routing approach"):
+        approve(queued_task)
+
+
 def test_worker_shutdown_marks_active_run_interrupted(queued_task, monkeypatch):
     worker = Worker()
     worker.stop.set()

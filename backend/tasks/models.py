@@ -14,21 +14,6 @@ class Repository(models.Model):
         ordering = ["name", "path"]
 
 
-class ColumnAssignment(models.Model):
-    class Stage(models.TextChoices):
-        PLAN = "plan", "Plan"
-        INTEGRATE = "integrate", "Integrate"
-        TEST = "test", "Test"
-
-    class Agent(models.TextChoices):
-        CODEX = "codex", "Codex CLI"
-        CLAUDE = "claude", "Claude Code CLI"
-        PI = "pi", "Pi"
-
-    stage = models.CharField(max_length=20, choices=Stage.choices, primary_key=True)
-    agent = models.CharField(max_length=20, choices=Agent.choices, blank=True)
-
-
 class Task(models.Model):
     class Status(models.TextChoices):
         BACKLOG = "backlog", "Backlog"
