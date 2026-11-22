@@ -16,6 +16,7 @@ body {
 }
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -29,6 +30,7 @@ button:disabled {
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
+select:focus-visible,
 textarea:focus-visible {
   outline: 3px solid #a35d25;
   outline-offset: 4px;
@@ -311,6 +313,7 @@ label {
   font-weight: 400;
 }
 input,
+select,
 textarea {
   width: 100%;
   padding: 11px 12px;
@@ -402,6 +405,29 @@ textarea::placeholder {
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+.column-agent {
+  margin: -6px 0 16px;
+}
+.column-agent select {
+  padding: 6px 8px;
+  font-size: 11px;
+}
+.column-agent span {
+  font-size: 11px;
+  color: #657262;
+}
+.repository-picker {
+  margin-bottom: 18px;
+}
+.repository-picker label {
+  display: block;
+}
+.repository-picker select {
+  max-width: 100%;
+}
+.add-repository {
+  margin-top: 8px;
 }
 @media (max-width: 760px) {
   .app-header {

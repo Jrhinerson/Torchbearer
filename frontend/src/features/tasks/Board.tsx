@@ -1,7 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { createTask, deleteTask, listTasks } from './api'
-import type { Task } from './api'
+import {
+  createTask,
+  deleteTask,
+  getRouting,
+  listRepositories,
+  listTasks,
+} from './api'
+import type { Repository, Routing, Task } from './api'
+import { AgentSelect, RepositoryPicker } from './RoutingControls'
 
 const columns = [
   { id: 'backlog', title: 'Backlog' },
@@ -18,6 +25,9 @@ const dateFormat = new Intl.DateTimeFormat(undefined, {
 
 export default function Board() {
   const [tasks, setTasks] = useState<Task[]>([])
+  const [routing, setRouting] = useState<Routing | null>(null)
+  const [repositories, setRepositories] = useState<Repository[]>([])
+  const [repository, setRepository] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
@@ -37,9 +47,17 @@ export default function Board() {
 
   useEffect(() => {
     const controller = new AbortController()
-    listTasks(controller.signal)
-      .then((result) => {
-        if (!controller.signal.aborted) setTasks(result)
+    Promise.all([
+      listTasks(controller.signal),
+      getRouting(controller.signal),
+      listRepositories(controller.signal),
+    ])
+      .then(([result, configuration, registered]) => {
+        if (!controller.signal.aborted) {
+          setTasks(result)
+          setRouting(configuration)
+          setRepositories(registered)
+        }
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
@@ -68,10 +86,11 @@ export default function Board() {
     setSaveError('')
     setAnnouncement('')
     try {
-      const task = await createTask(title, description)
+      const task = await createTask(title, description, repository)
       setTasks((current) => [task, ...current])
       setTitle('')
       setDescription('')
+      setRepository('')
       setAnnouncement(`Added ${task.title} to the backlog.`)
       composer.current?.close()
     } catch (error) {
@@ -141,6 +160,27 @@ export default function Board() {
                     {columnTasks.length}
                   </span>
                 </div>
+                {routing &&
+                  column.id !== 'backlog' &&
+                  column.id !== 'final_approval' && (
+                    <AgentSelect
+                      stage={column.id}
+                      routing={routing}
+                      onChange={(stage, agent) =>
+                        setRouting((current) =>
+                          current
+                            ? {
+                                ...current,
+                                assignments: {
+                                  ...current.assignments,
+                                  [stage]: agent,
+                                },
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                  )}
                 {isBacklog && (
                   <button
                     type="button"
@@ -257,6 +297,18 @@ export default function Board() {
             maxLength={200}
             required
             disabled={saving}
+          />
+          <RepositoryPicker
+            repositories={repositories}
+            value={repository}
+            onChange={setRepository}
+            disabled={saving}
+            onAdded={(added) =>
+              setRepositories((current) => [
+                ...current.filter((item) => item.id !== added.id),
+                added,
+              ])
+            }
           />
           <label htmlFor="task-description">
             Description <span className="optional">optional</span>
