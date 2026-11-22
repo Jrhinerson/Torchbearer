@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from django.utils import timezone
 
-from .models import AgentRun, ColumnAssignment, Task
+from .models import AgentRun, Task
 from .worker import Worker, WorkerLock, worker_status
 from .workflow import Conflict, act
 
@@ -14,10 +14,11 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def queued_task(repository, fake_cli, settings, tmp_path):
     settings.DATA_DIR = tmp_path / "data"
-    for stage, agent in [("plan", "codex"), ("integrate", "claude"), ("test", "pi")]:
+    for agent in ["codex", "pi"]:
         fake_cli(agent, "implement")
-        ColumnAssignment.objects.create(stage=stage, agent=agent)
-    task = Task.objects.create(title="Implement a feature", repository=repository)
+    task = Task.objects.create(
+        title="Implement a feature", repository=repository, routing_mode="hybrid"
+    )
     act(task.id, action="start", revision=task.revision)
     return task
 
@@ -63,7 +64,7 @@ def test_report_only_test_agent_cannot_succeed_after_edits(queued_task, fake_cli
     worker.run_once()
     approve(queued_task)
     # Leave Integrate's result unchanged so a new file in Test is observable.
-    fake_cli("claude", "normal")
+    fake_cli("pi", "normal")
     worker.run_once()
     approve(queued_task)
     fake_cli("pi", "modify")

@@ -66,7 +66,7 @@ export function AgentSelect({
   ]
   const selectedIndex = Math.max(
     0,
-    choices.findIndex((agent) => agent.id === routing.assignments[stage]),
+    choices.findIndex((agent) => agent.id === routing.assignments?.[stage]),
   )
 
   useEffect(() => {
@@ -87,7 +87,7 @@ export function AgentSelect({
   async function selectAgent(agent: Agent | '') {
     setOpen(false)
     trigger.current?.focus()
-    if (agent === routing.assignments[stage]) return
+    if (agent === routing.assignments?.[stage]) return
     setSaving(true)
     setError('')
     try {

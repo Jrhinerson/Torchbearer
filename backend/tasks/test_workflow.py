@@ -2,7 +2,7 @@ import pytest
 from django.db import IntegrityError, transaction
 
 from .conftest import csrf
-from .models import AgentRun, ColumnAssignment, Decision, Task
+from .models import AgentRun, Decision, Task
 from .workflow import Conflict, act, cancel
 from .workspaces import ensure_workspace, fingerprint
 
@@ -13,8 +13,6 @@ pytestmark = pytest.mark.django_db
 def task(repository, monkeypatch, settings, tmp_path):
     settings.DATA_DIR = tmp_path / "data"
     monkeypatch.setattr("tasks.workflow.resolve_command", lambda agent: ["test-agent"])
-    for stage in ColumnAssignment.Stage:
-        ColumnAssignment.objects.create(stage=stage, agent="codex")
     return Task.objects.create(title="Implement a feature", repository=repository)
 
 
@@ -44,7 +42,7 @@ def test_each_step_waits_for_human_approval_and_snapshots_agent(task):
     act(task.id, action="start", revision=0)
     run = task.runs.first()
     assert run.stage == "plan" and run.state == "queued"
-    ColumnAssignment.objects.filter(stage="plan").update(agent="pi")
+    Task.objects.create(title="Independent task", routing_mode="local_only", frontier_agent=None)
     assert task.runs.first().agent == "codex"
     with pytest.raises(Conflict):
         approve(task, run)
@@ -92,11 +90,11 @@ def test_missing_repository_or_agent_keeps_task_in_previous_column(task):
     assert not task.runs.exists()
 
 
-def test_missing_next_agent_does_not_consume_approval(task):
+def test_missing_next_agent_does_not_consume_approval(task, monkeypatch):
     act(task.id, action="start", revision=0)
     run = succeed(task)
-    ColumnAssignment.objects.filter(stage="integrate").update(agent="")
-    with pytest.raises(Conflict, match="Assign an agent"):
+    monkeypatch.setattr("tasks.workflow.resolve_command", lambda agent: None)
+    with pytest.raises(Conflict, match="not installed"):
         approve(task, run)
     task.refresh_from_db()
     assert task.status == "plan"

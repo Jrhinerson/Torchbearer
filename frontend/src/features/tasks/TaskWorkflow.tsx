@@ -4,7 +4,7 @@ import {
   getRuns,
   getWorkspace,
   performAction,
-  setTaskRepository,
+  updateTaskSettings,
 } from './api'
 import type {
   Repository,
@@ -16,6 +16,7 @@ import type {
   WorkspaceChanges,
 } from './api'
 import { RepositoryPicker } from './RoutingControls'
+import { TaskRoutingEditor } from './TaskRouting'
 
 const states: Record<RunState, string> = {
   queued: 'Queued',
@@ -64,27 +65,44 @@ export function CardWorkflow({
   }
   return (
     <div className="card-workflow">
+      <p className="workflow-hint">
+        {routing?.approaches.find((mode) => mode.id === task.routing_mode)
+          ?.label ?? 'Routing needed'}
+        {task.frontier_agent ? ` ? ${labels[task.frontier_agent]}` : ''}
+      </p>
+      {!task.completed_at &&
+        (task.status === 'backlog' || !task.routing_mode) && (
+          <TaskRoutingEditor
+            key={`${task.id}:${task.routing_mode}:${task.frontier_agent}`}
+            task={task}
+            routing={routing}
+            disabled={busy || isActive(task)}
+            onTask={onTask}
+          />
+        )}
+
       {task.status === 'backlog' ? (
         <>
           <RepositoryPicker
             repositories={repositories}
             value={task.repository ?? ''}
             onChange={(id) => {
-              if (id) void change(() => setTaskRepository(task.id, id))
+              if (id)
+                void change(() => updateTaskSettings(task, { repository: id }))
             }}
             onAdded={onAdded}
-            disabled={busy}
+            disabled={busy || !task.routing_mode}
           />
           <button
             type="button"
             className="button button-secondary step-button"
-            disabled={busy || !task.repository || !routing?.assignments.plan}
+            disabled={busy || !task.repository || !task.routing_mode}
             onClick={() => void change(() => performAction(task, 'start'))}
           >
             {busy ? 'Starting…' : 'Start planning'}
           </button>
-          {!routing?.assignments.plan && (
-            <p className="workflow-hint">Assign an agent to Plan to begin.</p>
+          {!task.routing_mode && (
+            <p className="workflow-hint">Choose task routing to begin.</p>
           )}
         </>
       ) : (
@@ -166,6 +184,7 @@ export function WorkflowDialog({
   )
   const canApprove =
     latest &&
+    Boolean(task.routing_mode) &&
     run?.state === 'succeeded' &&
     reviewCurrent &&
     !active &&
@@ -176,7 +195,11 @@ export function WorkflowDialog({
       : task.status === 'integrate'
         ? 'test'
         : null
-  const missingAgent = next && !routing?.assignments[next]
+  const missingAgent =
+    next &&
+    (!task.stage_agents[next] ||
+      routing?.agents.find((agent) => agent.id === task.stage_agents[next])
+        ?.available === false)
 
   useEffect(() => {
     const previous =
@@ -420,7 +443,8 @@ export function WorkflowDialog({
                       )}
                       {missingAgent && (
                         <p className="workflow-hint">
-                          Assign an agent to {next} before continuing.
+                          The agent for {next} must be configured and installed
+                          before continuing.
                         </p>
                       )}
                       <div className="review-primary-actions">
@@ -453,7 +477,7 @@ export function WorkflowDialog({
                             <button
                               type="button"
                               className="button button-secondary"
-                              disabled={busy}
+                              disabled={busy || !task.routing_mode}
                               onClick={() => void act('retry')}
                             >
                               Retry step
@@ -470,7 +494,7 @@ export function WorkflowDialog({
                         onChange={(event) => setFeedback(event.target.value)}
                         maxLength={4000}
                         rows={3}
-                        disabled={busy}
+                        disabled={busy || !task.routing_mode}
                         placeholder="Describe what needs to change…"
                       />
                       <div className="review-secondary-actions">

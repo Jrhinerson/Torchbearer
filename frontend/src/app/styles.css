@@ -388,6 +388,18 @@ main {
 .repository-picker {
   margin-block: var(--space-4);
 }
+.task-routing-fields {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.task-routing-editor {
+  margin-bottom: var(--space-3);
+}
+.task-routing-fields .field {
+  min-width: 0;
+  width: 100%;
+}
 
 .repository-picker select {
   max-width: 100%;

@@ -7,8 +7,9 @@ import {
   listRepositories,
   listTasks,
 } from './api'
-import type { Repository, Routing, Task } from './api'
-import { AgentSelect, RepositoryPicker } from './RoutingControls'
+import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
+import { RepositoryPicker } from './RoutingControls'
+import { RoutingFields } from './TaskRouting'
 import { CardWorkflow, WorkflowDialog } from './TaskWorkflow'
 
 const columns = [
@@ -29,6 +30,8 @@ export default function Board() {
   const [routing, setRouting] = useState<Routing | null>(null)
   const [repositories, setRepositories] = useState<Repository[]>([])
   const [repository, setRepository] = useState('')
+  const [routingMode, setRoutingMode] = useState<Approach>('frontier')
+  const [frontier, setFrontier] = useState<FrontierAgent>('codex')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [syncError, setSyncError] = useState('')
   const mutation = useRef(0)
@@ -140,12 +143,20 @@ export default function Board() {
     setSaveError('')
     setAnnouncement('')
     try {
-      const task = await createTask(title, description, repository)
+      const task = await createTask(
+        title,
+        description,
+        repository,
+        routingMode,
+        frontier,
+      )
       mutation.current++
       setTasks((current) => [task, ...current])
       setTitle('')
       setDescription('')
       setRepository('')
+      setRoutingMode('frontier')
+      setFrontier('codex')
       setAnnouncement(`Added ${task.title} to the backlog.`)
       composer.current?.close()
     } catch (error) {
@@ -228,28 +239,6 @@ export default function Board() {
                     {columnTasks.length}
                   </span>
                 </div>
-                {routing &&
-                  column.id !== 'backlog' &&
-                  column.id !== 'final_approval' && (
-                    <AgentSelect
-                      stage={column.id}
-                      routing={routing}
-                      onChange={(stage, agent) => {
-                        mutation.current++
-                        setRouting((current) =>
-                          current
-                            ? {
-                                ...current,
-                                assignments: {
-                                  ...current.assignments,
-                                  [stage]: agent,
-                                },
-                              }
-                            : current,
-                        )
-                      }}
-                    />
-                  )}
                 {isBacklog && (
                   <button
                     type="button"
@@ -394,6 +383,14 @@ export default function Board() {
             maxLength={200}
             required
             disabled={saving}
+          />
+          <RoutingFields
+            mode={routingMode}
+            frontier={frontier}
+            routing={routing}
+            disabled={saving}
+            onMode={setRoutingMode}
+            onFrontier={setFrontier}
           />
           <RepositoryPicker
             repositories={repositories}
