@@ -7,8 +7,8 @@ test.setTimeout(60000)
 
 async function configure(page: Page) {
   await page.goto('/')
-  await assign(page, 'plan', 'codex')
-  await assign(page, 'integrate', 'claude code')
+  await assign(page, 'plan', 'Codex')
+  await assign(page, 'integrate', 'Claude Code')
   await assign(page, 'test', 'Pi')
 }
 
@@ -54,10 +54,10 @@ test('offers agent dropdowns only in working columns and persists assignments', 
   await page.reload()
   await expect(
     page.getByLabel('Agent for plan', { exact: true }),
-  ).toContainText('codex')
+  ).toContainText('Codex')
   await expect(
     page.getByLabel('Agent for integrate', { exact: true }),
-  ).toContainText('claude code')
+  ).toContainText('Claude Code')
   await expect(
     page.getByLabel('Agent for test', { exact: true }),
   ).toContainText('Pi')
@@ -92,7 +92,7 @@ test('keeps the previous assignment when saving fails', async ({ page }) => {
   await assign(page, 'plan', 'Pi')
   await expect(
     page.getByLabel('Agent for plan', { exact: true }),
-  ).toContainText('codex')
+  ).toContainText('Codex')
   await expect(page.getByRole('alert')).toContainText('Assignment failed')
 })
 
@@ -126,7 +126,7 @@ test('supports keyboard selection and dismissing agent menus without saving', as
   await selector.press('Escape')
   await expect(selector).toHaveAttribute('aria-expanded', 'false')
   await expect(selector).toBeFocused()
-  await expect(selector).toContainText('codex')
+  await expect(selector).toContainText('Codex')
   await selector.press('p')
   await selector.press('Enter')
   await expect(selector).toContainText('Pi')

@@ -12,8 +12,8 @@ const agentLogos: Record<Agent, string> = {
 }
 
 const agentNames: Record<Agent, string> = {
-  codex: 'codex',
-  claude: 'claude code',
+  codex: 'Codex',
+  claude: 'Claude Code',
   pi: 'Pi',
 }
 
