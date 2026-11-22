@@ -12,8 +12,9 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from .adapters import RESULT_SCHEMA, RunnerFailure, execute
+from .adapters import RunnerFailure, execute
 from .models import AgentRun, Task, WorkerStatus
+from .prompts import prompt_for
 from .workspaces import ensure_workspace, fingerprint
 
 
@@ -53,84 +54,6 @@ def worker_status():
         "heartbeat": row.heartbeat if row else None,
         "active_run": row.active_run_id if row else None,
     }
-
-
-def prompt_for(run):
-    task = run.task
-    approval = (
-        task.decisions.filter(action="approve", from_stage="plan").select_related("run").last()
-    )
-    previous = []
-    for attempt in task.runs.exclude(pk=run.id).order_by("-sequence")[:6]:
-        result = dict(attempt.result)
-        details = result.get("details", "")
-        if len(details) > 12000:
-            result["details"] = details[:12000]
-            result["details_truncated"] = True
-        previous.append(
-            {
-                "stage": attempt.stage,
-                "agent": attempt.agent,
-                "state": attempt.state,
-                "result": result,
-                "feedback": attempt.feedback,
-                "error": attempt.error,
-            }
-        )
-    instructions = {
-        "plan": (
-            "Inspect the repository and produce a concrete implementation plan in details. "
-            "Do not edit any files or execute tests."
-        ),
-        "integrate": (
-            "Implement the human-approved plan, incorporating feedback and previous test failures. "
-            "Run relevant checks. If the scope needs a new plan, report blocked."
-        ),
-        "test": (
-            "Validate the implementation using the approved plan and repository test instructions. "
-            "Run actual validation commands and report each outcome. "
-            "Do not edit source, tests, configuration, or lockfiles. "
-            "Use ignored temporary directories for generated files. "
-            "Report failed when validation fails, and blocked when no validation can run. "
-            "Never fix failures in this stage."
-        ),
-    }
-    context = {
-        "stage": run.stage,
-        "instructions": instructions[run.stage],
-        "rules": [
-            "Work on this stage in the current worktree. Read and follow repository instructions.",
-            "Humans control transitions. Never call Torchbearer APIs or edit its database.",
-            "Do not change branches, commit, merge, push, open pull requests, or remove worktrees.",
-            "Keep commands in the foreground and wait for them. Leave no background work running.",
-            "Return only JSON matching result_schema, with the plan or stage report in details.",
-            "Report blocked for missing dependencies, auth, permissions, or unclear requirements. "
-            "Never claim checks passed unless run.",
-        ],
-        "task": {
-            "title": task.title,
-            "description": task.description,
-            "repository": task.repository.name,
-            "branch": task.branch,
-            "base_commit": task.base_commit,
-        },
-        "approved_plan": approval.run.result if approval else None,
-        "feedback": run.feedback,
-        "prior_runs": previous,
-        "human_decisions": list(
-            task.decisions.order_by("-id").values("action", "from_stage", "to_stage", "feedback")[
-                :10
-            ]
-        ),
-        "result_schema": RESULT_SCHEMA,
-    }
-    if run.stage != "plan" and not approval:
-        raise RunnerFailure("This step needs a human-approved plan.", "blocked")
-    if len(json.dumps(context)) > 200000:
-        raise RunnerFailure(
-            "Handoff context is too large. Request a more concise plan or result.", "blocked"
-        )
-    return context
 
 
 class Worker:
@@ -221,6 +144,7 @@ class Worker:
                     "The workspace changed while queued. Review it and request a new run.",
                     "blocked",
                 )
+            run.input_fingerprint = before
             run.input_context = prompt_for(run)
             AgentRun.objects.filter(pk=run.pk).update(
                 input_context=run.input_context, input_fingerprint=before

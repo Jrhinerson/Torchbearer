@@ -47,7 +47,9 @@ def test_mixed_agents_handoff_and_final_approval(queued_task):
         assert run.cli_version
         assert run.log and run.review_fingerprint
         if stage != "plan":
-            assert run.input_context["approved_plan"]["summary"].startswith("Plan")
+            assert run.input_context["artifacts"]["approved_plan"]["result"]["summary"].startswith(
+                "Plan"
+            )
         approve(task)
     task.refresh_from_db()
     assert task.status == "final_approval" and task.completed_at is None
