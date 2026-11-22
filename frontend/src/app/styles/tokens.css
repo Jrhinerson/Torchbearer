@@ -1,0 +1,14 @@
+:root {
+  --text-meta: 0.75rem;
+  --text-compact: 0.8125rem;
+  --text-body: 0.875rem;
+  --text-brand: 1rem;
+  --text-title: 1.125rem;
+  --text-icon: 1.5rem;
+  --leading-meta: 1.5;
+  --leading-body: 1.5;
+  --leading-title: 1.3334;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+}
