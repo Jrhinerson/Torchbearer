@@ -7,28 +7,42 @@ from django.urls import reverse
 from projects.models import Project
 
 from .conftest import csrf
-from .models import ColumnAssignment, Repository, Task
+from .models import Repository, Task
 
 pytestmark = pytest.mark.django_db
 
 
+@pytest.mark.parametrize(
+    ("mode", "agent"),
+    [
+        ("frontier", "codex"),
+        ("hybrid", "claude"),
+        ("local_only", None),
+    ],
+)
 def test_selected_git_project_uses_existing_execution_repository(
-    local_client, repository, fake_cli
+    local_client, repository, fake_cli, mode, agent
 ):
     project = Project.objects.create(name="Saved project", path=repository.path)
     response = local_client.post(
         reverse("task-list"),
-        {"title": "Plan the selected project", "project_id": str(project.id)},
+        {
+            "title": "Plan the selected project",
+            "project_id": str(project.id),
+            "routing_mode": mode,
+            "frontier_agent": agent,
+        },
         format="json",
         **csrf(local_client),
     )
     assert response.status_code == 201
     saved = response.json()
+    assert saved["routing_mode"] == mode
+    assert saved["frontier_agent"] == agent
     assert saved["repository"] == str(repository.id)
     assert saved["project"]["id"] == str(project.id)
     assert Repository.objects.count() == 1
-    fake_cli()
-    ColumnAssignment.objects.create(stage="plan", agent="codex")
+    fake_cli(agent or "pi")
     response = local_client.post(
         reverse("task-action", kwargs={"pk": saved["id"]}),
         {"action": "start", "revision": saved["revision"]},
@@ -38,6 +52,7 @@ def test_selected_git_project_uses_existing_execution_repository(
     assert response.status_code == 200
     assert response.json()["status"] == "plan"
     assert response.json()["latest_run"]["state"] == "queued"
+    assert response.json()["latest_run"]["agent"] == (agent or "pi")
 
 
 def test_selected_git_project_registers_execution_repository(local_client, repository):
@@ -91,13 +106,15 @@ def test_backlog_repository_change_keeps_project_context_consistent(
     task = Task.objects.create(title="Select an execution repository", project=old_project)
     response = local_client.patch(
         reverse("task-detail", kwargs={"pk": task.id}),
-        {"repository": str(repository.id)},
+        {"repository": str(repository.id), "revision": task.revision},
         format="json",
         **csrf(local_client),
     )
     assert response.status_code == 200
     assert response.json()["project"]["id"] == str(selected_project.id)
     assert response.json()["revision"] == 1
+    assert response.json()["routing_mode"] == "frontier"
+    assert response.json()["frontier_agent"] == "codex"
 
 
 @pytest.mark.django_db(transaction=True)

@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from django.utils import timezone
 
-from .models import AgentRun, ColumnAssignment, Task
+from .models import AgentRun, Task
 from .worker import Worker, WorkerLock, worker_status
 from .workflow import Conflict, act
 
@@ -14,10 +14,11 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def queued_task(repository, fake_cli, settings, tmp_path):
     settings.DATA_DIR = tmp_path / "data"
-    for stage, agent in [("plan", "codex"), ("integrate", "claude"), ("test", "pi")]:
+    for agent in ["codex", "pi"]:
         fake_cli(agent, "implement")
-        ColumnAssignment.objects.create(stage=stage, agent=agent)
-    task = Task.objects.create(title="Implement a feature", repository=repository)
+    task = Task.objects.create(
+        title="Implement a feature", repository=repository, routing_mode="hybrid"
+    )
     act(task.id, action="start", revision=task.revision)
     return task
 
@@ -37,7 +38,7 @@ def approve(task, final=False):
 def test_mixed_agents_handoff_and_final_approval(queued_task):
     task = queued_task
     worker = Worker()
-    for stage in ["plan", "integrate", "test"]:
+    for stage in ["plan", "integrate", "test", "code_review"]:
         assert worker.run_once()
         task.refresh_from_db()
         run = task.runs.first()
@@ -46,11 +47,13 @@ def test_mixed_agents_handoff_and_final_approval(queued_task):
         assert run.cli_version
         assert run.log and run.review_fingerprint
         if stage != "plan":
-            assert run.input_context["approved_plan"]["summary"].startswith("Plan")
+            assert run.input_context["artifacts"]["approved_plan"]["result"]["summary"].startswith(
+                "Plan"
+            )
         approve(task)
     task.refresh_from_db()
     assert task.status == "final_approval" and task.completed_at is None
-    assert task.runs.count() == 3
+    assert task.runs.count() == 4
     assert (Path(task.workspace_path) / "feature.txt").is_file()
     assert not (Path(task.repository.path) / "feature.txt").exists()
     approve(task, final=True)
@@ -63,12 +66,26 @@ def test_report_only_test_agent_cannot_succeed_after_edits(queued_task, fake_cli
     worker.run_once()
     approve(queued_task)
     # Leave Integrate's result unchanged so a new file in Test is observable.
-    fake_cli("claude", "normal")
+    fake_cli("pi", "normal")
     worker.run_once()
     approve(queued_task)
     fake_cli("pi", "modify")
     worker.run_once()
     run = queued_task.runs.first()
+    assert run.state == "blocked"
+    assert "changed workspace files" in run.error
+    assert not run.review_fingerprint
+
+
+def test_code_review_cannot_succeed_after_edits(queued_task, fake_cli):
+    worker = Worker()
+    for _ in range(3):
+        worker.run_once()
+        approve(queued_task)
+    fake_cli("codex", "modify")
+    worker.run_once()
+    run = queued_task.runs.first()
+    assert run.stage == "code_review"
     assert run.state == "blocked"
     assert "changed workspace files" in run.error
     assert not run.review_fingerprint
@@ -119,6 +136,16 @@ def test_cancelled_run_is_never_claimed(queued_task):
 
     cancel(queued_task.id, queued_task.runs.first().id)
     assert not Worker().run_once()
+
+
+def test_legacy_queued_attempt_keeps_agent_and_can_finish_before_routing_choice(queued_task):
+    Task.objects.filter(pk=queued_task.pk).update(routing_mode=None, frontier_agent=None)
+    assert Worker().run_once()
+    queued_task.refresh_from_db()
+    run = queued_task.runs.first()
+    assert run.agent == "codex" and run.state == "succeeded"
+    with pytest.raises(Conflict, match="Choose a routing approach"):
+        approve(queued_task)
 
 
 def test_worker_shutdown_marks_active_run_interrupted(queued_task, monkeypatch):

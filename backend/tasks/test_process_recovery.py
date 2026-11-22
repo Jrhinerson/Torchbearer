@@ -20,12 +20,11 @@ import django
 django.setup()
 from django.core.management import call_command
 call_command('migrate', interactive=False, verbosity=0)
-from tasks.models import Repository, ColumnAssignment, Task
+from tasks.models import Repository, Task
 from tasks.workflow import act
 repository = Repository.objects.create(
     name='Recovery fixture', path=os.environ['TEST_REPOSITORY_PATH']
 )
-ColumnAssignment.objects.create(stage='plan', agent='codex')
 ids = []
 for title in ['Interrupted task', 'Queued task']:
     task = Task.objects.create(title=title, repository=repository)

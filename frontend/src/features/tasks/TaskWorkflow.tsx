@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import {
+  agentLabel,
   cancelRun,
   getRuns,
   getWorkspace,
   performAction,
-  setTaskRepository,
+  updateTaskSettings,
 } from './api'
 import type {
   Repository,
@@ -15,7 +16,8 @@ import type {
   TaskAction,
   WorkspaceChanges,
 } from './api'
-import { RepositoryPicker } from './RoutingControls'
+import { RepositoryPicker } from './RepositoryPicker'
+import { TaskRoutingEditor } from './TaskRouting'
 
 const states: Record<RunState, string> = {
   queued: 'Queued',
@@ -26,7 +28,6 @@ const states: Record<RunState, string> = {
   cancelled: 'Cancelled',
   interrupted: 'Interrupted',
 }
-const labels = { codex: 'Codex CLI', claude: 'Claude Code CLI', pi: 'Pi' }
 const isActive = (task: Task) =>
   task.latest_run?.state === 'queued' || task.latest_run?.state === 'running'
 
@@ -64,27 +65,46 @@ export function CardWorkflow({
   }
   return (
     <div className="card-workflow">
+      <p className="workflow-hint">
+        {routing?.approaches.find((mode) => mode.id === task.routing_mode)
+          ?.label ?? 'Routing needed'}
+        {task.frontier_agent
+          ? ` - ${agentLabel(task.frontier_agent, routing)}`
+          : ''}
+      </p>
+      {!task.completed_at &&
+        (task.status === 'backlog' || !task.routing_mode) && (
+          <TaskRoutingEditor
+            key={`${task.id}:${task.routing_mode}:${task.frontier_agent}`}
+            task={task}
+            routing={routing}
+            disabled={busy || isActive(task)}
+            onTask={onTask}
+          />
+        )}
+
       {task.status === 'backlog' ? (
         <>
           <RepositoryPicker
             repositories={repositories}
             value={task.repository ?? ''}
             onChange={(id) => {
-              if (id) void change(() => setTaskRepository(task.id, id))
+              if (id)
+                void change(() => updateTaskSettings(task, { repository: id }))
             }}
             onAdded={onAdded}
-            disabled={busy}
+            disabled={busy || !task.routing_mode}
           />
           <button
             type="button"
             className="button button-secondary step-button"
-            disabled={busy || !task.repository || !routing?.assignments.plan}
+            disabled={busy || !task.repository || !task.routing_mode}
             onClick={() => void change(() => performAction(task, 'start'))}
           >
             {busy ? 'Starting…' : 'Start planning'}
           </button>
-          {!routing?.assignments.plan && (
-            <p className="workflow-hint">Assign an agent to Plan to begin.</p>
+          {!task.routing_mode && (
+            <p className="workflow-hint">Choose task routing to begin.</p>
           )}
         </>
       ) : (
@@ -104,7 +124,7 @@ export function CardWorkflow({
                   : 'Ready'}
             {run && (
               <span>
-                {labels[run.agent]} · Run {run.sequence}
+                {agentLabel(run.agent, routing)} · Run {run.sequence}
               </span>
             )}
           </p>
@@ -166,17 +186,18 @@ export function WorkflowDialog({
   )
   const canApprove =
     latest &&
+    Boolean(task.routing_mode) &&
     run?.state === 'succeeded' &&
     reviewCurrent &&
     !active &&
     !task.completed_at
-  const next =
-    task.status === 'plan'
-      ? 'integrate'
-      : task.status === 'integrate'
-        ? 'test'
-        : null
-  const missingAgent = next && !routing?.assignments[next]
+  const next = task.next_stage
+  const missingAgent =
+    next &&
+    next !== 'final_approval' &&
+    (!task.stage_agents[next] ||
+      routing?.agents.find((agent) => agent.id === task.stage_agents[next])
+        ?.available === false)
 
   useEffect(() => {
     const previous =
@@ -329,7 +350,7 @@ export function WorkflowDialog({
             {history.runs.map((attempt) => (
               <option key={attempt.id} value={attempt.id}>
                 Run {attempt.sequence} · {attempt.stage} ·{' '}
-                {labels[attempt.agent]} · {states[attempt.state]}
+                {agentLabel(attempt.agent, routing)} · {states[attempt.state]}
               </option>
             ))}
           </select>
@@ -338,7 +359,7 @@ export function WorkflowDialog({
               <p className={`run-state state-${run.state}`}>
                 {states[run.state]}{' '}
                 <span>
-                  {labels[run.agent]} {run.cli_version}
+                  {agentLabel(run.agent, routing)} {run.cli_version}
                 </span>
               </p>
               {run.error && (
@@ -420,7 +441,8 @@ export function WorkflowDialog({
                       )}
                       {missingAgent && (
                         <p className="workflow-hint">
-                          Assign an agent to {next} before continuing.
+                          The agent for {next} must be configured and installed
+                          before continuing.
                         </p>
                       )}
                       <div className="review-primary-actions">
@@ -445,7 +467,9 @@ export function WorkflowDialog({
                                 ? 'Approve plan & start Integrate'
                                 : task.status === 'integrate'
                                   ? 'Approve changes & start Test'
-                                  : 'Approve test & continue'}
+                                  : task.status === 'test'
+                                    ? 'Approve test & start Code Review'
+                                    : 'Approve code review & continue'}
                           </button>
                         )}
                         {run.state !== 'succeeded' &&
@@ -453,7 +477,7 @@ export function WorkflowDialog({
                             <button
                               type="button"
                               className="button button-secondary"
-                              disabled={busy}
+                              disabled={busy || !task.routing_mode}
                               onClick={() => void act('retry')}
                             >
                               Retry step
@@ -470,7 +494,7 @@ export function WorkflowDialog({
                         onChange={(event) => setFeedback(event.target.value)}
                         maxLength={4000}
                         rows={3}
-                        disabled={busy}
+                        disabled={busy || !task.routing_mode}
                         placeholder="Describe what needs to change…"
                       />
                       <div className="review-secondary-actions">

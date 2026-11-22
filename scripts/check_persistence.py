@@ -82,6 +82,8 @@ def main():
                 data=json.dumps(
                     {
                         "title": "Persist after a process restart",
+                        "routing_mode": "hybrid",
+                        "frontier_agent": "claude",
                         "project_id": project["id"],
                     }
                 ).encode(),
@@ -101,6 +103,14 @@ def main():
             assert len(tasks) == 1
             assert tasks[0]["id"] == saved["id"]
             assert tasks[0]["title"] == saved["title"]
+            assert tasks[0]["routing_mode"] == "hybrid"
+            assert tasks[0]["frontier_agent"] == "claude"
+            assert tasks[0]["stage_agents"] == {
+                "plan": "claude",
+                "integrate": "pi",
+                "test": "pi",
+                "code_review": "claude",
+            }
             assert tasks[0]["project"]["id"] == project["id"]
             with opener.open(f"{url}/api/v1/projects/", timeout=3) as response:
                 assert json.load(response)[0]["id"] == project["id"]

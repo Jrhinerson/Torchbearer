@@ -1,16 +1,23 @@
 import { requestJson } from '../../lib/api'
 import type { Project } from '../projects/api'
 
-export type Stage = 'plan' | 'integrate' | 'test'
+export type Stage = 'plan' | 'integrate' | 'test' | 'code_review'
 export type Agent = 'codex' | 'claude' | 'pi'
+export type Approach = 'frontier' | 'hybrid' | 'local_only'
+export type FrontierAgent = Exclude<Agent, 'pi'>
 export interface Repository {
   id: string
   name: string
   path: string
 }
 export interface Routing {
-  agents: { id: Agent; label: string; available: boolean }[]
-  assignments: Record<Stage, Agent | ''>
+  agents: {
+    id: Agent
+    label: string
+    kind: 'frontier' | 'local'
+    available: boolean
+  }[]
+  approaches: { id: Approach; label: string }[]
   worker: {
     available: boolean
     heartbeat: string | null
@@ -74,6 +81,10 @@ export interface Task {
   description: string
   project: Project | null
   repository: string | null
+  routing_mode: Approach | null
+  frontier_agent: FrontierAgent | null
+  stage_agents: Partial<Record<Stage, Agent>>
+  next_stage: Stage | 'final_approval' | null
   status: 'backlog' | Stage | 'final_approval'
   revision: number
   completed_at: string | null
@@ -106,11 +117,15 @@ export function createTask(
   title: string,
   description: string,
   repository = '',
+  routing_mode: Approach = 'frontier',
+  frontier_agent: FrontierAgent | null = 'codex',
   projectId: string | null = null,
 ) {
   return writeJson<Task>('tasks/', 'POST', {
     title: title.trim(),
     description: description.trim(),
+    routing_mode,
+    frontier_agent: routing_mode === 'local_only' ? null : frontier_agent,
     project_id: projectId,
     ...(repository ? { repository } : {}),
   })
@@ -122,14 +137,24 @@ export function deleteTask(id: string) {
 
 export const getRouting = (signal?: AbortSignal) =>
   requestJson<Routing>('routing/', { signal })
+export const agentLabel = (agent: Agent, routing: Routing | null) =>
+  routing?.agents.find((entry) => entry.id === agent)?.label ?? agent
 export const listRepositories = (signal?: AbortSignal) =>
   requestJson<Repository[]>('repositories/', { signal })
 export const addRepository = (path: string) =>
   writeJson<Repository>('repositories/', 'POST', { path })
-export const assignAgent = (stage: Stage, agent: Agent | '') =>
-  writeJson(`routing/${stage}/`, 'PATCH', { agent })
-export const setTaskRepository = (id: string, repository: string) =>
-  writeJson<Task>(`tasks/${id}/`, 'PATCH', { repository })
+export const updateTaskSettings = (
+  task: Task,
+  settings: {
+    repository?: string
+    routing_mode?: Approach
+    frontier_agent?: FrontierAgent | null
+  },
+) =>
+  writeJson<Task>(`tasks/${task.id}/`, 'PATCH', {
+    revision: task.revision,
+    ...settings,
+  })
 
 export type TaskAction =
   'start' | 'approve' | 'retry' | 'revise' | 'send_back' | 'final_approve'

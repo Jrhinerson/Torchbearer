@@ -3,22 +3,24 @@ from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
-from rest_framework import generics, serializers
+from rest_framework import generics
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .cli import agent_catalog
-from .models import ColumnAssignment, Repository, Task
+from .models import Repository, Task
+from .routing import Approach
 from .serializers import (
     ActionSerializer,
     DecisionSerializer,
     RepositorySerializer,
     RunSerializer,
     TaskSerializer,
+    TaskSettingsSerializer,
 )
 from .worker import worker_status
-from .workflow import Conflict, act, cancel
+from .workflow import Conflict, act, cancel, update_settings
 from .workspaces import changes
 
 
@@ -30,27 +32,13 @@ class LocalView(APIView):
 
 class RoutingView(LocalView):
     def get(self, request):
-        assignments = dict(ColumnAssignment.objects.values_list("stage", "agent"))
         return Response(
             {
                 "agents": agent_catalog(),
-                "assignments": {
-                    stage: assignments.get(stage, "") for stage in ColumnAssignment.Stage
-                },
+                "approaches": [{"id": mode, "label": mode.label} for mode in Approach],
                 "worker": worker_status(),
             }
         )
-
-
-class AssignmentView(LocalView):
-    def patch(self, request, stage):
-        if stage not in ColumnAssignment.Stage.values:
-            raise serializers.ValidationError("Only Plan, Integrate, and Test can run agents.")
-        agent = request.data.get("agent")
-        if agent not in ["", *ColumnAssignment.Agent.values]:
-            raise serializers.ValidationError("Choose a supported agent or Unassigned.")
-        ColumnAssignment.objects.update_or_create(stage=stage, defaults={"agent": agent})
-        return Response({"stage": stage, "agent": agent})
 
 
 @method_decorator(csrf_protect, name="dispatch")
@@ -79,19 +67,10 @@ class TaskDeleteView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = TaskSerializer
 
     def patch(self, request, *args, **kwargs):
-        if set(request.data) != {"repository"} or self.get_object().status != Task.Status.BACKLOG:
-            raise serializers.ValidationError("Only a backlog task's repository can be changed.")
-        return self.partial_update(request, *args, **kwargs)
-
-    @transaction.atomic
-    def perform_update(self, serializer):
-        if not Task.objects.filter(pk=serializer.instance.pk, status="backlog").update(
-            repository=serializer.validated_data["repository"],
-            project=serializer.validated_data["project"],
-            revision=F("revision") + 1,
-        ):
-            raise Conflict("A task's repository cannot change after planning starts.")
-        serializer.instance.refresh_from_db()
+        serializer = TaskSettingsSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        task = update_settings(kwargs["pk"], **serializer.validated_data)
+        return Response(TaskSerializer(task).data)
 
     @transaction.atomic
     def perform_destroy(self, instance):

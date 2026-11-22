@@ -4,14 +4,15 @@ from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework.exceptions import APIException
+from projects.models import Project
+from rest_framework.exceptions import APIException, ValidationError
 
 from .cli import resolve_command
-from .models import AgentRun, ColumnAssignment, Decision, Task
+from .models import AgentRun, Decision, Task
+from .routing import NEXT_STAGE, Agent, Approach, agent_for, validate_routing
 from .workspaces import fingerprint as workspace_fingerprint
 
 ACTIVE = [AgentRun.State.QUEUED, AgentRun.State.RUNNING]
-NEXT = {"plan": "integrate", "integrate": "test", "test": "final_approval"}
 
 
 class Conflict(APIException):
@@ -37,17 +38,52 @@ def validate_review(task, run, fingerprint):
         )
 
 
-def assigned_agent(stage):
-    agent = ColumnAssignment.objects.filter(stage=stage).values_list("agent", flat=True).first()
-    if not agent:
-        raise Conflict(f"Assign an agent to {stage.title()} before starting this step.")
+def available_agent(task, stage):
     try:
+        agent = agent_for(task, stage)
         available = resolve_command(agent)
     except ValueError as error:
         raise Conflict(str(error)) from error
     if not available:
-        raise Conflict(f"{ColumnAssignment.Agent(agent).label} is not installed on PATH.")
+        raise Conflict(f"{Agent(agent).label} is not installed on PATH.")
     return agent
+
+
+@transaction.atomic
+def update_settings(task_id, *, revision, **settings):
+    if not Task.objects.filter(pk=task_id, revision=revision).update(revision=F("revision") + 1):
+        get_object_or_404(Task, pk=task_id)
+        raise Conflict()
+    task = Task.objects.get(pk=task_id)
+    if task.completed_at or task.runs.filter(state__in=ACTIVE).exists():
+        raise Conflict("Cancel or wait for active work before updating task settings.")
+    routing = bool({"routing_mode", "frontier_agent"} & settings.keys())
+    if task.status != "backlog" and (
+        not routing or task.routing_mode is not None or "repository" in settings
+    ):
+        raise Conflict("Task routing and repository are locked after planning starts.")
+    if routing:
+        mode = settings.get("routing_mode", task.routing_mode)
+        frontier = settings.get(
+            "frontier_agent",
+            None if mode == Approach.LOCAL else task.frontier_agent or Agent.CODEX,
+        )
+        try:
+            validate_routing(mode, frontier)
+        except ValueError as error:
+            raise ValidationError({"routing_mode": str(error)}) from error
+        settings.update(routing_mode=mode, frontier_agent=frontier)
+    if "repository" in settings:
+        repository = settings["repository"]
+        settings["project"] = (
+            Project.objects.filter(path=repository.path, archived=False).first()
+            if repository
+            else None
+        )
+    for field, value in settings.items():
+        setattr(task, field, value)
+    task.save(update_fields=[*settings, "updated_at"])
+    return task
 
 
 @transaction.atomic
@@ -60,6 +96,8 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
     task = Task.objects.select_related("repository").get(pk=task_id)
     if task.completed_at:
         raise Conflict("This task is already approved.")
+    if task.routing_mode is None:
+        raise Conflict("Choose a routing approach before continuing this task.")
     run = task.runs.first()
     if run and run.state in ACTIVE:
         raise Conflict("Cancel or wait for the active run first.")
@@ -71,7 +109,7 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
             raise Conflict("Only a backlog task can start planning.")
         target = "plan"
     elif action in {"retry", "revise"}:
-        if previous not in NEXT or run.stage != previous:
+        if previous not in NEXT_STAGE or run.stage != previous:
             raise Conflict("This step cannot be rerun here.")
         if action == "retry" and run.state == AgentRun.State.SUCCEEDED:
             raise Conflict("Use Request Revision to replace a successful result.")
@@ -79,27 +117,30 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
             raise Conflict("Describe the requested revision.")
         target = previous
     elif action == "send_back":
-        if previous not in {"integrate", "test", "final_approval"} or not feedback.strip():
+        if (
+            previous not in {"integrate", "test", "code_review", "final_approval"}
+            or not feedback.strip()
+        ):
             raise Conflict("Describe the changes needed before sending this task back.")
         target = "plan" if previous == "integrate" else "integrate"
     elif action in {"approve", "final_approve"}:
         validate_review(task, run, fingerprint)
         if action == "final_approve":
-            if previous != "final_approval" or run.stage != "test":
-                raise Conflict("Final approval follows a reviewed Test result.")
+            if previous != "final_approval" or run.stage != "code_review":
+                raise Conflict("Final approval follows a successful Code Review result.")
             task.completed_at = timezone.now()
             target = previous
         else:
-            if previous not in NEXT or run.stage != previous:
+            if previous not in NEXT_STAGE or run.stage != previous:
                 raise Conflict("This result does not belong to the current step.")
-            target = NEXT[previous]
+            target = NEXT_STAGE[previous]
     else:
         raise Conflict("Unknown workflow action.")
     agent = None
-    if target in NEXT and not task.completed_at:
+    if target in NEXT_STAGE and not task.completed_at:
         if not task.repository:
             raise Conflict("Choose a repository before starting planning.")
-        agent = assigned_agent(target)
+        agent = available_agent(task, target)
     Decision.objects.create(
         task=task,
         run=run,

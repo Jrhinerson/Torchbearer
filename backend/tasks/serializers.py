@@ -4,6 +4,15 @@ from rest_framework import serializers
 
 from .git import repository_path
 from .models import AgentRun, Decision, Repository, Task
+from .routing import (
+    FRONTIER_AGENTS,
+    NEXT_STAGE,
+    Agent,
+    Approach,
+    Stage,
+    agent_for,
+    validate_routing,
+)
 
 
 class RunSerializer(serializers.ModelSerializer):
@@ -58,6 +67,16 @@ class TaskSerializer(serializers.ModelSerializer):
         write_only=True,
     )
     latest_run = serializers.SerializerMethodField()
+    stage_agents = serializers.SerializerMethodField()
+    next_stage = serializers.SerializerMethodField()
+
+    def get_next_stage(self, obj):
+        return NEXT_STAGE.get(obj.status)
+
+    def get_stage_agents(self, obj):
+        if obj.routing_mode is None:
+            return {}
+        return {stage: agent_for(obj, stage) for stage in Stage}
 
     def get_latest_run(self, obj):
         return obj.runs.values(
@@ -73,6 +92,10 @@ class TaskSerializer(serializers.ModelSerializer):
             "project",
             "project_id",
             "repository",
+            "routing_mode",
+            "frontier_agent",
+            "stage_agents",
+            "next_stage",
             "status",
             "revision",
             "completed_at",
@@ -94,8 +117,16 @@ class TaskSerializer(serializers.ModelSerializer):
             "branch",
             "base_commit",
         ]
+        extra_kwargs = {"frontier_agent": {"required": False}}
 
     def validate(self, data):
+        mode = data.get("routing_mode", Approach.FRONTIER)
+        frontier = data.get("frontier_agent", None if mode == Approach.LOCAL else Agent.CODEX)
+        try:
+            validate_routing(mode, frontier)
+        except ValueError as error:
+            raise serializers.ValidationError({"routing_mode": str(error)}) from error
+        data.update(routing_mode=mode, frontier_agent=frontier)
         project = data.get("project")
         if project and "repository" not in data:
             try:
@@ -133,10 +164,32 @@ class TaskSerializer(serializers.ModelSerializer):
                 "workspace_path",
                 "branch",
                 "base_commit",
+                "stage_agents",
+                "next_stage",
             }
             & data.keys()
         ):
             raise serializers.ValidationError(
                 {"status": ["Task status is managed by Torchbearer."]}
+            )
+        return super().to_internal_value(data)
+
+
+class TaskSettingsSerializer(serializers.Serializer):
+    revision = serializers.IntegerField(min_value=0)
+    repository = serializers.PrimaryKeyRelatedField(
+        queryset=Repository.objects.all(), required=False, allow_null=True
+    )
+    routing_mode = serializers.ChoiceField(choices=Approach.choices, required=False)
+    frontier_agent = serializers.ChoiceField(
+        choices=FRONTIER_AGENTS, required=False, allow_null=True
+    )
+
+    def to_internal_value(self, data):
+        if not isinstance(data, dict):
+            return super().to_internal_value(data)
+        if set(data) - self.fields.keys() or not (set(data) - {"revision"}):
+            raise serializers.ValidationError(
+                "Choose repository or task routing settings to update."
             )
         return super().to_internal_value(data)

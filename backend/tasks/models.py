@@ -2,6 +2,8 @@ import uuid
 
 from django.db import models
 
+from .routing import Agent, Approach, Stage
+
 
 class Repository(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -12,33 +14,29 @@ class Repository(models.Model):
         ordering = ["name", "path"]
 
 
-class ColumnAssignment(models.Model):
-    class Stage(models.TextChoices):
-        PLAN = "plan", "Plan"
-        INTEGRATE = "integrate", "Integrate"
-        TEST = "test", "Test"
-
-    class Agent(models.TextChoices):
-        CODEX = "codex", "Codex CLI"
-        CLAUDE = "claude", "Claude Code CLI"
-        PI = "pi", "Pi"
-
-    stage = models.CharField(max_length=20, choices=Stage.choices, primary_key=True)
-    agent = models.CharField(max_length=20, choices=Agent.choices, blank=True)
-
-
 class Task(models.Model):
     class Status(models.TextChoices):
         BACKLOG = "backlog", "Backlog"
         PLAN = "plan", "Plan"
         INTEGRATE = "integrate", "Integrate"
         TEST = "test", "Test"
+        CODE_REVIEW = "code_review", "Code Review"
         FINAL_APPROVAL = "final_approval", "Final Approval"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True, max_length=10000)
     repository = models.ForeignKey(Repository, null=True, blank=True, on_delete=models.PROTECT)
+    routing_mode = models.CharField(
+        max_length=20, choices=Approach.choices, default=Approach.FRONTIER, null=True
+    )
+    frontier_agent = models.CharField(
+        max_length=20,
+        choices=[(agent, agent.label) for agent in Agent if agent != Agent.PI],
+        default=Agent.CODEX,
+        null=True,
+        blank=True,
+    )
     project = models.ForeignKey(
         "projects.Project", null=True, blank=True, on_delete=models.SET_NULL, related_name="tasks"
     )
@@ -55,6 +53,25 @@ class Task(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(routing_mode__isnull=True, frontier_agent__isnull=True)
+                    | models.Q(
+                        routing_mode="local_only",
+                        routing_mode__isnull=False,
+                        frontier_agent__isnull=True,
+                    )
+                    | models.Q(
+                        routing_mode__in=["frontier", "hybrid"],
+                        routing_mode__isnull=False,
+                        frontier_agent__in=["codex", "claude"],
+                        frontier_agent__isnull=False,
+                    )
+                ),
+                name="valid_task_routing",
+            )
+        ]
 
     def __str__(self):
         return self.title
@@ -73,8 +90,8 @@ class AgentRun(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="runs")
     sequence = models.PositiveIntegerField()
-    stage = models.CharField(max_length=20, choices=ColumnAssignment.Stage.choices)
-    agent = models.CharField(max_length=20, choices=ColumnAssignment.Agent.choices)
+    stage = models.CharField(max_length=20, choices=Stage.choices)
+    agent = models.CharField(max_length=20, choices=Agent.choices)
     state = models.CharField(max_length=20, choices=State.choices, default=State.QUEUED)
     feedback = models.TextField(blank=True)
     result = models.JSONField(default=dict)

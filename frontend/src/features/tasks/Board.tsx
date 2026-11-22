@@ -7,8 +7,8 @@ import {
   listRepositories,
   listTasks,
 } from './api'
-import type { Repository, Routing, Task } from './api'
-import { AgentSelect } from './RoutingControls'
+import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
+import { RoutingFields } from './TaskRouting'
 import { CardWorkflow, WorkflowDialog } from './TaskWorkflow'
 import ProjectPicker from '../projects/ProjectPicker'
 import type { Project } from '../projects/api'
@@ -18,6 +18,7 @@ const columns = [
   { id: 'plan', title: 'Plan' },
   { id: 'integrate', title: 'Integrate' },
   { id: 'test', title: 'Test' },
+  { id: 'code_review', title: 'Code Review' },
   { id: 'final_approval', title: 'Final Approval' },
 ] as const
 
@@ -30,6 +31,8 @@ export default function Board() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [routing, setRouting] = useState<Routing | null>(null)
   const [repositories, setRepositories] = useState<Repository[]>([])
+  const [routingMode, setRoutingMode] = useState<Approach>('frontier')
+  const [frontier, setFrontier] = useState<FrontierAgent>('codex')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [syncError, setSyncError] = useState('')
   const mutation = useRef(0)
@@ -145,11 +148,20 @@ export default function Board() {
     setSaveError('')
     setAnnouncement('')
     try {
-      const task = await createTask(title, description, '', project?.id ?? null)
+      const task = await createTask(
+        title,
+        description,
+        '',
+        routingMode,
+        frontier,
+        project?.id ?? null,
+      )
       mutation.current++
       setTasks((current) => [task, ...current])
       setTitle('')
       setDescription('')
+      setRoutingMode('frontier')
+      setFrontier('codex')
       setAnnouncement(`Added ${task.title} to the backlog.`)
       composer.current?.close()
     } catch (error) {
@@ -232,28 +244,6 @@ export default function Board() {
                     {columnTasks.length}
                   </span>
                 </div>
-                {routing &&
-                  column.id !== 'backlog' &&
-                  column.id !== 'final_approval' && (
-                    <AgentSelect
-                      stage={column.id}
-                      routing={routing}
-                      onChange={(stage, agent) => {
-                        mutation.current++
-                        setRouting((current) =>
-                          current
-                            ? {
-                                ...current,
-                                assignments: {
-                                  ...current.assignments,
-                                  [stage]: agent,
-                                },
-                              }
-                            : current,
-                        )
-                      }}
-                    />
-                  )}
                 {isBacklog && (
                   <button
                     type="button"
@@ -412,6 +402,14 @@ export default function Board() {
             maxLength={200}
             required
             disabled={formBusy}
+          />
+          <RoutingFields
+            mode={routingMode}
+            frontier={frontier}
+            routing={routing}
+            disabled={formBusy}
+            onMode={setRoutingMode}
+            onFrontier={setFrontier}
           />
           <label className="field-label" htmlFor="task-description">
             Description <span className="optional">optional</span>
