@@ -44,3 +44,13 @@ This follows the two explorer commits above; no additional prerequisites are nee
 - **Database:** No changes.
 
 Verification: all 38 Chromium tests pass, including routing/repository edits through settings, error recovery, reload persistence, keyboard focus restoration, legacy routing recovery, and the full reviewed workflow. Frontend formatting, lint, TypeScript, and production build pass. The shared preview confirms zero inline fields on the card and a working settings dialog from its title.
+
+## Follow-up commit: `feat: make task cards collapsible`
+
+This follows the existing card-settings commit; no additional prerequisites are needed.
+
+- **Frontend:** Add an accessible per-card toggle that hides everything except the title and project when collapsed, with “No project” for unassigned tasks. Keep cards initially expanded, preserve each card's state during board refreshes, and verify keyboard toggling, independent cards, settings access, and narrow screens.
+- **Backend:** No changes.
+- **Database:** No changes.
+
+Verification: all 18 board/styling browser checks pass. After tightening long project-name wrapping, the two collapse checks pass again at 1280px and 390px; screenshots were visually inspected. Frontend formatting, lint, TypeScript, and production build pass.

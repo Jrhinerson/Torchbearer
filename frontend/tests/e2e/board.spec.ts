@@ -86,6 +86,104 @@ test('supports Cancel, Escape, and close while retaining a draft', async ({
   ).toHaveCount(0)
 })
 
+for (const width of [1280, 390]) {
+  test(`collapses cards independently to title and project at ${width}px`, async ({
+    page,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 })
+    await page.goto('/')
+    const title = `Collapsible task ${width} ${Date.now()}`
+    const description = 'Keep the details and actions available when expanded.'
+    const composer = await openComposer(page)
+    await composer.getByLabel('Title', { exact: false }).fill(title)
+    await composer.getByLabel('Description', { exact: false }).fill(description)
+    await composer.getByRole('button', { name: /^Project optional/ }).click()
+    await composer
+      .getByRole('button', {
+        name: 'Select Browser fixture repository',
+        exact: true,
+      })
+      .click()
+    await composer.getByRole('button', { name: 'Add to backlog' }).click()
+    const card = page.getByRole('article', { name: title, exact: true })
+    await expect(card.getByText(description, { exact: true })).toBeVisible()
+
+    const otherTitle = `Independent card ${width} ${Date.now()}`
+    await openComposer(page)
+    await composer.getByLabel('Title', { exact: false }).fill(otherTitle)
+    await composer.getByRole('button', { name: /^Project optional/ }).click()
+    await composer
+      .getByRole('button', { name: 'No project', exact: false })
+      .click()
+    await composer.getByRole('button', { name: 'Add to backlog' }).click()
+    const other = page.getByRole('article', { name: otherTitle, exact: true })
+    await expect(other.locator('.task-project')).toHaveText('No project')
+
+    const refreshed = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/v1/tasks/') &&
+        response.request().method() === 'GET',
+    )
+    await card
+      .getByRole('button', { name: `Collapse ${title}`, exact: true })
+      .press('Enter')
+    await refreshed
+    const expand = card.getByRole('button', {
+      name: `Expand ${title}`,
+      exact: true,
+    })
+    await expect(expand).toHaveAttribute('aria-expanded', 'false')
+    await expect(card.getByRole('button')).toHaveCount(2)
+    await expect(
+      card.getByRole('button', { name: `Open ${title}`, exact: true }),
+    ).toBeVisible()
+    await expect(card.locator('.task-project')).toHaveText(
+      '▱ Browser fixture repository',
+    )
+    await expect(card.getByText(description, { exact: true })).not.toBeVisible()
+    await expect(card.locator('.card-workflow')).not.toBeVisible()
+    await expect(card.locator('.task-footer')).not.toBeVisible()
+    await expect(
+      other.getByRole('button', {
+        name: `Collapse ${otherTitle}`,
+        exact: true,
+      }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    await expect(
+      other.getByRole('button', { name: `Delete ${otherTitle}`, exact: true }),
+    ).toBeVisible()
+    await card.scrollIntoViewIfNeeded()
+    expect(
+      await card.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true)
+    await page.screenshot({
+      path: testInfo.outputPath('collapsed-task-card.png'),
+      fullPage: true,
+    })
+
+    await card
+      .getByRole('button', { name: `Open ${title}`, exact: true })
+      .click()
+    const settings = page.getByRole('dialog', { name: title, exact: true })
+    await expect(settings.getByLabel('Approach', { exact: true })).toBeVisible()
+    await settings.getByRole('button', { name: 'Close task settings' }).click()
+    await expect(expand).toHaveAttribute('aria-expanded', 'false')
+    await expand.press('Space')
+    await expect(
+      card.getByRole('button', { name: `Collapse ${title}`, exact: true }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    await expect(card.getByText(description, { exact: true })).toBeVisible()
+    await expect(
+      card.getByRole('button', { name: 'Start planning', exact: true }),
+    ).toBeVisible()
+    await expect(
+      card.getByRole('button', { name: `Delete ${title}`, exact: true }),
+    ).toBeVisible()
+  })
+}
+
 test('preserves the popup and draft when creation fails', async ({ page }) => {
   await page.goto('/')
   const dialog = await openComposer(page)

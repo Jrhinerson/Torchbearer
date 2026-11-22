@@ -152,6 +152,39 @@ main {
   font-weight: var(--weight-semibold);
   line-height: var(--leading-body);
 }
+.task-card-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.task-card-summary {
+  flex: 1;
+  min-width: 0;
+}
+.task-card-summary .task-project {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+.task-project-name {
+  min-width: 0;
+}
+.task-collapse-button {
+  margin-top: calc(-1 * var(--space-2));
+  margin-right: calc(-1 * var(--space-2));
+}
+.task-collapse-button svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.task-collapse-button[aria-expanded='false'] svg {
+  transform: rotate(-90deg);
+}
 .task-title-button {
   display: block;
   width: 100%;
