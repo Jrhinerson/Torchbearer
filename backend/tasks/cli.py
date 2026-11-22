@@ -5,6 +5,8 @@ import os
 import shutil
 from pathlib import Path
 
+from .routing import Agent
+
 PACKAGES = {
     "codex": ["@openai/codex/bin/codex.js"],
     "claude": ["@anthropic-ai/claude-code/cli.js"],
@@ -13,7 +15,7 @@ PACKAGES = {
         "@mariozechner/pi-coding-agent/dist/cli.js",
     ],
 }
-LABELS = {"codex": "Codex CLI", "claude": "Claude Code CLI", "pi": "Pi"}
+LABELS = dict(Agent.choices)
 
 
 def resolve_command(agent):
@@ -53,5 +55,12 @@ def agent_catalog():
             available = resolve_command(agent) is not None
         except ValueError:
             available = False
-        catalog.append({"id": agent, "label": label, "available": available})
+        catalog.append(
+            {
+                "id": agent,
+                "label": label,
+                "kind": "local" if agent == Agent.PI else "frontier",
+                "available": available,
+            }
+        )
     return catalog
