@@ -10,6 +10,9 @@ class Task(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True, max_length=10000)
+    project = models.ForeignKey(
+        "projects.Project", null=True, blank=True, on_delete=models.SET_NULL, related_name="tasks"
+    )
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.BACKLOG, editable=False
     )
