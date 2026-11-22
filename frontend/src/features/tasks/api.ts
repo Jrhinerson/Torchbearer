@@ -157,7 +157,13 @@ export const updateTaskSettings = (
   })
 
 export type TaskAction =
-  'start' | 'approve' | 'retry' | 'revise' | 'send_back' | 'final_approve'
+  | 'start'
+  | 'plan_message'
+  | 'approve'
+  | 'retry'
+  | 'revise'
+  | 'send_back'
+  | 'final_approve'
 export const performAction = (
   task: Task,
   action: TaskAction,

@@ -29,7 +29,15 @@ class DecisionSerializer(serializers.ModelSerializer):
 
 class ActionSerializer(serializers.Serializer):
     action = serializers.ChoiceField(
-        choices=["start", "approve", "retry", "revise", "send_back", "final_approve"]
+        choices=[
+            "start",
+            "plan_message",
+            "approve",
+            "retry",
+            "revise",
+            "send_back",
+            "final_approve",
+        ]
     )
     revision = serializers.IntegerField(min_value=0)
     run_id = serializers.UUIDField(required=False)

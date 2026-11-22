@@ -108,6 +108,13 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
         if previous != Task.Status.BACKLOG or run:
             raise Conflict("Only a backlog task can start planning.")
         target = "plan"
+    elif action == "plan_message":
+        if previous != "plan" or run.stage != "plan":
+            raise Conflict("Planning messages can only be sent in Plan.")
+        feedback = feedback.strip()
+        if not feedback:
+            raise Conflict("Write a message for your planning agent.")
+        target = "plan"
     elif action in {"retry", "revise"}:
         if previous not in NEXT_STAGE or run.stage != previous:
             raise Conflict("This step cannot be rerun here.")
