@@ -49,7 +49,8 @@ def test_each_step_waits_for_human_approval_and_snapshots_agent(task):
     for stage, next_stage in [
         ("plan", "integrate"),
         ("integrate", "test"),
-        ("test", "final_approval"),
+        ("test", "code_review"),
+        ("code_review", "final_approval"),
     ]:
         run = succeed(task)
         task.refresh_from_db()
@@ -57,7 +58,7 @@ def test_each_step_waits_for_human_approval_and_snapshots_agent(task):
         approve(task, run)
         task.refresh_from_db()
         assert task.status == next_stage
-    assert task.runs.count() == 3
+    assert task.runs.count() == 4
     act(
         task.id,
         action="final_approve",
@@ -67,7 +68,7 @@ def test_each_step_waits_for_human_approval_and_snapshots_agent(task):
     )
     task.refresh_from_db()
     assert task.completed_at is not None
-    assert Decision.objects.filter(task=task).count() == 5
+    assert Decision.objects.filter(task=task).count() == 6
 
 
 def test_duplicate_actions_and_stale_results_cannot_start_another_run(task):

@@ -165,7 +165,7 @@ class Worker:
                 timeout=settings.TORCHBEARER_RUN_TIMEOUT,
             )
             snapshot = fingerprint(run.task)
-            if run.stage in {"plan", "test"} and snapshot != before:
+            if run.stage in {"plan", "test", "code_review"} and snapshot != before:
                 raise RunnerFailure(
                     f"The {run.stage.title()} agent changed workspace files. "
                     "Review them before requesting another run.",

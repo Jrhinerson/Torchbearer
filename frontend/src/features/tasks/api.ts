@@ -1,6 +1,6 @@
 import { requestJson } from '../../lib/api'
 
-export type Stage = 'plan' | 'integrate' | 'test'
+export type Stage = 'plan' | 'integrate' | 'test' | 'code_review'
 export type Agent = 'codex' | 'claude' | 'pi'
 export type Approach = 'frontier' | 'hybrid' | 'local_only'
 export type FrontierAgent = Exclude<Agent, 'pi'>

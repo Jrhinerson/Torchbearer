@@ -80,3 +80,6 @@ def test_test_stage_requires_reported_passing_commands():
     assert "read-only" in arguments("codex", "plan", "schema")
     assert "workspace-write" in arguments("codex", "test", "schema")
     assert "edit" not in arguments("pi", "test", "schema")[-1]
+    assert "read-only" in arguments("codex", "code_review", "schema")
+    assert "edit" not in arguments("pi", "code_review", "schema")[-1]
+    assert "Edit" not in arguments("claude", "code_review", "schema")

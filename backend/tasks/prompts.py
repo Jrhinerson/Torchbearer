@@ -2,7 +2,7 @@
 
 import json
 
-from .adapters import RESULT_SCHEMA, RunnerFailure
+from .adapters import RESULT_SCHEMA, RunnerFailure, validate_result
 
 INSTRUCTIONS = {
     "plan": (
@@ -27,6 +27,18 @@ INSTRUCTIONS = {
         "Do not edit source, tests, configuration, or lockfiles. Use ignored temporary directories "
         "for generated files. Report failed when validation fails, and blocked when no validation "
         "can run. Never fix failures in this stage."
+    ),
+    "code_review": (
+        "Review all task changes against artifacts.approved_plan, artifacts.implementation, "
+        "artifacts.test, and rework findings. Inspect the complete diff against task.base_commit "
+        "with git diff --no-ext-diff --no-textconv and inspect new files listed by "
+        "git ls-files --others --exclude-standard. Read full files as needed; a bounded UI diff "
+        "is not the complete review. Check correctness, acceptance criteria, edge cases, API/data "
+        "compatibility, migration behavior, and test coverage. Report actionable findings in "
+        "details with severity, file and line references, impact, and a suggested correction. "
+        "Explain remaining risks and test evidence. Report complete only with no unresolved "
+        "findings that block acceptance, failed when rework is needed, and blocked when evidence "
+        "or access is insufficient. Do not edit any workspace files or fix findings."
     ),
 }
 
@@ -72,6 +84,23 @@ def prompt_for(run):
         if run.stage != "integrate":
             implementation = approved_run(run, "integrate", after=plan.sequence)
             artifacts["implementation"] = artifact(implementation)
+        if run.stage == "code_review":
+            test = approved_run(run, "test", after=implementation.sequence)
+            try:
+                validate_result(test.result, "test")
+            except RunnerFailure as error:
+                raise RunnerFailure(
+                    "Code Review needs passing Test evidence. Rerun Test.", "blocked"
+                ) from error
+            if not run.input_fingerprint or not (
+                run.input_fingerprint
+                == test.review_fingerprint
+                == implementation.review_fingerprint
+            ):
+                raise RunnerFailure(
+                    "Code Review evidence is stale. Return to Integrate and rerun Test.", "blocked"
+                )
+            artifacts["test"] = artifact(test)
         rework = []
         for stage in ["test", "code_review"]:
             decision = (

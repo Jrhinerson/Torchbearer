@@ -12,7 +12,12 @@ from .routing import Agent, Approach, agent_for, validate_routing
 from .workspaces import fingerprint as workspace_fingerprint
 
 ACTIVE = [AgentRun.State.QUEUED, AgentRun.State.RUNNING]
-NEXT = {"plan": "integrate", "integrate": "test", "test": "final_approval"}
+NEXT = {
+    "plan": "integrate",
+    "integrate": "test",
+    "test": "code_review",
+    "code_review": "final_approval",
+}
 
 
 class Conflict(APIException):
@@ -110,14 +115,17 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
             raise Conflict("Describe the requested revision.")
         target = previous
     elif action == "send_back":
-        if previous not in {"integrate", "test", "final_approval"} or not feedback.strip():
+        if (
+            previous not in {"integrate", "test", "code_review", "final_approval"}
+            or not feedback.strip()
+        ):
             raise Conflict("Describe the changes needed before sending this task back.")
         target = "plan" if previous == "integrate" else "integrate"
     elif action in {"approve", "final_approve"}:
         validate_review(task, run, fingerprint)
         if action == "final_approve":
-            if previous != "final_approval" or run.stage != "test":
-                raise Conflict("Final approval follows a reviewed Test result.")
+            if previous != "final_approval" or run.stage != "code_review":
+                raise Conflict("Final approval follows a successful Code Review result.")
             task.completed_at = timezone.now()
             target = previous
         else:

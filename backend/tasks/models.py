@@ -35,6 +35,7 @@ class Task(models.Model):
         PLAN = "plan", "Plan"
         INTEGRATE = "integrate", "Integrate"
         TEST = "test", "Test"
+        CODE_REVIEW = "code_review", "Code Review"
         FINAL_APPROVAL = "final_approval", "Final Approval"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

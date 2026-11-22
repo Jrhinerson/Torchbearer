@@ -13,6 +13,7 @@ class Stage(models.TextChoices):
     PLAN = "plan", "Plan"
     INTEGRATE = "integrate", "Integrate"
     TEST = "test", "Test"
+    CODE_REVIEW = "code_review", "Code Review"
 
 
 class Approach(models.TextChoices):

@@ -80,7 +80,7 @@ main {
 .kanban-board {
   display: grid;
   flex: 1;
-  grid-template-columns: repeat(5, minmax(14.5rem, 1fr));
+  grid-template-columns: repeat(6, minmax(14.5rem, 1fr));
   gap: var(--space-3);
   align-items: stretch;
   min-height: 26.25rem;
@@ -539,7 +539,7 @@ main {
     padding: var(--space-4) var(--space-3) var(--space-2);
   }
   .kanban-board {
-    grid-template-columns: repeat(5, minmax(16rem, 1fr));
+    grid-template-columns: repeat(6, minmax(16rem, 1fr));
   }
   .task-dialog {
     padding: var(--space-4);

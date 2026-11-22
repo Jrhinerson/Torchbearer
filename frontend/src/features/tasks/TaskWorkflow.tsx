@@ -194,7 +194,9 @@ export function WorkflowDialog({
       ? 'integrate'
       : task.status === 'integrate'
         ? 'test'
-        : null
+        : task.status === 'test'
+          ? 'code_review'
+          : null
   const missingAgent =
     next &&
     (!task.stage_agents[next] ||
@@ -469,7 +471,9 @@ export function WorkflowDialog({
                                 ? 'Approve plan & start Integrate'
                                 : task.status === 'integrate'
                                   ? 'Approve changes & start Test'
-                                  : 'Approve test & continue'}
+                                  : task.status === 'test'
+                                    ? 'Approve test & start Code Review'
+                                    : 'Approve code review & continue'}
                           </button>
                         )}
                         {run.state !== 'succeeded' &&

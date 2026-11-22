@@ -73,7 +73,7 @@ def preflight(agent):
 
 def arguments(agent, stage, schema_path):
     if agent == "codex":
-        sandbox = "read-only" if stage == "plan" else "workspace-write"
+        sandbox = "read-only" if stage in {"plan", "code_review"} else "workspace-write"
         return [
             "-a",
             "never",
@@ -90,7 +90,7 @@ def arguments(agent, stage, schema_path):
         tools = "Read,Grep,Glob"
         if stage == "integrate":
             tools += ",Edit,Write,Bash"
-        elif stage == "test":
+        elif stage in {"test", "code_review"}:
             tools += ",Bash"
         return [
             "-p",
@@ -109,7 +109,7 @@ def arguments(agent, stage, schema_path):
     tools = "read,grep,find,ls"
     if stage == "integrate":
         tools += ",edit,write,bash"
-    elif stage == "test":
+    elif stage in {"test", "code_review"}:
         tools += ",bash"
     return ["--mode", "json", "--no-session", "--tools", tools]
 

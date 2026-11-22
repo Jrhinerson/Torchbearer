@@ -76,3 +76,38 @@ def test_required_context_is_never_silently_truncated(repository):
     with pytest.raises(RunnerFailure, match="supported limit") as error:
         prompt_for(run)
     assert error.value.state == "blocked"
+
+
+@pytest.mark.parametrize("evidence", ["missing", "failed", "stale", "valid"])
+def test_review_needs_current_passing_test_evidence(repository, evidence):
+    task = Task.objects.create(title="Review task", repository=repository)
+    approval(task, "plan", 1)
+    implementation = approval(task, "integrate", 2)
+    implementation.review_fingerprint = "snapshot"
+    implementation.save()
+    if evidence != "missing":
+        test = approval(task, "test", 3)
+        test.result["tests"] = [
+            {
+                "command": "python -m pytest",
+                "outcome": "fail" if evidence == "failed" else "pass",
+                "details": "Test evidence",
+            }
+        ]
+        test.review_fingerprint = "old" if evidence == "stale" else "snapshot"
+        test.save()
+    run = AgentRun.objects.create(
+        task=task,
+        stage="code_review",
+        sequence=4,
+        agent="codex",
+        input_fingerprint="snapshot",
+    )
+    if evidence == "valid":
+        context = prompt_for(run)
+        assert context["artifacts"]["test"]["run_id"] == str(test.id)
+        assert context["artifacts"]["implementation"]["run_id"] == str(implementation.id)
+    else:
+        with pytest.raises(RunnerFailure) as error:
+            prompt_for(run)
+        assert error.value.state == "blocked"

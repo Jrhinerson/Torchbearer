@@ -42,7 +42,9 @@ if scenario == "error":
 if scenario == "malformed":
     print("not JSON", flush=True)
     sys.exit(0)
-if scenario == "modify" or (stage == "integrate" and scenario == "implement"):
+if scenario == "modify":
+    Path(f"violation-{stage}.txt").write_text("Unexpected edit\n", encoding="utf-8")
+if stage == "integrate" and scenario == "implement":
     Path("feature.txt").write_text("Implemented by the fixture\n", encoding="utf-8")
 result = {
     "outcome": "failed" if scenario == "test_fail" and stage == "test" else "complete",

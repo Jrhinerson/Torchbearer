@@ -38,7 +38,7 @@ def approve(task, final=False):
 def test_mixed_agents_handoff_and_final_approval(queued_task):
     task = queued_task
     worker = Worker()
-    for stage in ["plan", "integrate", "test"]:
+    for stage in ["plan", "integrate", "test", "code_review"]:
         assert worker.run_once()
         task.refresh_from_db()
         run = task.runs.first()
@@ -53,7 +53,7 @@ def test_mixed_agents_handoff_and_final_approval(queued_task):
         approve(task)
     task.refresh_from_db()
     assert task.status == "final_approval" and task.completed_at is None
-    assert task.runs.count() == 3
+    assert task.runs.count() == 4
     assert (Path(task.workspace_path) / "feature.txt").is_file()
     assert not (Path(task.repository.path) / "feature.txt").exists()
     approve(task, final=True)
@@ -72,6 +72,20 @@ def test_report_only_test_agent_cannot_succeed_after_edits(queued_task, fake_cli
     fake_cli("pi", "modify")
     worker.run_once()
     run = queued_task.runs.first()
+    assert run.state == "blocked"
+    assert "changed workspace files" in run.error
+    assert not run.review_fingerprint
+
+
+def test_code_review_cannot_succeed_after_edits(queued_task, fake_cli):
+    worker = Worker()
+    for _ in range(3):
+        worker.run_once()
+        approve(queued_task)
+    fake_cli("codex", "modify")
+    worker.run_once()
+    run = queued_task.runs.first()
+    assert run.stage == "code_review"
     assert run.state == "blocked"
     assert "changed workspace files" in run.error
     assert not run.review_fingerprint
