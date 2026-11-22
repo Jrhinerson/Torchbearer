@@ -36,7 +36,12 @@
   border-radius: var(--radius-control);
   color: var(--color-primary-text);
   background: var(--color-primary);
-  font-size: var(--text-title);
+  flex-shrink: 0;
+}
+.brand-mark svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: currentColor;
 }
 .local-label {
   margin-left: var(--space-1);
@@ -218,7 +223,17 @@ main {
   font-size: var(--text-meta);
 }
 .delete-task-button {
-  font-size: var(--text-meta);
+  width: var(--control-size);
+  height: var(--control-size);
+}
+.delete-task-button svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .column-empty-state,
 .state-message {

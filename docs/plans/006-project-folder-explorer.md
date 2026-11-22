@@ -54,3 +54,13 @@ This follows the existing card-settings commit; no additional prerequisites are 
 - **Database:** No changes.
 
 Verification: all 18 board/styling browser checks pass. After tightening long project-name wrapping, the two collapse checks pass again at 1280px and 390px; screenshots were visually inspected. Frontend formatting, lint, TypeScript, and production build pass.
+
+## Follow-up commit: `style: use trash and torch icons`
+
+This follows the existing card-collapse commit; no additional prerequisites are needed.
+
+- **Frontend:** Replace the Delete text with a trash SVG and the header's “t” with a torch silhouette. Inherit theme colors and preserve the delete button's accessible name, tooltip, pending state, confirmation, and 44-pixel click target.
+- **Backend:** No changes.
+- **Database:** No changes.
+
+Verification: all 18 existing board/styling browser checks pass, including deletion cancellation, persistence, and failure recovery. Frontend formatting, lint, TypeScript, and production build pass. Both icons were visually checked in the shared preview, and the delete button retains its accessible name and 44-by-44-pixel target.
