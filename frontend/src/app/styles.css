@@ -198,6 +198,7 @@ main {
   margin: 0;
   padding: 0;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 .task-card {
@@ -407,6 +408,7 @@ textarea::placeholder {
   border: 0;
 }
 .column-agent {
+  position: relative;
   margin: -6px 0 16px;
 }
 .column-agent select {
@@ -425,9 +427,148 @@ textarea::placeholder {
 }
 .repository-picker select {
   max-width: 100%;
+  min-width: 0;
+  text-overflow: ellipsis;
 }
 .add-repository {
   margin-top: 8px;
+}
+.worker-notice {
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  background: #fff7e8;
+  border: 1px solid #e5d4b4;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #725431;
+}
+.card-workflow {
+  margin-top: 12px;
+}
+.card-workflow .repository-picker {
+  margin-bottom: 8px;
+}
+.card-workflow .repository-picker label {
+  font-size: 11px;
+}
+.card-workflow select {
+  font-size: 11px;
+  padding: 7px;
+}
+.card-workflow .text-button {
+  font-size: 11px;
+}
+.step-button {
+  width: 100%;
+  border: 1px solid #c8d4c2;
+  border-radius: 5px;
+  background: #f4f7ef;
+  color: #365436;
+  min-height: 36px;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.workflow-hint,
+.repository-name {
+  color: #657262;
+  font-size: 11px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.run-state {
+  color: #3f513c;
+  font-size: 12px;
+  font-weight: 600;
+}
+.run-state span {
+  display: block;
+  color: #73816e;
+  font-size: 11px;
+  font-weight: 400;
+  margin-top: 4px;
+}
+.state-approved {
+  color: #254c35;
+}
+.state-blocked,
+.state-failed,
+.state-interrupted {
+  color: #953f2f;
+}
+.workflow-dialog {
+  width: min(780px, calc(100vw - 32px));
+}
+.workflow-dialog label {
+  display: block;
+  margin-top: 18px;
+}
+.workspace-path {
+  font-family: ui-monospace, monospace;
+}
+.run-review h3 {
+  font-size: 15px;
+  line-height: 1.5;
+}
+.stage-result,
+.run-log {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 12px;
+  line-height: 1.8;
+  max-height: 400px;
+  overflow: auto;
+  background: #f6f8f2;
+  border: 1px solid #e0e6da;
+  border-radius: 6px;
+  padding: 14px;
+}
+.stage-result {
+  font-family: inherit;
+}
+.run-log {
+  font-family: ui-monospace, monospace;
+}
+.workflow-dialog details {
+  margin: 16px 0;
+  font-size: 12px;
+}
+.workflow-dialog summary {
+  cursor: pointer;
+  color: #3f513c;
+  min-height: 28px;
+}
+.review-actions {
+  border-top: 1px solid #e0e6da;
+  margin-top: 20px;
+  padding-top: 20px;
+}
+.review-primary-actions,
+.review-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.review-secondary-actions {
+  margin-top: 12px;
+}
+.review-actions textarea {
+  min-height: 90px;
+}
+.decision-history li {
+  margin: 12px 0;
+}
+.decision-history time {
+  display: block;
+  color: #73816e;
+  font-size: 11px;
+  margin-top: 5px;
+}
+.test-report {
+  padding-left: 20px;
+  font-size: 12px;
+}
+.test-report p {
+  color: #657262;
 }
 @media (max-width: 760px) {
   .app-header {
