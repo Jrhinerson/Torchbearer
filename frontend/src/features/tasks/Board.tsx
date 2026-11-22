@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { createTask, deleteTask, listTasks } from './api'
-import type { Task } from './api'
+import {
+  createTask,
+  deleteTask,
+  getRouting,
+  listRepositories,
+  listTasks,
+} from './api'
+import type { Repository, Routing, Task } from './api'
+import { AgentSelect, RepositoryPicker } from './RoutingControls'
+import { CardWorkflow, WorkflowDialog } from './TaskWorkflow'
 
 const columns = [
   { id: 'backlog', title: 'Backlog' },
@@ -18,6 +26,12 @@ const dateFormat = new Intl.DateTimeFormat(undefined, {
 
 export default function Board() {
   const [tasks, setTasks] = useState<Task[]>([])
+  const [routing, setRouting] = useState<Routing | null>(null)
+  const [repositories, setRepositories] = useState<Repository[]>([])
+  const [repository, setRepository] = useState('')
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [syncError, setSyncError] = useState('')
+  const mutation = useRef(0)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [reload, setReload] = useState(0)
@@ -34,12 +48,35 @@ export default function Board() {
   const titleInput = useRef<HTMLInputElement>(null)
   const newTaskButton = useRef<HTMLButtonElement>(null)
   const composer = useRef<HTMLDialogElement>(null)
+  const selectedTask = tasks.find((task) => task.id === selectedId)
+
+  function updateTask(task: Task) {
+    mutation.current++
+    setTasks((current) =>
+      current.map((item) => (item.id === task.id ? task : item)),
+    )
+  }
+
+  function repositoryAdded(added: Repository) {
+    setRepositories((current) => [
+      ...current.filter((item) => item.id !== added.id),
+      added,
+    ])
+  }
 
   useEffect(() => {
     const controller = new AbortController()
-    listTasks(controller.signal)
-      .then((result) => {
-        if (!controller.signal.aborted) setTasks(result)
+    Promise.all([
+      listTasks(controller.signal),
+      getRouting(controller.signal),
+      listRepositories(controller.signal),
+    ])
+      .then(([result, configuration, registered]) => {
+        if (!controller.signal.aborted) {
+          setTasks(result)
+          setRouting(configuration)
+          setRepositories(registered)
+        }
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) {
@@ -56,6 +93,41 @@ export default function Board() {
     return () => controller.abort()
   }, [reload])
 
+  useEffect(() => {
+    if (loading || loadError) return
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout>
+    async function refresh() {
+      const version = mutation.current
+      try {
+        const [updated, configuration] = await Promise.all([
+          listTasks(controller.signal),
+          getRouting(controller.signal),
+        ])
+        if (!controller.signal.aborted && mutation.current === version) {
+          setTasks(updated)
+          setRouting(configuration)
+          setSyncError('')
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted)
+          setSyncError(
+            cause instanceof Error
+              ? cause.message
+              : 'Could not refresh the board.',
+          )
+      } finally {
+        if (!controller.signal.aborted)
+          timer = setTimeout(() => void refresh(), 2000)
+      }
+    }
+    timer = setTimeout(() => void refresh(), 2000)
+    return () => {
+      controller.abort()
+      clearTimeout(timer)
+    }
+  }, [loading, loadError])
+
   function openComposer() {
     setSaveError('')
     composer.current?.showModal()
@@ -68,10 +140,12 @@ export default function Board() {
     setSaveError('')
     setAnnouncement('')
     try {
-      const task = await createTask(title, description)
+      const task = await createTask(title, description, repository)
+      mutation.current++
       setTasks((current) => [task, ...current])
       setTitle('')
       setDescription('')
+      setRepository('')
       setAnnouncement(`Added ${task.title} to the backlog.`)
       composer.current?.close()
     } catch (error) {
@@ -91,6 +165,7 @@ export default function Board() {
     setAnnouncement('')
     try {
       await deleteTask(task.id)
+      mutation.current++
       setTasks((current) => current.filter((item) => item.id !== task.id))
       setAnnouncement(`Deleted ${task.title} from the backlog.`)
       newTaskButton.current?.focus()
@@ -110,6 +185,17 @@ export default function Board() {
   return (
     <>
       <h1 className="sr-only">Kanban board</h1>
+      {routing && !routing.worker.available && (
+        <p className="feedback feedback-warning worker-notice" role="status">
+          Agent worker is offline. Queued runs will start when Torchbearer’s
+          launcher is running.
+        </p>
+      )}
+      {syncError && (
+        <p role="alert" className="feedback feedback-error form-error">
+          {syncError} The board will retry automatically.
+        </p>
+      )}
       <div
         className="board-scroll"
         role="region"
@@ -142,6 +228,28 @@ export default function Board() {
                     {columnTasks.length}
                   </span>
                 </div>
+                {routing &&
+                  column.id !== 'backlog' &&
+                  column.id !== 'final_approval' && (
+                    <AgentSelect
+                      stage={column.id}
+                      routing={routing}
+                      onChange={(stage, agent) => {
+                        mutation.current++
+                        setRouting((current) =>
+                          current
+                            ? {
+                                ...current,
+                                assignments: {
+                                  ...current.assignments,
+                                  [stage]: agent,
+                                },
+                              }
+                            : current,
+                        )
+                      }}
+                    />
+                  )}
                 {isBacklog && (
                   <button
                     type="button"
@@ -191,6 +299,14 @@ export default function Board() {
                               {task.description}
                             </p>
                           )}
+                          <CardWorkflow
+                            task={task}
+                            repositories={repositories}
+                            routing={routing}
+                            onTask={updateTask}
+                            onAdded={repositoryAdded}
+                            onReview={() => setSelectedId(task.id)}
+                          />
                           <footer className="task-footer">
                             <span>
                               Added{' '}
@@ -198,16 +314,20 @@ export default function Board() {
                                 {dateFormat.format(new Date(task.created_at))}
                               </time>
                             </span>
-                            <button
-                              type="button"
-                              className="button button-destructive delete-task-button"
-                              aria-busy={deletingId === task.id}
-                              aria-label={`Delete ${task.title}`}
-                              disabled={deletingId !== null}
-                              onClick={() => handleDelete(task)}
-                            >
-                              {deletingId === task.id ? 'Deleting…' : 'Delete'}
-                            </button>
+                            {task.status === 'backlog' && (
+                              <button
+                                type="button"
+                                className="button button-destructive delete-task-button"
+                                aria-busy={deletingId === task.id}
+                                aria-label={`Delete ${task.title}`}
+                                disabled={deletingId !== null}
+                                onClick={() => handleDelete(task)}
+                              >
+                                {deletingId === task.id
+                                  ? 'Deleting…'
+                                  : 'Delete'}
+                              </button>
+                            )}
                           </footer>
                           {deleteError?.id === task.id && (
                             <p
@@ -275,6 +395,13 @@ export default function Board() {
             required
             disabled={saving}
           />
+          <RepositoryPicker
+            repositories={repositories}
+            value={repository}
+            onChange={setRepository}
+            disabled={saving}
+            onAdded={repositoryAdded}
+          />
           <label className="field-label" htmlFor="task-description">
             Description <span className="optional">optional</span>
           </label>
@@ -317,6 +444,15 @@ export default function Board() {
           A task captures intent. You decide when it is ready to move forward.
         </p>
       </dialog>
+      {selectedTask && (
+        <WorkflowDialog
+          key={selectedTask.id}
+          task={selectedTask}
+          routing={routing}
+          onTask={updateTask}
+          onClose={() => setSelectedId(null)}
+        />
+      )}
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>

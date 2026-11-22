@@ -3,15 +3,17 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+const backendPort = process.env.TORCHBEARER_TEST_BACKEND_PORT ?? '18000'
+const frontendPort = process.env.TORCHBEARER_TEST_FRONTEND_PORT ?? '15173'
+const testEnvironment = {
+  TORCHBEARER_BACKEND_PORT: backendPort,
+  TORCHBEARER_FRONTEND_PORT: frontendPort,
+}
 const python = path.join(
   root,
   '.venv',
   process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python',
 )
-const apiPort = 18000
-const webPort = 15173
-const apiURL = `http://127.0.0.1:${apiPort}`
-const baseURL = `http://127.0.0.1:${webPort}`
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -21,23 +23,23 @@ export default defineConfig({
   retries: 0,
   reporter: 'list',
   outputDir: '../test-results',
-  use: { baseURL, trace: 'retain-on-failure' },
+  use: {
+    baseURL: `http://127.0.0.1:${frontendPort}`,
+    trace: 'retain-on-failure',
+  },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: [
     {
       command: `"${python}" "${path.join(root, 'scripts/test_server.py')}"`,
-      url: `${apiURL}/api/v1/health/`,
-      env: {
-        TORCHBEARER_TEST_API_PORT: String(apiPort),
-        TORCHBEARER_TEST_WEB_ORIGIN: baseURL,
-      },
+      url: `http://127.0.0.1:${backendPort}/api/v1/health/`,
+      env: testEnvironment,
       reuseExistingServer: false,
       timeout: 30000,
     },
     {
-      command: `npm run dev -- --port ${webPort}`,
-      url: baseURL,
-      env: { TORCHBEARER_API_PROXY: apiURL },
+      command: 'npm run dev',
+      url: `http://127.0.0.1:${frontendPort}`,
+      env: testEnvironment,
       reuseExistingServer: false,
       timeout: 30000,
     },

@@ -100,9 +100,11 @@ stage names accompany the colored stage dots.
 ## Verification
 
 Run `python scripts/check.py` from the repository root and `npm run test:e2e` from
-`frontend/` (use `npm.cmd` in PowerShell). Browser tests use frontend port 15173 and API port 18000
-with their own temporary SQLite database. The test launcher trusts only its
-configured frontend origin in addition to the development origins. The regular
+`frontend/` (use `npm.cmd` in PowerShell). Browser tests use frontend port 15173
+and API port 18000 with their own temporary SQLite database. Both services receive
+the configured frontend and backend ports, keeping the Vite proxy and Django's
+trusted frontend origins aligned. Override them with
+`TORCHBEARER_TEST_FRONTEND_PORT` and `TORCHBEARER_TEST_BACKEND_PORT`. The regular
 development app can remain running on ports 5173 and 8000.
 
 The styling checks verify actual custom Inter rendering through Chromium's font
