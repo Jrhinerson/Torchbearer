@@ -1,3 +1,7 @@
+import json
+import sys
+from pathlib import Path
+
 import pytest
 from rest_framework.test import APIClient
 
@@ -25,3 +29,17 @@ def repository(tmp_path):
 
 def csrf(client):
     return {"HTTP_X_CSRFTOKEN": client.get("/api/v1/csrf/").json()["csrfToken"]}
+
+
+@pytest.fixture
+def fake_cli(monkeypatch):
+    def configure(agent="codex", scenario="normal"):
+        command = [
+            sys.executable,
+            str(Path(__file__).parent / "fixtures" / "fake_cli.py"),
+            agent,
+            scenario,
+        ]
+        monkeypatch.setenv(f"TORCHBEARER_{agent.upper()}_COMMAND", json.dumps(command))
+
+    return configure
