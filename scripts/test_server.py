@@ -14,10 +14,13 @@ def main():
         os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
         sys.path.insert(0, str(ROOT / "backend"))
         import django
+        from django.conf import settings
         from django.core.management import call_command
         from django.db import connections
 
         django.setup()
+        if web_origin := os.environ.get("TORCHBEARER_TEST_WEB_ORIGIN"):
+            settings.CSRF_TRUSTED_ORIGINS = [*settings.CSRF_TRUSTED_ORIGINS, web_origin]
         call_command("migrate", interactive=False, verbosity=0)
 
         def stop(signum, frame):
@@ -25,7 +28,8 @@ def main():
 
         signal.signal(signal.SIGTERM, stop)
         try:
-            call_command("runserver", "127.0.0.1:8000", use_reloader=False)
+            port = os.environ.get("TORCHBEARER_TEST_API_PORT", "8000")
+            call_command("runserver", f"127.0.0.1:{port}", use_reloader=False)
         finally:
             connections.close_all()
 

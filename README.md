@@ -56,7 +56,7 @@ npm.cmd run test:e2e
 
 On macOS/Linux, run `npx playwright install chromium` and `npm run test:e2e` from `frontend/`. Linux may require `npx playwright install --with-deps chromium` to install browser system dependencies.
 
-Stop the regular development launcher before browser checks. They start their own services and a fresh temporary database. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
+Browser checks start their own services on ports 15173 and 18000 and use a fresh temporary database, so the regular development launcher can remain running. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
 
 Run `python scripts/check_launcher.py` from the repository root in a terminal to verify both services start and stop together. Its Windows check requires a console to send Ctrl+Break. The restart and launcher checks also use temporary databases, leaving normal local data alone.
 
@@ -65,6 +65,7 @@ Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.v
 ## Structure and review
 
 - [Architecture](docs/architecture.md): application boundaries, API contract, persistence, and process lifecycle.
+- [Styling system](docs/styling.md): locally bundled Inter, semantic dark/light palettes, reusable controls, and styling verification.
 - [Commit plan](docs/plans/001-app-foundation.md): frontend, backend, and database impacts for each planned commit.
 - [PR description draft](docs/pr-001-foundation.md): behavior, scope, and local validation results.
 

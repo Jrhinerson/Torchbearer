@@ -1,6 +1,6 @@
 # T3-inspired styling system
 
-Status: Proposed. This plan documents the styling direction; application changes have not been implemented.
+Status: Implemented locally. The font, tokens, shared styling, and focused verification described below are complete; validation results are recorded at the end.
 
 ## Reference and findings
 
@@ -35,7 +35,7 @@ Prerequisites outside this change: None. The current foundation already contains
 ### 4. `test: verify typography and theme behavior`
 
 - **Frontend:** Extend the existing browser checks where needed to verify local font loading, theme integration, and layout at narrow widths and increased text size; exercise existing creation, deletion, and dialog flows under the new styles. Document token usage and complete visual, keyboard, contrast, formatting, lint, TypeScript, and production-build verification.
-- **Backend:** No changes.
+- **Backend:** Configure the isolated browser-test launcher with a dedicated API port and trusted frontend origin so checks can run beside the development app.
 - **Database:** No changes.
 
 ## Typography specification
@@ -112,3 +112,15 @@ Dark is the initial default to match the inspected app. Define the light palette
 - Verify dark and light native controls, browser theme color, first paint, and reduced-motion behavior. Capture representative board, dialog, and error-state views for review during implementation.
 - Run the frontend formatting, lint, TypeScript, build, and Playwright checks. Keep any added automated checks focused on font delivery, theme integration, and actual usability regressions.
 - Record the final token conventions and validation results in the repository documentation. Implementation commits remain local for the user's review.
+
+## Implementation and validation
+
+- Vendored the normal/italic Latin and Latin Extended Inter Variable assets from the integrity-verified Fontsource 5.3.0 package, including its license and provenance.
+- Implemented the documented stylesheet layers, semantic themes, shared primitives, and browser theme-color synchronization. A head stylesheet and root dark attribute provide the initial palette before JavaScript runs.
+- Strengthened muted text and interactive boundaries from the reference palette. All 35 tested contrast pairings per theme meet their applicable 4.5:1 text or 3:1 boundary/focus thresholds.
+- Browser verification passed all 16 tests, including the existing seven task-flow tests and nine styling checks. Reviewed captured desktop dark/light layouts, dialog/error states, narrow layouts, and zoom-equivalent reflow.
+- Visual review identified a transient contrast dip when save buttons left the disabled state. Foreground and surface colors now change immediately, border feedback retains the short transition, and the nine styling checks passed again after this adjustment.
+- `python scripts/check.py` passed all static, migration, API, and frontend checks, including 15 API tests, formatting/linting, TypeScript, and the production build. Frontend checks also passed after the final color-transition adjustment.
+- The layout checks include 200% text sizing and a 640x450 CSS viewport equivalent to desktop 200% zoom reflow; they do not manipulate the native browser zoom setting.
+- Browser tests now use ports 15173/18000 and their existing temporary database isolation. Their test-only origin is explicitly trusted by the isolated launcher.
+- The developer conventions are documented in [the styling guide](../styling.md).

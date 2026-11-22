@@ -14,10 +14,8 @@
   font-weight: var(--weight-medium);
   line-height: var(--leading-body);
   overflow-wrap: anywhere;
-  transition:
-    background-color var(--duration-feedback) ease,
-    border-color var(--duration-feedback) ease,
-    color var(--duration-feedback) ease;
+  /* Keep foreground/surface pairs atomic when pending and disabled states change. */
+  transition: border-color var(--duration-feedback) ease;
 }
 
 .button-primary {
@@ -39,6 +37,9 @@
 .button-quiet:hover:not(:disabled),
 .button-link:hover:not(:disabled) {
   background: var(--color-surface-hover);
+}
+.button-secondary:hover:not(:disabled) {
+  border-color: var(--color-focus);
 }
 .button-secondary:active:not(:disabled),
 .button-quiet:active:not(:disabled),
@@ -72,6 +73,7 @@
   color: var(--color-text-muted);
   border-color: var(--color-border);
   background: var(--color-surface);
+  transition: none;
 }
 .button[aria-busy='true'] {
   cursor: progress;

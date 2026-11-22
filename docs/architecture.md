@@ -4,7 +4,7 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 
 ## Boundaries
 
-- `frontend/src/app/`: application shell and shared styling.
+- `frontend/src/app/`: application shell, theme-color synchronization, and layered shared styling. See the [styling system](styling.md) for font, token, and control conventions.
 - `frontend/src/features/tasks/`: five-column board, task-creation popup, and task-specific API operations.
 - `frontend/src/lib/api.ts`: same-origin requests and useful HTTP/connection errors.
 - `backend/config/`: local settings, routing, health, and CSRF bootstrap.
@@ -38,6 +38,8 @@ The default database is `.local/torchbearer.sqlite3`. `TORCHBEARER_DATA_DIR` can
 Django migrations are the source of schema changes. Setup applies migrations without replacing existing data. Startup checks for unapplied migrations and does not reset or seed the database.
 
 API tests use Django's isolated test database. Browser tests start Django with a new temporary data directory, and restart verification starts two successive backend processes against one temporary SQLite database. These checks do not use the developer's normal database.
+
+Browser tests bind dedicated ports 15173 (Vite) and 18000 (Django). Their Vite proxy uses `TORCHBEARER_API_PROXY`, and the isolated backend launcher receives its port and trusted frontend origin through test-only environment variables. Development retains ports 5173 and 8000, allowing verification alongside a running app.
 
 ## Process lifecycle
 
