@@ -1,6 +1,38 @@
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import chatgptLogo from '../../assets/agents/chatgpt.svg'
+import claudeLogo from '../../assets/agents/claude.svg'
+import piLogo from '../../assets/agents/pi.svg'
 import { addRepository, assignAgent } from './api'
 import type { Agent, Repository, Routing, Stage } from './api'
+
+const agentLogos: Record<Agent, string> = {
+  codex: chatgptLogo,
+  claude: claudeLogo,
+  pi: piLogo,
+}
+
+function AgentLabel({
+  agent,
+}: {
+  agent: { id: Agent | ''; label: string; available: boolean }
+}) {
+  return (
+    <span className="agent-label">
+      <span className="agent-name">
+        {agent.id && (
+          <img
+            className={`agent-logo agent-logo-${agent.id}`}
+            src={agentLogos[agent.id]}
+            alt=""
+            aria-hidden="true"
+          />
+        )}
+        <span>{agent.label}</span>
+      </span>
+      {!agent.available && <small>Not installed</small>}
+    </span>
+  )
+}
 
 export function AgentSelect({
   stage,
@@ -11,41 +43,177 @@ export function AgentSelect({
   routing: Routing
   onChange: (stage: Stage, agent: Agent | '') => void
 }) {
+  const id = useId()
+  const container = useRef<HTMLDivElement>(null)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const typeahead = useRef({ text: '', time: 0 })
+  const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(0)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const choices: { id: Agent | ''; label: string; available: boolean }[] = [
+    { id: '', label: 'Unassigned', available: true },
+    ...routing.agents,
+  ]
+  const selectedIndex = Math.max(
+    0,
+    choices.findIndex((agent) => agent.id === routing.assignments[stage]),
+  )
+
+  useEffect(() => {
+    if (!open) return
+    function dismiss(event: PointerEvent) {
+      if (!container.current?.contains(event.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', dismiss)
+    return () => document.removeEventListener('pointerdown', dismiss)
+  }, [open])
+
+  function showOptions(index = selectedIndex) {
+    setActiveIndex(index)
+    setOpen(true)
+    typeahead.current = { text: '', time: 0 }
+  }
+
+  async function selectAgent(agent: Agent | '') {
+    setOpen(false)
+    trigger.current?.focus()
+    if (agent === routing.assignments[stage]) return
+    setSaving(true)
+    setError('')
+    try {
+      await assignAgent(stage, agent)
+      onChange(stage, agent)
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not save agent.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return (
-    <div className="column-agent">
-      <label className="sr-only" htmlFor={`${stage}-agent`}>
+    <div
+      className="column-agent"
+      ref={container}
+      onBlur={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false)
+      }}
+    >
+      <span className="sr-only" id={`${id}-label`}>
         Agent for {stage}
-      </label>
-      <select
-        id={`${stage}-agent`}
-        value={routing.assignments[stage]}
-        disabled={saving}
-        onChange={async (event) => {
-          const agent = event.target.value as Agent | ''
-          setSaving(true)
-          setError('')
-          try {
-            await assignAgent(stage, agent)
-            onChange(stage, agent)
-          } catch (cause) {
-            setError(
-              cause instanceof Error ? cause.message : 'Could not save agent.',
+      </span>
+      <button
+        ref={trigger}
+        type="button"
+        className="agent-select"
+        role="combobox"
+        aria-labelledby={`${id}-label`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={open ? `${id}-options` : undefined}
+        aria-activedescendant={open ? `${id}-option-${activeIndex}` : undefined}
+        aria-busy={saving}
+        aria-disabled={saving}
+        onClick={() => {
+          if (!saving) {
+            if (open) setOpen(false)
+            else showOptions()
+          }
+        }}
+        onKeyDown={(event) => {
+          if (saving && event.key !== 'Tab') {
+            event.preventDefault()
+            return
+          }
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault()
+            if (!open) showOptions()
+            else
+              setActiveIndex((index) =>
+                Math.max(
+                  0,
+                  Math.min(
+                    choices.length - 1,
+                    index + (event.key === 'ArrowDown' ? 1 : -1),
+                  ),
+                ),
+              )
+          } else if (event.key === 'Home' || event.key === 'End') {
+            event.preventDefault()
+            showOptions(event.key === 'Home' ? 0 : choices.length - 1)
+          } else if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            if (open) void selectAgent(choices[activeIndex].id)
+            else showOptions()
+          } else if (event.key === 'Escape' || event.key === 'Tab') {
+            if (open && event.key === 'Escape') event.preventDefault()
+            setOpen(false)
+          } else if (
+            event.key.length === 1 &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey
+          ) {
+            event.preventDefault()
+            const now = Date.now()
+            const text =
+              (now - typeahead.current.time < 700
+                ? typeahead.current.text
+                : '') + event.key.toLowerCase()
+            typeahead.current = { text, time: now }
+            const match = choices.findIndex((agent) =>
+              agent.label.toLowerCase().startsWith(text),
             )
-          } finally {
-            setSaving(false)
+            if (match >= 0) {
+              setActiveIndex(match)
+              setOpen(true)
+            }
           }
         }}
       >
-        <option value="">Unassigned</option>
-        {routing.agents.map((agent) => (
-          <option key={agent.id} value={agent.id}>
-            {agent.label}
-            {agent.available ? '' : ' (not installed)'}
-          </option>
-        ))}
-      </select>
+        <AgentLabel agent={choices[selectedIndex]} />
+        <svg
+          className="agent-chevron"
+          width="12"
+          height="12"
+          viewBox="0 0 12 12"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="m3 4.5 3 3 3-3"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+      {open && (
+        <ul
+          id={`${id}-options`}
+          role="listbox"
+          aria-labelledby={`${id}-label`}
+          className="agent-options"
+          onPointerDown={(event) => event.preventDefault()}
+        >
+          {choices.map((agent, index) => (
+            <li
+              key={agent.id}
+              id={`${id}-option-${index}`}
+              role="option"
+              aria-selected={index === selectedIndex}
+              className={
+                index === activeIndex ? 'agent-option active' : 'agent-option'
+              }
+              onPointerMove={() => setActiveIndex(index)}
+              onClick={() => void selectAgent(agent.id)}
+            >
+              <AgentLabel agent={agent} />
+            </li>
+          ))}
+        </ul>
+      )}
       {saving && <span role="status">Saving…</span>}
       {error && (
         <p role="alert" className="form-error">

@@ -7,12 +7,19 @@ test.setTimeout(60000)
 
 async function configure(page: Page) {
   await page.goto('/')
-  await page.getByLabel('Agent for plan', { exact: true }).selectOption('codex')
-  await page
-    .getByLabel('Agent for integrate', { exact: true })
-    .selectOption('claude')
-  await page.getByLabel('Agent for test', { exact: true }).selectOption('pi')
-  await expect(page.getByLabel('Agent for test', { exact: true })).toBeEnabled()
+  await assign(page, 'plan', 'Codex CLI')
+  await assign(page, 'integrate', 'Claude Code CLI')
+  await assign(page, 'test', 'Pi')
+}
+
+async function assign(page: Page, stage: string, name: string) {
+  const selector = page.getByRole('combobox', {
+    name: `Agent for ${stage}`,
+    exact: true,
+  })
+  await selector.click()
+  await page.getByRole('option', { name, exact: true }).click()
+  await expect(selector).toBeEnabled()
 }
 
 async function create(page: Page, title: string) {
@@ -45,15 +52,15 @@ test('offers agent dropdowns only in working columns and persists assignments', 
   await expect(page.getByLabel('Agent for backlog')).toHaveCount(0)
   await expect(page.getByLabel('Agent for final_approval')).toHaveCount(0)
   await page.reload()
-  await expect(page.getByLabel('Agent for plan', { exact: true })).toHaveValue(
-    'codex',
-  )
+  await expect(
+    page.getByLabel('Agent for plan', { exact: true }),
+  ).toContainText('Codex CLI')
   await expect(
     page.getByLabel('Agent for integrate', { exact: true }),
-  ).toHaveValue('claude')
-  await expect(page.getByLabel('Agent for test', { exact: true })).toHaveValue(
-    'pi',
-  )
+  ).toContainText('Claude Code CLI')
+  await expect(
+    page.getByLabel('Agent for test', { exact: true }),
+  ).toContainText('Pi')
 })
 
 test('keeps the previous assignment when saving fails', async ({ page }) => {
@@ -61,11 +68,60 @@ test('keeps the previous assignment when saving fails', async ({ page }) => {
   await page.route('**/api/v1/routing/plan/', (route) =>
     route.fulfill({ status: 500, json: { detail: 'Assignment failed' } }),
   )
-  await page.getByLabel('Agent for plan', { exact: true }).selectOption('pi')
-  await expect(page.getByLabel('Agent for plan', { exact: true })).toHaveValue(
-    'codex',
-  )
+  await assign(page, 'plan', 'Pi')
+  await expect(
+    page.getByLabel('Agent for plan', { exact: true }),
+  ).toContainText('Codex CLI')
   await expect(page.getByRole('alert')).toContainText('Assignment failed')
+})
+
+test('supports keyboard selection and dismissing agent menus without saving', async ({
+  page,
+}, testInfo) => {
+  await configure(page)
+  const selector = page.getByRole('combobox', {
+    name: 'Agent for plan',
+    exact: true,
+  })
+  await selector.focus()
+  await selector.press('ArrowDown')
+  const menu = page.getByRole('listbox', {
+    name: 'Agent for plan',
+    exact: true,
+  })
+  await expect(menu).toBeVisible()
+  await expect(menu.locator('img')).toHaveCount(3)
+  for (const logo of await menu.locator('img').all()) {
+    await expect(logo).toHaveJSProperty('complete', true)
+    expect(
+      await logo.evaluate((image: HTMLImageElement) => image.naturalWidth),
+    ).toBeGreaterThan(0)
+  }
+  await page.screenshot({
+    path: testInfo.outputPath('agent-menu.png'),
+    fullPage: true,
+  })
+  await selector.press('End')
+  await selector.press('Escape')
+  await expect(selector).toHaveAttribute('aria-expanded', 'false')
+  await expect(selector).toBeFocused()
+  await expect(selector).toContainText('Codex CLI')
+  await selector.press('p')
+  await selector.press('Enter')
+  await expect(selector).toContainText('Pi')
+  await expect(selector).toBeEnabled()
+  await selector.click()
+  await page.getByRole('heading', { name: 'Backlog', exact: true }).click()
+  await expect(selector).toHaveAttribute('aria-expanded', 'false')
+  await selector.focus()
+  await selector.press('ArrowUp')
+  await selector.press('Home')
+  await selector.press('Enter')
+  await expect(selector).toContainText('Unassigned')
+  await page.reload()
+  await expect(
+    page.getByLabel('Agent for plan', { exact: true }),
+  ).toContainText('Unassigned')
 })
 
 test('runs mixed agents with a human approval gate at every stage', async ({
