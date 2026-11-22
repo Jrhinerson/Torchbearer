@@ -335,9 +335,6 @@ main {
   height: 24px;
   margin: -3px;
 }
-:root:not([data-theme='light']) .agent-logo-codex {
-  filter: invert(1);
-}
 .agent-label small {
   color: var(--color-text-muted);
   font-size: var(--text-meta);

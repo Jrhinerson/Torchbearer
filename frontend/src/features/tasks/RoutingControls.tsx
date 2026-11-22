@@ -114,7 +114,7 @@ export function AgentSelect({
       <button
         ref={trigger}
         type="button"
-        className="agent-select"
+        className="button button-secondary agent-select"
         role="combobox"
         aria-labelledby={`${id}-label`}
         aria-haspopup="listbox"
@@ -225,7 +225,7 @@ export function AgentSelect({
       )}
       {saving && <span role="status">Saving…</span>}
       {error && (
-        <p role="alert" className="form-error">
+        <p role="alert" className="feedback feedback-error form-error">
           {error}
         </p>
       )}
@@ -253,8 +253,11 @@ export function RepositoryPicker({
   const [error, setError] = useState('')
   return (
     <div className="repository-picker">
-      <label htmlFor={id}>Repository</label>
+      <label className="field-label" htmlFor={id}>
+        Repository
+      </label>
       <select
+        className="field"
         id={id}
         value={value}
         disabled={disabled || saving}
@@ -269,7 +272,7 @@ export function RepositoryPicker({
       </select>
       <button
         type="button"
-        className="text-button"
+        className="button button-link"
         disabled={disabled || saving}
         onClick={() => setAdding(!adding)}
       >
@@ -277,8 +280,11 @@ export function RepositoryPicker({
       </button>
       {adding && (
         <div className="add-repository">
-          <label htmlFor={`${id}-path`}>Local Git repository path</label>
+          <label className="field-label" htmlFor={`${id}-path`}>
+            Local Git repository path
+          </label>
           <input
+            className="field"
             id={`${id}-path`}
             value={path}
             disabled={disabled || saving}
@@ -287,7 +293,7 @@ export function RepositoryPicker({
           />
           <button
             type="button"
-            className="secondary-button"
+            className="button button-secondary"
             disabled={disabled || saving || !path.trim()}
             onClick={async () => {
               setSaving(true)
@@ -314,7 +320,7 @@ export function RepositoryPicker({
         </div>
       )}
       {error && (
-        <p role="alert" className="form-error">
+        <p role="alert" className="feedback feedback-error form-error">
           {error}
         </p>
       )}
