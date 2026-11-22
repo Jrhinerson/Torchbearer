@@ -1,3 +1,5 @@
+from projects.models import Project
+from projects.serializers import ProjectSerializer
 from rest_framework import serializers
 
 from .git import repository_path
@@ -56,6 +58,14 @@ class RepositorySerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    project = ProjectSerializer(read_only=True)
+    project_id = serializers.PrimaryKeyRelatedField(
+        source="project",
+        queryset=Project.objects.filter(archived=False),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     latest_run = serializers.SerializerMethodField()
     stage_agents = serializers.SerializerMethodField()
     next_stage = serializers.SerializerMethodField()
@@ -68,16 +78,6 @@ class TaskSerializer(serializers.ModelSerializer):
             return {}
         return {stage: agent_for(obj, stage) for stage in Stage}
 
-    def validate(self, attrs):
-        mode = attrs.get("routing_mode", Approach.FRONTIER)
-        frontier = attrs.get("frontier_agent", None if mode == Approach.LOCAL else Agent.CODEX)
-        try:
-            validate_routing(mode, frontier)
-        except ValueError as error:
-            raise serializers.ValidationError({"routing_mode": str(error)}) from error
-        attrs.update(routing_mode=mode, frontier_agent=frontier)
-        return attrs
-
     def get_latest_run(self, obj):
         return obj.runs.values(
             "id", "stage", "agent", "state", "sequence", "error", "cancel_requested"
@@ -89,6 +89,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
+            "project",
+            "project_id",
             "repository",
             "routing_mode",
             "frontier_agent",
@@ -116,6 +118,39 @@ class TaskSerializer(serializers.ModelSerializer):
             "base_commit",
         ]
         extra_kwargs = {"frontier_agent": {"required": False}}
+
+    def validate(self, data):
+        mode = data.get("routing_mode", Approach.FRONTIER)
+        frontier = data.get("frontier_agent", None if mode == Approach.LOCAL else Agent.CODEX)
+        try:
+            validate_routing(mode, frontier)
+        except ValueError as error:
+            raise serializers.ValidationError({"routing_mode": str(error)}) from error
+        data.update(routing_mode=mode, frontier_agent=frontier)
+        project = data.get("project")
+        if project and "repository" not in data:
+            try:
+                path = repository_path(project.path)
+            except ValueError:
+                # Ordinary folders are valid projects; execution still needs a Git repository.
+                data["repository"] = None
+            else:
+                data["repository"] = Repository.objects.get_or_create(
+                    path=path, defaults={"name": project.name}
+                )[0]
+        elif "repository" in data:
+            repository = data["repository"]
+            if project and (not repository or repository.path != project.path):
+                raise serializers.ValidationError(
+                    {"repository": ["The repository must match the selected project's folder."]}
+                )
+            if "project" not in data:
+                data["project"] = (
+                    Project.objects.filter(path=repository.path, archived=False).first()
+                    if repository
+                    else None
+                )
+        return data
 
     def to_internal_value(self, data):
         # Reject workflow assignments rather than silently accepting an ignored field.

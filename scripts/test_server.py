@@ -25,6 +25,7 @@ def main():
         call_command("migrate", interactive=False, verbosity=0)
         from pathlib import Path
 
+        from projects.models import Project
         from tasks.git import git
         from tasks.models import AgentRun, Repository, Task
 
@@ -46,9 +47,11 @@ def main():
         registered = Repository.objects.create(
             name="Browser fixture repository", path=str(repository)
         )
+        project = Project.objects.create(name="Browser fixture repository", path=str(repository))
         legacy = Task.objects.create(
             title="Existing task needs routing",
             repository=registered,
+            project=project,
             status="plan",
             routing_mode=None,
             frontier_agent=None,

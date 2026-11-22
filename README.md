@@ -23,6 +23,14 @@ Setup creates `.venv/`, installs the pinned Python requirements and frontend loc
 
 Vite refreshes frontend edits automatically. Restart the launcher after editing Python code; Django's automatic reloader is disabled so the launcher can reliably manage its process tree. These commands start local development services.
 
+## Projects in New Task
+
+Choose **Project** to search saved projects by name or folder, then select one for the task. A Git project with an initial commit also supplies the repository used for agent execution. **No project** keeps a task unassigned. The selection stays with the draft when you dismiss the popup and stays selected for subsequent tasks until you change it. Existing registered repositories and their task selections are retained as saved projects when upgrading.
+
+Use **Add Project** to add an existing **Local folder** by pasting an absolute path or choosing **Browse**. Alternatively, choose **Clone a Git URL**, enter an HTTPS or SSH clone URL and the full path to a new destination folder, then **Clone and select project**. **Browse parent** chooses the existing parent and suggests a destination using the repository name. The machine running Django supplies the folders, Git installation and Git credentials. Cloning is noninteractive and times out after two minutes; an existing destination is never overwritten. GitHub sign-in and repository search are not included.
+
+Project names default to the folder name. Adding a project selects it while keeping the task title and description. **Manage projects** provides rename and removal controls. Renaming updates existing task labels; removal hides the project from the picker while keeping its files and task history. Adding the same folder again restores the saved project. A project association does not execute any work.
+
 ## Configuration and data
 
 | Setting | Default | Purpose |
@@ -44,7 +52,7 @@ Routing can change in Backlog using **Save routing** and is locked when planning
 
 Install and authenticate each CLI you want to use, and configure its default model in that CLI. Torchbearer uses the CLI's existing authentication and model configuration. The dropdown identifies missing installations; outdated versions, missing authentication, and permission denials appear as run errors. Current adapter version requirements are Codex CLI 0.162.0+, Claude Code 2.1.259+, and Pi 0.74.0+.
 
-1. Create a task, choose its approach and frontier agent when applicable, and select its local Git repository. Use **Add repository** to register a repository root; repository selection remains editable in Backlog.
+1. Create a task, choose its approach and frontier agent when applicable, and select a saved Git project. Use **Add Project** to register a local folder or clone a Git URL; existing Backlog tasks can also select an execution repository on the card.
 2. Click **Start planning**. Torchbearer creates a branch and worktree from the repository's committed HEAD; uncommitted changes and ignored dependencies in the original checkout are not copied.
 3. Open **Review step** to read the detailed plan, logs, and changes. Approving Plan queues Integrate; approving Integrate queues Test. Required artifacts are passed in full, independently of the bounded recent-run history.
 4. Test runs validation and reports actual command outcomes. Approve passing results to start Code Review, which inspects the complete task changes against the approved plan and test evidence. Every successful stage waits for human approval before advancing.
@@ -83,7 +91,7 @@ npm.cmd run test:e2e
 
 On macOS/Linux, run `npx playwright install chromium` and `npm run test:e2e` from `frontend/`. Linux may require `npx playwright install --with-deps chromium` to install browser system dependencies.
 
-Browser checks use separate ports (frontend `15173`, backend `18000`), their own services, a fresh temporary database and repository, and deterministic fake agent CLIs. The regular development launcher can remain running. They never invoke authenticated models or use the developer's normal data. Override test ports with `TORCHBEARER_TEST_FRONTEND_PORT` and `TORCHBEARER_TEST_BACKEND_PORT`. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
+Browser checks use separate ports (frontend `15173`, backend `18000`), their own services, a fresh temporary database and repository, and deterministic fake agent CLIs. The regular development launcher can remain running. They never invoke authenticated models or use the developer's normal data. Override test ports with `TORCHBEARER_TEST_FRONTEND_PORT` and `TORCHBEARER_TEST_BACKEND_PORT`. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory. Clone success and pending states use a simulated response; remote credentials and network access are not required by the suite.
 
 Run `python scripts/check_launcher.py` from the repository root in a terminal to verify the backend, frontend, and worker start and stop together. Its Windows check requires a console to send Ctrl+Break. The restart and launcher checks also use temporary databases and available ports, leaving normal local data alone. Backend tests include killing a real worker process to verify child cleanup, queue persistence, and explicit retry of interrupted work.
 
@@ -97,6 +105,6 @@ Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.v
 - [Task routing plan](docs/plans/005-task-agent-routing.md): per-task approaches, detailed handoffs, Code Review, migration, and cleanup.
 - [PR description draft](docs/pr-001-foundation.md): behavior, scope, and local validation results.
 
-The application supports backlog tasks, per-task agent routing, isolated task worktrees, reviewed stage transitions, execution history, and final human approval. Desktop packaging, automatic merging, custom stage prompts, model selectors, and parallel execution remain future work.
+The application supports reusable saved projects, backlog tasks, per-task agent routing, isolated task worktrees, reviewed stage transitions, execution history, and final human approval. Desktop packaging, automatic merging, custom stage prompts, model selectors, and parallel execution remain future work.
 
 GitHub Actions is configured for Windows and Linux. All work is committed locally; the user handles pushing and opening a PR after their approval. Hosted CI has not run as part of local implementation.

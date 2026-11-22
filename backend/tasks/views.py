@@ -55,7 +55,7 @@ class TaskListCreateView(generics.ListCreateAPIView):
 
     authentication_classes = []
     permission_classes = [AllowAny]
-    queryset = Task.objects.all()
+    queryset = Task.objects.select_related("project")
     serializer_class = TaskSerializer
 
 

@@ -19,12 +19,13 @@ async function backlog(
     await composer
       .getByLabel('Frontier agent', { exact: true })
       .selectOption(frontier)
-  const repositories = await page.request
-    .get('/api/v1/repositories/')
-    .then((response) => response.json())
+  await composer.getByRole('button', { name: /^Project optional/ }).click()
   await composer
-    .getByLabel('Repository', { exact: true })
-    .selectOption(repositories[0].id)
+    .getByRole('button', {
+      name: 'Select Browser fixture repository',
+      exact: true,
+    })
+    .click()
   await composer.getByRole('button', { name: 'Add to backlog' }).click()
   const card = page.getByRole('article', { name: title, exact: true })
   await expect(card).toBeVisible()

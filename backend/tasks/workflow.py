@@ -4,6 +4,7 @@ from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from projects.models import Project
 from rest_framework.exceptions import APIException, ValidationError
 
 from .cli import resolve_command
@@ -72,6 +73,13 @@ def update_settings(task_id, *, revision, **settings):
         except ValueError as error:
             raise ValidationError({"routing_mode": str(error)}) from error
         settings.update(routing_mode=mode, frontier_agent=frontier)
+    if "repository" in settings:
+        repository = settings["repository"]
+        settings["project"] = (
+            Project.objects.filter(path=repository.path, archived=False).first()
+            if repository
+            else None
+        )
     for field, value in settings.items():
         setattr(task, field, value)
     task.save(update_fields=[*settings, "updated_at"])

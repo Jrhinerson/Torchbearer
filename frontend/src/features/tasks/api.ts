@@ -1,4 +1,5 @@
 import { requestJson } from '../../lib/api'
+import type { Project } from '../projects/api'
 
 export type Stage = 'plan' | 'integrate' | 'test' | 'code_review'
 export type Agent = 'codex' | 'claude' | 'pi'
@@ -78,6 +79,7 @@ export interface Task {
   id: string
   title: string
   description: string
+  project: Project | null
   repository: string | null
   routing_mode: Approach | null
   frontier_agent: FrontierAgent | null
@@ -117,12 +119,14 @@ export function createTask(
   repository = '',
   routing_mode: Approach = 'frontier',
   frontier_agent: FrontierAgent | null = 'codex',
+  projectId: string | null = null,
 ) {
   return writeJson<Task>('tasks/', 'POST', {
     title: title.trim(),
     description: description.trim(),
     routing_mode,
     frontier_agent: routing_mode === 'local_only' ? null : frontier_agent,
+    project_id: projectId,
     ...(repository ? { repository } : {}),
   })
 }
