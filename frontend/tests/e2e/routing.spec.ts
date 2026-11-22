@@ -7,8 +7,8 @@ test.setTimeout(60000)
 
 async function configure(page: Page) {
   await page.goto('/')
-  await assign(page, 'plan', 'Codex CLI')
-  await assign(page, 'integrate', 'Claude Code CLI')
+  await assign(page, 'plan', 'codex')
+  await assign(page, 'integrate', 'claude code')
   await assign(page, 'test', 'Pi')
 }
 
@@ -47,20 +47,41 @@ async function create(page: Page, title: string) {
 
 test('offers agent dropdowns only in working columns and persists assignments', async ({
   page,
-}) => {
+}, testInfo) => {
   await configure(page)
   await expect(page.getByLabel('Agent for backlog')).toHaveCount(0)
   await expect(page.getByLabel('Agent for final_approval')).toHaveCount(0)
   await page.reload()
   await expect(
     page.getByLabel('Agent for plan', { exact: true }),
-  ).toContainText('Codex CLI')
+  ).toContainText('codex')
   await expect(
     page.getByLabel('Agent for integrate', { exact: true }),
-  ).toContainText('Claude Code CLI')
+  ).toContainText('claude code')
   await expect(
     page.getByLabel('Agent for test', { exact: true }),
   ).toContainText('Pi')
+  for (const [stage, agent] of [
+    ['plan', 'codex'],
+    ['integrate', 'claude'],
+    ['test', 'pi'],
+  ]) {
+    const selector = page.getByRole('combobox', {
+      name: `Agent for ${stage}`,
+      exact: true,
+    })
+    await expect(selector).toHaveAttribute('aria-expanded', 'false')
+    const logo = selector.locator(`img.agent-logo-${agent}`)
+    await expect(logo).toBeVisible()
+    await expect(logo).toHaveJSProperty('complete', true)
+    expect(
+      await logo.evaluate((image: HTMLImageElement) => image.naturalWidth),
+    ).toBeGreaterThan(0)
+  }
+  await page.screenshot({
+    path: testInfo.outputPath('selected-agent-logos.png'),
+    fullPage: true,
+  })
 })
 
 test('keeps the previous assignment when saving fails', async ({ page }) => {
@@ -71,7 +92,7 @@ test('keeps the previous assignment when saving fails', async ({ page }) => {
   await assign(page, 'plan', 'Pi')
   await expect(
     page.getByLabel('Agent for plan', { exact: true }),
-  ).toContainText('Codex CLI')
+  ).toContainText('codex')
   await expect(page.getByRole('alert')).toContainText('Assignment failed')
 })
 
@@ -105,7 +126,7 @@ test('supports keyboard selection and dismissing agent menus without saving', as
   await selector.press('Escape')
   await expect(selector).toHaveAttribute('aria-expanded', 'false')
   await expect(selector).toBeFocused()
-  await expect(selector).toContainText('Codex CLI')
+  await expect(selector).toContainText('codex')
   await selector.press('p')
   await selector.press('Enter')
   await expect(selector).toContainText('Pi')

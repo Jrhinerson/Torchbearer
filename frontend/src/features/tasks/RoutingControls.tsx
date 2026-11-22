@@ -11,6 +11,12 @@ const agentLogos: Record<Agent, string> = {
   pi: piLogo,
 }
 
+const agentNames: Record<Agent, string> = {
+  codex: 'codex',
+  claude: 'claude code',
+  pi: 'Pi',
+}
+
 function AgentLabel({
   agent,
 }: {
@@ -53,7 +59,10 @@ export function AgentSelect({
   const [error, setError] = useState('')
   const choices: { id: Agent | ''; label: string; available: boolean }[] = [
     { id: '', label: 'Unassigned', available: true },
-    ...routing.agents,
+    ...routing.agents.map((agent) => ({
+      ...agent,
+      label: agentNames[agent.id],
+    })),
   ]
   const selectedIndex = Math.max(
     0,
