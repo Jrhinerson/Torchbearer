@@ -1,9 +1,11 @@
 import { requestJson } from '../../lib/api'
+import type { Project } from '../projects/api'
 
 export interface Task {
   id: string
   title: string
   description: string
+  project: Project | null
   status: 'backlog'
   created_at: string
   updated_at: string
@@ -13,7 +15,11 @@ export function listTasks(signal?: AbortSignal) {
   return requestJson<Task[]>('tasks/', { signal })
 }
 
-export async function createTask(title: string, description: string) {
+export async function createTask(
+  title: string,
+  description: string,
+  projectId: string | null = null,
+) {
   const { csrfToken } = await requestJson<{ csrfToken: string }>('csrf/')
   return requestJson<Task>('tasks/', {
     method: 'POST',
@@ -21,6 +27,7 @@ export async function createTask(title: string, description: string) {
     body: JSON.stringify({
       title: title.trim(),
       description: description.trim(),
+      project_id: projectId,
     }),
   })
 }

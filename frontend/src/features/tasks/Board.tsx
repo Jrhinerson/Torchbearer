@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import { createTask, deleteTask, listTasks } from './api'
 import type { Task } from './api'
+import ProjectPicker from '../projects/ProjectPicker'
+import type { Project } from '../projects/api'
 
 const columns = [
   { id: 'backlog', title: 'Backlog' },
@@ -23,6 +25,8 @@ export default function Board() {
   const [reload, setReload] = useState(0)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [project, setProject] = useState<Project | null>(null)
+  const [projectBusy, setProjectBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -34,6 +38,7 @@ export default function Board() {
   const titleInput = useRef<HTMLInputElement>(null)
   const newTaskButton = useRef<HTMLButtonElement>(null)
   const composer = useRef<HTMLDialogElement>(null)
+  const formBusy = saving || projectBusy
 
   useEffect(() => {
     const controller = new AbortController()
@@ -64,11 +69,12 @@ export default function Board() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (formBusy) return
     setSaving(true)
     setSaveError('')
     setAnnouncement('')
     try {
-      const task = await createTask(title, description)
+      const task = await createTask(title, description, project?.id ?? null)
       setTasks((current) => [task, ...current])
       setTitle('')
       setDescription('')
@@ -178,6 +184,20 @@ export default function Board() {
                       <li key={task.id}>
                         <article className="task-card" aria-label={task.title}>
                           <h3>{task.title}</h3>
+                          {task.project && (
+                            <p
+                              className="task-project"
+                              title={task.project.path}
+                            >
+                              <span aria-hidden="true">▱</span>{' '}
+                              {task.project.name}
+                              {task.project.archived && (
+                                <span className="removed-project-label">
+                                  Removed project
+                                </span>
+                              )}
+                            </p>
+                          )}
                           {task.description && (
                             <p className="task-description">
                               {task.description}
@@ -222,7 +242,7 @@ export default function Board() {
         aria-labelledby="new-task-heading"
         aria-describedby="new-task-description"
         onCancel={(event) => {
-          if (saving) event.preventDefault()
+          if (formBusy) event.preventDefault()
         }}
         onClose={() => newTaskButton.current?.focus()}
       >
@@ -236,7 +256,7 @@ export default function Board() {
             className="close-dialog-button"
             aria-label="Close new task"
             onClick={() => composer.current?.close()}
-            disabled={saving}
+            disabled={formBusy}
           >
             ×
           </button>
@@ -256,7 +276,7 @@ export default function Board() {
             placeholder="What needs to happen?"
             maxLength={200}
             required
-            disabled={saving}
+            disabled={formBusy}
           />
           <label htmlFor="task-description">
             Description <span className="optional">optional</span>
@@ -268,7 +288,22 @@ export default function Board() {
             placeholder="Describe the goal, context, or a useful starting point."
             rows={5}
             maxLength={10000}
-            disabled={saving}
+            disabled={formBusy}
+          />
+          <ProjectPicker
+            selected={project}
+            onSelect={setProject}
+            disabled={formBusy}
+            onBusyChange={setProjectBusy}
+            onProjectChange={(updated) =>
+              setTasks((current) =>
+                current.map((task) =>
+                  task.project?.id === updated.id
+                    ? { ...task, project: updated }
+                    : task,
+                ),
+              )
+            }
           />
           {saveError && (
             <p className="form-error" role="alert">
@@ -280,11 +315,15 @@ export default function Board() {
               type="button"
               className="secondary-button"
               onClick={() => composer.current?.close()}
-              disabled={saving}
+              disabled={formBusy}
             >
               Cancel
             </button>
-            <button type="submit" className="primary-button" disabled={saving}>
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={formBusy}
+            >
               {saving ? 'Adding task…' : 'Add to backlog'}
               <span aria-hidden="true">↗</span>
             </button>

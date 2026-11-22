@@ -1,5 +1,7 @@
 # Saved projects in task creation
 
+Status: Implemented and verified locally. Both planned commits are local only.
+
 Reference: T3 Code's [project creation](https://github.com/pingdotgg/t3code/blob/main/docs/user/source-control.md#start-clone-or-publish-a-project), [add-project UI](https://github.com/pingdotgg/t3code/blob/main/apps/web/src/components/CommandPaletteAddProject.tsx), and [project settings](https://github.com/pingdotgg/t3code/blob/main/apps/web/src/components/settings/ProjectsSettings.tsx).
 
 Save projects once, then select them when creating tasks. Support existing local folders and cloning a Git URL into a new local destination. Keep the task draft while adding or managing projects. Projects may be renamed or removed from the picker without deleting their files or existing tasks. Tasks without a project remain supported.
@@ -15,7 +17,7 @@ No prerequisite commits outside this change.
 ## Commit 2: `feat: add project selection and management to new tasks`
 
 - **Frontend:** Add a searchable project picker and local-folder/clone flows inside New Task, plus rename/remove controls and project labels on task cards. Cover persistence, draft retention, failures, keyboard use and narrow screens; document the workflow.
-- **Backend:** No changes.
+- **Backend:** Configure the isolated browser-test service to use separate ports and its matching CSRF origin, allowing verification alongside the running app. No project or task API changes.
 - **Database:** No changes.
 
 ## Acceptance criteria
@@ -29,3 +31,10 @@ No prerequisite commits outside this change.
 - Project selection survives closing and reopening the task draft, and saved associations survive a backend restart.
 - Existing tasks and task creation without a project continue to work.
 - Run portable checks, restart persistence verification and Chromium integration checks; commit locally only.
+
+## Verification
+
+- `python scripts/check.py`: Python formatting/lint, Django and migration checks, all 59 API tests, frontend formatting/lint, TypeScript and production build pass.
+- `python scripts/check_persistence.py`: task, saved project and association survive a real backend restart.
+- Chromium: all 14 integration tests pass using dedicated ports 18523/18524 and a disposable database. The mobile project flow was visually inspected from its test screenshot.
+- Clone success and Git failures use simulated responses/subprocess results; live remote authentication was not tested.

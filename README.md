@@ -23,6 +23,14 @@ Setup creates `.venv/`, installs the pinned Python requirements and frontend loc
 
 Vite refreshes frontend edits automatically. Restart the launcher after editing Python code; Django's automatic reloader is disabled so the launcher can reliably manage its process tree. These commands start local development services.
 
+## Projects in New Task
+
+Choose **Project** to search saved projects by name or folder, then select one for the task. **No project** keeps a task unassigned. The selection stays with the draft when you dismiss the popup and stays selected for subsequent tasks until you change it.
+
+Use **Add Project** to add an existing **Local folder** by pasting an absolute path or choosing **Browse**. Alternatively, choose **Clone a Git URL**, enter an HTTPS or SSH clone URL and the full path to a new destination folder, then **Clone and select project**. **Browse parent** chooses the existing parent and suggests a destination using the repository name. The machine running Django supplies the folders, Git installation and Git credentials. Cloning is noninteractive and times out after two minutes; an existing destination is never overwritten. GitHub sign-in and repository search are not included.
+
+Project names default to the folder name. Adding a project selects it while keeping the task title and description. **Manage projects** provides rename and removal controls. Renaming updates existing task labels; removal hides the project from the picker while keeping its files and task history. Adding the same folder again restores the saved project. A project association does not execute any work.
+
 ## Configuration and data
 
 | Setting | Default | Purpose |
@@ -56,7 +64,7 @@ npm.cmd run test:e2e
 
 On macOS/Linux, run `npx playwright install chromium` and `npm run test:e2e` from `frontend/`. Linux may require `npx playwright install --with-deps chromium` to install browser system dependencies.
 
-Stop the regular development launcher before browser checks. They start their own services and a fresh temporary database. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
+Browser checks start their own services on ports `8001` and `5174` with a fresh temporary database, so the regular development launcher can remain running. Set `TORCHBEARER_TEST_BACKEND_PORT` and `TORCHBEARER_TEST_FRONTEND_PORT` to unused ports if those are occupied. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory. Clone success and pending states use a simulated response; remote credentials and network access are not required by the suite.
 
 Run `python scripts/check_launcher.py` from the repository root in a terminal to verify both services start and stop together. Its Windows check requires a console to send Ctrl+Break. The restart and launcher checks also use temporary databases, leaving normal local data alone.
 
@@ -68,6 +76,6 @@ Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.v
 - [Commit plan](docs/plans/001-app-foundation.md): frontend, backend, and database impacts for each planned commit.
 - [PR description draft](docs/pr-001-foundation.md): behavior, scope, and local validation results.
 
-The foundation supports creating, listing, and deleting backlog tasks. Decision checkpoints, approvals, agent execution, and desktop packaging will be added in subsequent changes.
+The foundation supports creating, listing, and deleting backlog tasks, and adding, selecting, renaming and removing reusable local projects. Decision checkpoints, approvals, agent execution, and desktop packaging will be added in subsequent changes.
 
 GitHub Actions is configured for Windows and Linux. All work is committed locally; the user handles pushing and opening a PR after their approval. Hosted CI has not run as part of local implementation.
