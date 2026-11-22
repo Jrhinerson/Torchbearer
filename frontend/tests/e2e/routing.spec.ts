@@ -34,6 +34,9 @@ async function backlog(
 
 async function start(page: Page, card: Locator, title: string) {
   await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
+  await card
     .getByRole('button', { name: 'Start planning', exact: true })
     .click()
   await card.getByRole('button', { name: /View run|Review step/ }).click()
@@ -88,6 +91,13 @@ test('defaults to Frontier and Codex and edits only the chosen backlog task', as
     card.getByRole('button', { name: `Open ${title}`, exact: true }),
   ).toBeFocused()
   await page.reload()
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
+  await page
+    .getByRole('article', { name: otherTitle, exact: true })
+    .getByRole('button', { name: `Expand ${otherTitle}`, exact: true })
+    .click()
   await expect(card).toContainText('Local Only')
   await expect(
     page.getByRole('article', { name: otherTitle, exact: true }),
@@ -130,6 +140,9 @@ test('chooses a missing repository in settings while keeping card controls compa
   await composer.getByLabel('Title', { exact: false }).fill(title)
   await composer.getByRole('button', { name: 'Add to backlog' }).click()
   const card = page.getByRole('article', { name: title, exact: true })
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
   await expect(card.getByRole('combobox')).toHaveCount(0)
   await expect(
     card.getByRole('button', { name: 'Start planning', exact: true }),
@@ -202,6 +215,9 @@ for (const policy of [
     await expect(review.getByText(/^Approved/)).toBeVisible()
     await review.getByRole('button', { name: 'Close task review' }).click()
     await page.reload()
+    await card
+      .getByRole('button', { name: `Expand ${title}`, exact: true })
+      .click()
     await expect(card).toContainText('Approved')
     await card.getByRole('button', { name: 'View history' }).click()
     await expect(page.getByLabel('Run history').locator('option')).toHaveCount(
@@ -218,6 +234,12 @@ test('requires one routing choice before continuing an existing started task', a
     name: 'Existing task needs routing',
     exact: true,
   })
+  await card
+    .getByRole('button', {
+      name: 'Expand Existing task needs routing',
+      exact: true,
+    })
+    .click()
   await expect(card.getByLabel('Approach')).toHaveCount(0)
   await card.getByRole('button', { name: 'Review step' }).click()
   const review = page.getByRole('dialog', {

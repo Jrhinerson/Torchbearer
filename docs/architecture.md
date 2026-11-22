@@ -19,7 +19,7 @@ The board presents Backlog, Plan, Integrate, Test, Code Review, and Final Approv
 
 Task cards contain read-only task context and workflow actions. Clicking a Backlog task's title opens its routing and repository settings in a native dialog; titles on started tasks open the review dialog. Legacy tasks that still need an initial routing choice configure it inside that review dialog. Routing fields and repository selection/registration controls are kept off the cards, and dismissing settings returns keyboard focus to the task title.
 
-Each card has an independent expand/collapse button with `aria-expanded` and `aria-controls`. Cards start expanded. Collapsing keeps the title and project visible (or “No project” when unassigned) and hides the description, routing summary, workflow actions, footer, and errors. Hidden details remain mounted so pending operations and their state are retained. The board tracks collapsed task IDs independently of fetched task data, preserving the choice during polling and column transitions for the current page session.
+Each card has an independent expand/collapse button with `aria-expanded` and `aria-controls`. Cards start collapsed on page load or reload, including newly created cards. Collapsing keeps the title and project visible (or “No project” when unassigned) and hides the description, routing summary, workflow actions, footer, and errors. Hidden details remain mounted so pending operations and their state are retained. The board tracks expanded task IDs in page-session state independently of fetched task data, preserving manual expansion during polling and column transitions; a page reload starts with an empty set again.
 
 ## API contract
 

@@ -33,7 +33,7 @@ const dateFormat = new Intl.DateTimeFormat(undefined, {
 
 export default function Board() {
   const [tasks, setTasks] = useState<Task[]>([])
-  const [collapsedTasks, setCollapsedTasks] = useState<Set<string>>(
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(
     () => new Set(),
   )
   const [routing, setRouting] = useState<Routing | null>(null)
@@ -72,7 +72,7 @@ export default function Board() {
   }
 
   function toggleTask(id: string) {
-    setCollapsedTasks((current) => {
+    setExpandedTasks((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -338,8 +338,8 @@ export default function Board() {
                             <button
                               type="button"
                               className="button button-quiet button-icon task-collapse-button"
-                              aria-label={`${collapsedTasks.has(task.id) ? 'Expand' : 'Collapse'} ${task.title}`}
-                              aria-expanded={!collapsedTasks.has(task.id)}
+                              aria-label={`${expandedTasks.has(task.id) ? 'Collapse' : 'Expand'} ${task.title}`}
+                              aria-expanded={expandedTasks.has(task.id)}
                               aria-controls={`task-details-${task.id}`}
                               onClick={() => toggleTask(task.id)}
                             >
@@ -354,7 +354,7 @@ export default function Board() {
                           </div>
                           <div
                             id={`task-details-${task.id}`}
-                            hidden={collapsedTasks.has(task.id)}
+                            hidden={!expandedTasks.has(task.id)}
                           >
                             {task.description && (
                               <p className="task-description">

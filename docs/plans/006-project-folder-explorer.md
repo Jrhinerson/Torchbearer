@@ -64,3 +64,13 @@ This follows the existing card-collapse commit; no additional prerequisites are 
 - **Database:** No changes.
 
 Verification: all 18 existing board/styling browser checks pass, including deletion cancellation, persistence, and failure recovery. Frontend formatting, lint, TypeScript, and production build pass. Both icons were visually checked in the shared preview, and the delete button retains its accessible name and 44-by-44-pixel target.
+
+## Follow-up commit: `fix: default task cards to collapsed`
+
+This follows the existing icon commit; no additional prerequisites are needed.
+
+- **Frontend:** Track expanded card IDs so all cards default to collapsed on page load/reload and creation, while manual expansion survives automatic polling and stage changes. Update existing browser checks to expand cards before using their actions and verify that reloading resets expansion.
+- **Backend:** No changes.
+- **Database:** No changes.
+
+Verification: all 40 Chromium tests pass, including desktop/mobile initial collapse, reload reset, expansion during polling, settings access, deletion, project selection, and stage transitions. Frontend formatting, lint, TypeScript, and production build pass.

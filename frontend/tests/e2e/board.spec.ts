@@ -44,6 +44,10 @@ test('shows six workflow columns and creates a task through the popup', async ({
   ).toBeFocused()
   await expect(backlog.getByRole('article', { name: title })).toBeVisible()
   await page.reload()
+  await backlog
+    .getByRole('article', { name: title })
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
   await expect(backlog.getByRole('article', { name: title })).toContainText(
     'Decide what success looks like',
   )
@@ -92,6 +96,9 @@ for (const width of [1280, 390]) {
   }, testInfo) => {
     await page.setViewportSize({ width, height: 844 })
     await page.goto('/')
+    await expect(page.getByRole('button', { name: /^Collapse / })).toHaveCount(
+      0,
+    )
     const title = `Collapsible task ${width} ${Date.now()}`
     const description = 'Keep the details and actions available when expanded.'
     const composer = await openComposer(page)
@@ -106,6 +113,10 @@ for (const width of [1280, 390]) {
       .click()
     await composer.getByRole('button', { name: 'Add to backlog' }).click()
     const card = page.getByRole('article', { name: title, exact: true })
+    await expect(card.getByText(description, { exact: true })).not.toBeVisible()
+    await card
+      .getByRole('button', { name: `Expand ${title}`, exact: true })
+      .press('Enter')
     await expect(card.getByText(description, { exact: true })).toBeVisible()
 
     const otherTitle = `Independent card ${width} ${Date.now()}`
@@ -118,6 +129,9 @@ for (const width of [1280, 390]) {
     await composer.getByRole('button', { name: 'Add to backlog' }).click()
     const other = page.getByRole('article', { name: otherTitle, exact: true })
     await expect(other.locator('.task-project')).toHaveText('No project')
+    await other
+      .getByRole('button', { name: `Expand ${otherTitle}`, exact: true })
+      .click()
 
     const refreshed = page.waitForResponse(
       (response) =>
@@ -181,6 +195,23 @@ for (const width of [1280, 390]) {
     await expect(
       card.getByRole('button', { name: `Delete ${title}`, exact: true }),
     ).toBeVisible()
+    const expandedRefresh = page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/v1/tasks/') &&
+        response.request().method() === 'GET',
+    )
+    await expandedRefresh
+    await expect(
+      card.getByRole('button', { name: `Collapse ${title}`, exact: true }),
+    ).toHaveAttribute('aria-expanded', 'true')
+    await page.reload()
+    await expect(
+      card.getByRole('button', { name: `Expand ${title}`, exact: true }),
+    ).toHaveAttribute('aria-expanded', 'false')
+    await expect(card.getByText(description, { exact: true })).not.toBeVisible()
+    await expect(
+      other.getByRole('button', { name: `Expand ${otherTitle}`, exact: true }),
+    ).toHaveAttribute('aria-expanded', 'false')
   })
 }
 
@@ -275,12 +306,18 @@ test('cancels deletion and then deletes a task persistently', async ({
   await dialog.getByRole('button', { name: 'Add to backlog' }).click()
   const card = page.getByRole('article', { name: title, exact: true })
   await expect(card).toBeVisible()
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
   page.once('dialog', (prompt) => prompt.dismiss())
   await card
     .getByRole('button', { name: `Delete ${title}`, exact: true })
     .click()
   await page.reload()
   await expect(card).toBeVisible()
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
   page.once('dialog', (prompt) => prompt.accept())
   await card
     .getByRole('button', { name: `Delete ${title}`, exact: true })
@@ -303,6 +340,9 @@ test('keeps a task when deletion fails and allows retrying', async ({
   await dialog.getByRole('button', { name: 'Add to backlog' }).click()
   const card = page.getByRole('article', { name: title, exact: true })
   await expect(card).toBeVisible()
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
   await page.route('**/api/v1/tasks/*/', (route) =>
     route.fulfill({
       status: 500,
