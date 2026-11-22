@@ -370,7 +370,7 @@ export function WorkflowDialog({
   return (
     <dialog
       ref={dialog}
-      className="surface surface-overlay task-dialog workflow-dialog"
+      className={`surface surface-overlay task-dialog workflow-dialog${planning ? ' planning-dialog' : ''}`}
       aria-labelledby="workflow-heading"
       onCancel={(event) => {
         if (busy) event.preventDefault()
@@ -379,7 +379,15 @@ export function WorkflowDialog({
     >
       <div className="dialog-heading">
         <div>
-          <p className="eyebrow">{task.status.replace('_', ' ')}</p>
+          {planning ? (
+            <p className="planning-context">
+              <span>{task.project?.name || 'Task'}</span>
+              <span aria-hidden="true">/</span>
+              <span>Plan</span>
+            </p>
+          ) : (
+            <p className="eyebrow">{task.status.replace('_', ' ')}</p>
+          )}
           <h2 id="workflow-heading">{task.title}</h2>
         </div>
         <button
@@ -428,38 +436,31 @@ export function WorkflowDialog({
       )}
       {!history && !loadError && <p role="status">Loading runs…</p>}
       {history && planning && (
-        <>
-          <PlanningConversation
-            key={task.id}
-            task={task}
-            history={history}
-            run={run}
-            routing={routing}
-            active={active}
-            busy={busy}
-            canApprove={canApprove && !missingAgent}
-            approvalHint={
-              workspaceError ||
-              (!reviewCurrent
-                ? workspace
-                  ? 'Workspace changes have made this result stale. Send a message to refresh the plan before approving.'
-                  : 'Checking the workspace before approval…'
-                : missingAgent
-                  ? `The agent for ${next} must be configured and installed before continuing.`
-                  : '')
-            }
-            onMessage={(message) => act('plan_message', message)}
-            onRetry={() => void act('retry', '')}
-            onStop={() => void act('cancel')}
-            onApprove={() => void act('approve', '')}
-          />
-          {run?.log && (
-            <details>
-              <summary>Reply diagnostics</summary>
-              <pre className="run-log">{run.log}</pre>
-            </details>
-          )}
-        </>
+        <PlanningConversation
+          key={task.id}
+          task={task}
+          history={history}
+          run={run}
+          routing={routing}
+          active={active}
+          busy={busy}
+          error={error}
+          canApprove={canApprove && !missingAgent}
+          approvalHint={
+            workspaceError ||
+            (!reviewCurrent
+              ? workspace
+                ? 'Workspace changes have made this result stale. Send a message to refresh the plan before approving.'
+                : 'Checking the workspace before approval…'
+              : missingAgent
+                ? `The agent for ${next} must be configured and installed before continuing.`
+                : '')
+          }
+          onMessage={(message) => act('plan_message', message)}
+          onRetry={() => void act('retry', '')}
+          onStop={() => void act('cancel')}
+          onApprove={() => void act('approve', '')}
+        />
       )}
       {history && !planning && (
         <>
@@ -671,7 +672,7 @@ export function WorkflowDialog({
           )}
         </>
       )}
-      {error && (
+      {error && !planning && (
         <p role="alert" className="feedback feedback-error form-error">
           {error}
         </p>
