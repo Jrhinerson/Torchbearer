@@ -1,5 +1,10 @@
 # Project instructions
 
+## Git workflow
+
+- Commit locally only. The user handles pushing to GitHub and opening pull requests after their own approval.
+- Do not push branches, create remote repositories, or open pull requests.
+
 ## Planning format
 
 - Break every project plan into an ordered sequence of proposed Git commits.

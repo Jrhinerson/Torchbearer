@@ -1,6 +1,6 @@
 # First PR: Local application foundation
 
-Status: Proposed. Application implementation has not begun.
+Status: Implemented and verified locally. The user handles pushing and opening the PR after their approval.
 
 Proposed PR title: `Scaffold local app with SQLite-backed backlog`
 
@@ -12,7 +12,7 @@ A developer can start the local application, create a backlog task through React
 
 Use React with TypeScript and Vite, Python with Django 5.2 LTS and Django REST Framework, and SQLite through Django's models and migrations. Use the installed Python 3.14, pin resolved dependencies, and commit dependency locks or complete pinned dependency files.
 
-The repository currently has no commits or remote. Configure the intended Git host and repository, establish the baseline below on `main`, and then create the feature branch. The hosting destination is required before pushing and opening the PR, but does not prevent local implementation.
+The repository began with no commits or remote. Establish the baseline below on `main`, then implement the feature branch locally. The user handles GitHub configuration, pushing, and opening a PR after their own approval; the agent commits locally only.
 
 ## Prerequisite commit outside the PR
 
@@ -73,12 +73,12 @@ Torchbearer/
 |   |   |-- app/
 |   |   |-- features/tasks/
 |   |   `-- lib/
+|   |-- tests/e2e/
 |   `-- package.json
 |-- backend/
 |   |-- config/
 |   |-- tasks/
 |   `-- manage.py
-|-- tests/e2e/
 |-- scripts/
 `-- docs/
     |-- architecture.md
@@ -95,7 +95,14 @@ Torchbearer/
 - Write requests have explicitly tested CSRF protection.
 - Frontend builds, linting, type checks, Django checks, migration checks, API tests, and browser tests pass.
 - Local databases, environment files containing secrets, dependency directories, and generated build files are excluded from Git.
-- The PR description explains the resulting behavior, setup, and validation performed.
+- A local PR description draft explains the resulting behavior, setup, and validation performed; the user handles publishing it.
+
+## Implementation notes
+
+- Browser tests live under `frontend/tests/e2e/` so they resolve the frontend's pinned Playwright dependency without a second JavaScript dependency root.
+- Persistence verification uses an actual backend process restart with temporary data, and a separate launcher check verifies process cleanup.
+- Local validation passed on Windows: 10 API tests, 4 Chromium browser tests, restart persistence, launcher shutdown, linting/formatting, TypeScript, Django/migration checks, and the frontend build.
+- GitHub Actions is configured for Windows and Linux but has not run on GitHub. All commits remain local.
 
 ## Follow-up scope
 
