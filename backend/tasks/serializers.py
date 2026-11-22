@@ -116,7 +116,8 @@ class TaskSerializer(serializers.ModelSerializer):
             if "project" not in data:
                 data["project"] = (
                     Project.objects.filter(path=repository.path, archived=False).first()
-                    if repository else None
+                    if repository
+                    else None
                 )
         return data
 

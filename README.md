@@ -25,7 +25,7 @@ Vite refreshes frontend edits automatically. Restart the launcher after editing 
 
 ## Projects in New Task
 
-Choose **Project** to search saved projects by name or folder, then select one for the task. **No project** keeps a task unassigned. The selection stays with the draft when you dismiss the popup and stays selected for subsequent tasks until you change it.
+Choose **Project** to search saved projects by name or folder, then select one for the task. A Git project with an initial commit also supplies the repository used for agent execution. **No project** keeps a task unassigned. The selection stays with the draft when you dismiss the popup and stays selected for subsequent tasks until you change it. Existing registered repositories and their task selections are retained as saved projects when upgrading.
 
 Use **Add Project** to add an existing **Local folder** by pasting an absolute path or choosing **Browse**. Alternatively, choose **Clone a Git URL**, enter an HTTPS or SSH clone URL and the full path to a new destination folder, then **Clone and select project**. **Browse parent** chooses the existing parent and suggests a destination using the repository name. The machine running Django supplies the folders, Git installation and Git credentials. Cloning is noninteractive and times out after two minutes; an existing destination is never overwritten. GitHub sign-in and repository search are not included.
 
@@ -50,7 +50,7 @@ Plan, Integrate, and Test each have a small agent selector at the top of the col
 
 Install and authenticate each CLI you want to use, and configure its default model in that CLI. Torchbearer uses the CLI's existing authentication and model configuration. The dropdown identifies missing installations; outdated versions, missing authentication, and permission denials appear as run errors. Current adapter version requirements are Codex CLI 0.162.0+, Claude Code 2.1.259+, and Pi 0.74.0+.
 
-1. Create a task and choose its local Git repository, using **Add repository** to register a repository root. Existing backlog tasks can choose their repository directly on the card.
+1. Create a task and choose its saved Git project, using **Add Project** to register a repository root or clone a Git URL. Existing backlog tasks can also choose or register an execution repository directly on the card.
 2. Choose the Plan agent and click **Start planning**. Torchbearer creates a branch and worktree from that repository's committed HEAD; uncommitted changes and ignored dependencies in the original checkout are not copied.
 3. Open **Review step** to read the result, execution log, and code changes. **Approve plan & start Integrate** queues the implementation agent; approval of Integrate queues Test. Each stage reuses the task's worktree and receives the approved plan, prior results, and human feedback, even when the agent changes.
 4. Test runs validation and reports results. Failures stay in Test until you retry or provide instructions and choose **Send back to Integrate**. Test never automatically advances or starts repair work.
@@ -87,7 +87,7 @@ npm.cmd run test:e2e
 
 On macOS/Linux, run `npx playwright install chromium` and `npm run test:e2e` from `frontend/`. Linux may require `npx playwright install --with-deps chromium` to install browser system dependencies.
 
-Browser checks use separate ports (frontend `15173`, backend `18000`), their own services, a fresh temporary database and repository, and deterministic fake agent CLIs. The regular development launcher can remain running. They never invoke authenticated models or use the developer's normal data. Override test ports with `TORCHBEARER_TEST_FRONTEND_PORT` and `TORCHBEARER_TEST_BACKEND_PORT`. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
+Browser checks use separate ports (frontend `15173`, backend `18000`), their own services, a fresh temporary database and repository, and deterministic fake agent CLIs. The regular development launcher can remain running. They never invoke authenticated models or use the developer's normal data. Override test ports with `TORCHBEARER_TEST_FRONTEND_PORT` and `TORCHBEARER_TEST_BACKEND_PORT`. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory. Clone success and pending states use a simulated response; remote credentials and network access are not required by the suite.
 
 Run `python scripts/check_launcher.py` from the repository root in a terminal to verify the backend, frontend, and worker start and stop together. Its Windows check requires a console to send Ctrl+Break. The restart and launcher checks also use temporary databases and available ports, leaving normal local data alone. Backend tests include killing a real worker process to verify child cleanup, queue persistence, and explicit retry of interrupted work.
 
@@ -101,6 +101,6 @@ Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.v
 - [Agent routing plan](docs/plans/004-agentic-routing.md): agreed stage behavior, commit sequence, and verification scope.
 - [PR description draft](docs/pr-001-foundation.md): behavior, scope, and local validation results.
 
-The application supports backlog tasks, per-column agent routing, isolated task worktrees, reviewed stage transitions, execution history, and final human approval. Desktop packaging, automatic merging, custom stage prompts, model selectors, and parallel execution remain future work.
+The application supports reusable saved projects, backlog tasks, per-column agent routing, isolated task worktrees, reviewed stage transitions, execution history, and final human approval. Desktop packaging, automatic merging, custom stage prompts, model selectors, and parallel execution remain future work.
 
 GitHub Actions is configured for Windows and Linux. All work is committed locally; the user handles pushing and opening a PR after their approval. Hosted CI has not run as part of local implementation.

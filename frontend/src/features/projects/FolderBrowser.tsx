@@ -52,9 +52,12 @@ export default function FolderBrowser({
       aria-label="Browse local folders"
       aria-busy={loading}
     >
-      <label htmlFor="browse-folder-path">Browse folders on this machine</label>
+      <label className="field-label" htmlFor="browse-folder-path">
+        Browse folders on this machine
+      </label>
       <div className="project-input-row">
         <input
+          className="field"
           id="browse-folder-path"
           disabled={loading}
           value={path}
@@ -69,7 +72,7 @@ export default function FolderBrowser({
         />
         <button
           type="button"
-          className="secondary-button"
+          className="button button-secondary"
           disabled={loading}
           onClick={() => navigate(path.trim() || undefined)}
         >
@@ -77,7 +80,7 @@ export default function FolderBrowser({
         </button>
       </div>
       {error && (
-        <p className="form-error" role="alert">
+        <p className="feedback feedback-error form-error" role="alert">
           {error}
         </p>
       )}
@@ -90,7 +93,7 @@ export default function FolderBrowser({
           {listing?.parent && (
             <button
               type="button"
-              className="text-button"
+              className="button button-link"
               onClick={() => navigate(listing.parent!)}
             >
               ↑ Parent folder
@@ -100,7 +103,7 @@ export default function FolderBrowser({
             {listing?.folders.map((folder) => (
               <button
                 type="button"
-                className="folder-row"
+                className="button button-quiet folder-row"
                 key={folder.path}
                 onClick={() => navigate(folder.path)}
               >
@@ -115,12 +118,16 @@ export default function FolderBrowser({
         </>
       )}
       <div className="project-panel-actions">
-        <button type="button" className="secondary-button" onClick={onCancel}>
+        <button
+          type="button"
+          className="button button-secondary"
+          onClick={onCancel}
+        >
           Cancel browsing
         </button>
         <button
           type="button"
-          className="primary-button"
+          className="button button-primary"
           disabled={loading || Boolean(error) || !listing}
           onClick={() => listing && onChoose(listing.path)}
         >

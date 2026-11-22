@@ -25,9 +25,9 @@ def main():
         call_command("migrate", interactive=False, verbosity=0)
         from pathlib import Path
 
+        from projects.models import Project
         from tasks.git import git
         from tasks.models import Repository
-        from projects.models import Project
 
         repository = Path(data_dir) / "browser repository"
         repository.mkdir()

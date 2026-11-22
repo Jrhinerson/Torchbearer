@@ -292,8 +292,8 @@ main {
   height: 32px;
   flex-shrink: 0;
   border-radius: 6px;
-  background: var(--color-border);
-  font-size: 22px;
+  background: var(--color-surface);
+  font-size: var(--text-icon);
   color: var(--color-text-muted);
 }
 .project-summary {
@@ -318,7 +318,7 @@ main {
   border: 1px solid var(--color-input-border);
   border-radius: 8px;
   background: var(--color-surface-overlay);
-  box-shadow: 0 4px 16px transparent;
+  box-shadow: var(--shadow-card);
 }
 .project-panel input {
   margin-bottom: 12px;
@@ -348,9 +348,9 @@ main {
   padding-top: 6px;
   border-top: 1px solid var(--color-border);
 }
-.project-picker-actions .text-button,
-.project-row-actions .text-button,
-.project-panel-heading .text-button {
+.project-picker-actions .button-link,
+.project-row-actions .button-link,
+.project-panel-heading .button-link {
   min-height: 44px;
   font-size: var(--text-meta);
 }
@@ -395,7 +395,6 @@ main {
   border-color: var(--color-input-border);
   background: var(--color-surface-overlay);
   color: var(--color-text);
-  box-shadow: 0 1px 3px transparent;
 }
 .project-input-row {
   align-items: stretch;
@@ -752,5 +751,18 @@ main {
   .dialog-actions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 30rem) {
+  .project-input-row,
+  .project-picker-actions {
+    flex-wrap: wrap;
+  }
+  .project-input-row input {
+    flex-basis: 100%;
+  }
+  .project-panel-actions > .button {
+    width: 100%;
   }
 }

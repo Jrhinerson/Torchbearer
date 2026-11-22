@@ -140,17 +140,22 @@ export default function ProjectPicker({
           event.preventDefault()
       }}
     >
-      <label id="task-project-label" htmlFor="task-project">
+      <label
+        className="field-label"
+        id="task-project-label"
+        htmlFor="task-project"
+      >
         Project <span className="optional">optional</span>
       </label>
       <button
         id="task-project"
+        aria-busy={busy}
         ref={trigger}
         type="button"
-        className="project-trigger"
+        className="button button-secondary project-trigger"
         aria-labelledby="task-project-label task-project-value"
         aria-expanded={view !== 'closed'}
-        aria-controls="project-panel"
+        aria-controls={view === 'closed' ? undefined : 'project-panel'}
         disabled={blocked}
         onClick={() => changeView(view === 'closed' ? 'choose' : 'closed')}
       >
@@ -168,11 +173,11 @@ export default function ProjectPicker({
         <span aria-hidden="true">{view === 'closed' ? '⌄' : '⌃'}</span>
       </button>
       {loadError && (
-        <div className="form-error" role="alert">
+        <div className="feedback feedback-error form-error" role="alert">
           {loadError}{' '}
           <button
             type="button"
-            className="text-button"
+            className="button button-link"
             onClick={() => {
               setLoading(true)
               setLoadError('')
@@ -195,6 +200,7 @@ export default function ProjectPicker({
                 Search projects
               </label>
               <input
+                className="field"
                 id="project-search"
                 ref={searchInput}
                 type="search"
@@ -212,7 +218,7 @@ export default function ProjectPicker({
               <div className="project-list" aria-label="Saved projects">
                 <button
                   type="button"
-                  className="project-option"
+                  className="button button-quiet project-option"
                   aria-pressed={!selected}
                   disabled={blocked}
                   onClick={() => select(null)}
@@ -234,7 +240,7 @@ export default function ProjectPicker({
                   <button
                     type="button"
                     key={project.id}
-                    className="project-option"
+                    className="button button-quiet project-option"
                     aria-label={`Select ${project.name}`}
                     aria-pressed={selected?.id === project.id}
                     disabled={blocked}
@@ -260,7 +266,7 @@ export default function ProjectPicker({
               <div className="project-picker-actions">
                 <button
                   type="button"
-                  className="text-button"
+                  className="button button-link"
                   disabled={blocked}
                   onClick={() => changeView('add')}
                 >
@@ -268,7 +274,7 @@ export default function ProjectPicker({
                 </button>
                 <button
                   type="button"
-                  className="text-button"
+                  className="button button-link"
                   disabled={blocked || projects.length === 0}
                   onClick={() => changeView('manage')}
                 >
@@ -283,7 +289,7 @@ export default function ProjectPicker({
                 <strong>Add project</strong>
                 <button
                   type="button"
-                  className="text-button"
+                  className="button button-link"
                   disabled={blocked}
                   onClick={() => changeView('choose')}
                 >
@@ -293,6 +299,7 @@ export default function ProjectPicker({
               <div className="project-sources" aria-label="Project source">
                 <button
                   type="button"
+                  className="button button-secondary"
                   aria-pressed={source === 'local'}
                   disabled={blocked}
                   onClick={() => {
@@ -306,6 +313,7 @@ export default function ProjectPicker({
                 </button>
                 <button
                   type="button"
+                  className="button button-secondary"
                   aria-pressed={source === 'clone'}
                   disabled={blocked}
                   onClick={() => {
@@ -320,8 +328,11 @@ export default function ProjectPicker({
               </div>
               {source === 'clone' && (
                 <>
-                  <label htmlFor="project-url">Git URL</label>
+                  <label className="field-label" htmlFor="project-url">
+                    Git URL
+                  </label>
                   <input
+                    className="field"
                     id="project-url"
                     ref={urlInput}
                     value={url}
@@ -332,11 +343,12 @@ export default function ProjectPicker({
                   />
                 </>
               )}
-              <label htmlFor="project-path">
+              <label className="field-label" htmlFor="project-path">
                 {source === 'local' ? 'Local folder path' : 'Clone destination'}
               </label>
               <div className="project-input-row">
                 <input
+                  className="field"
                   id="project-path"
                   ref={pathInput}
                   value={path}
@@ -351,7 +363,7 @@ export default function ProjectPicker({
                 />
                 <button
                   type="button"
-                  className="secondary-button"
+                  className="button button-secondary"
                   disabled={blocked}
                   onClick={() => setBrowsing((current) => !current)}
                 >
@@ -382,11 +394,12 @@ export default function ProjectPicker({
                   ? 'Use an existing folder on the machine running Torchbearer.'
                   : 'The parent folder must exist. Git uses this machine’s credentials; cloning can take up to two minutes.'}
               </p>
-              <label htmlFor="project-name">
+              <label className="field-label" htmlFor="project-name">
                 Project name{' '}
                 <span className="optional">defaults to folder name</span>
               </label>
               <input
+                className="field"
                 id="project-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
@@ -397,7 +410,7 @@ export default function ProjectPicker({
               <div className="project-panel-actions">
                 <button
                   type="button"
-                  className="primary-button"
+                  className="button button-primary"
                   disabled={
                     blocked ||
                     !path.trim() ||
@@ -422,7 +435,7 @@ export default function ProjectPicker({
                 <strong>Manage projects</strong>
                 <button
                   type="button"
-                  className="text-button"
+                  className="button button-link"
                   disabled={blocked}
                   onClick={() => changeView('choose')}
                 >
@@ -445,6 +458,7 @@ export default function ProjectPicker({
                           New project name
                         </label>
                         <input
+                          className="field"
                           id="rename-project"
                           value={rename}
                           onChange={(event) => setRename(event.target.value)}
@@ -455,7 +469,7 @@ export default function ProjectPicker({
                         <div className="project-row-actions">
                           <button
                             type="button"
-                            className="text-button"
+                            className="button button-link"
                             disabled={blocked || !rename.trim()}
                             onClick={() =>
                               run(async () => {
@@ -479,7 +493,7 @@ export default function ProjectPicker({
                           </button>
                           <button
                             type="button"
-                            className="text-button"
+                            className="button button-link"
                             disabled={blocked}
                             onClick={() => setEditing(null)}
                           >
@@ -491,7 +505,7 @@ export default function ProjectPicker({
                       <div className="project-row-actions">
                         <button
                           type="button"
-                          className="text-button"
+                          className="button button-link"
                           aria-label={`Rename ${project.name}`}
                           disabled={blocked}
                           onClick={() => {
@@ -504,7 +518,7 @@ export default function ProjectPicker({
                         </button>
                         <button
                           type="button"
-                          className="text-button remove-project-button"
+                          className="button button-link button-destructive remove-project-button"
                           aria-label={`Remove ${project.name}`}
                           disabled={blocked}
                           onClick={() => {
@@ -539,7 +553,7 @@ export default function ProjectPicker({
             </>
           )}
           {error && (
-            <p className="form-error" role="alert">
+            <p className="feedback feedback-error form-error" role="alert">
               {error}
             </p>
           )}

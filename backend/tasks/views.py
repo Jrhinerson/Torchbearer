@@ -86,7 +86,9 @@ class TaskDeleteView(generics.RetrieveUpdateDestroyAPIView):
     @transaction.atomic
     def perform_update(self, serializer):
         if not Task.objects.filter(pk=serializer.instance.pk, status="backlog").update(
-            repository=serializer.validated_data["repository"], revision=F("revision") + 1
+            repository=serializer.validated_data["repository"],
+            project=serializer.validated_data["project"],
+            revision=F("revision") + 1,
         ):
             raise Conflict("A task's repository cannot change after planning starts.")
         serializer.instance.refresh_from_db()

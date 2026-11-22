@@ -32,7 +32,21 @@ No prerequisite commits outside this change.
 - Existing tasks and task creation without a project continue to work.
 - Run portable checks, restart persistence verification and Chromium integration checks; commit locally only.
 
+## Merge follow-up: `fix: reconcile project selection with merged agent workflows`
+
+- **Frontend:** Preserve agent routing and review controls while using the saved-project picker in New Task. Apply the shared dark/light styling primitives to project controls and verify the combined workflow.
+- **Backend:** Connect Git projects to validated execution repositories while retaining legacy repository requests and workflow safeguards. Keep test-service ports aligned with the current launcher configuration.
+- **Database:** Join the independent project and agent-workflow migration histories and carry existing repository selections into saved projects without replacing project names or archive state.
+
 ## Verification
+
+### Merge follow-up
+
+- Portable checks pass, including 99 backend tests, migration consistency, frontend formatting/lint, TypeScript and the production build. A fresh short temporary directory avoids the Windows Git path-length limit in worker-recovery checks.
+- All 30 Chromium tests pass, including selected-project execution through every agent stage, both themes and responsive project controls.
+- Restart persistence passes against a disposable database containing the reconciled migrations.
+
+### Original feature
 
 - `python scripts/check.py`: Python formatting/lint, Django and migration checks, all 59 API tests, frontend formatting/lint, TypeScript and production build pass.
 - `python scripts/check_persistence.py`: task, saved project and association survive a real backend restart.
