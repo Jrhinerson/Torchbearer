@@ -23,6 +23,14 @@ Setup creates `.venv/`, installs the pinned Python requirements and frontend loc
 
 Vite refreshes frontend edits automatically. Restart the launcher after editing Python code; Django's automatic reloader is disabled so the launcher can reliably manage its process tree. These commands start local development services.
 
+## Projects in New Task
+
+Choose **Project** to search saved projects by name or folder, then select one for the task. **No project** keeps a task unassigned. The selection stays with the draft when you dismiss the popup and stays selected for subsequent tasks until you change it.
+
+Use **Add Project** to add an existing **Local folder** by pasting an absolute path or choosing **Browse**. Alternatively, choose **Clone a Git URL**, enter an HTTPS or SSH clone URL and the full path to a new destination folder, then **Clone and select project**. **Browse parent** chooses the existing parent and suggests a destination using the repository name. The machine running Django supplies the folders, Git installation and Git credentials. Cloning is noninteractive and times out after two minutes; an existing destination is never overwritten. GitHub sign-in and repository search are not included.
+
+Project names default to the folder name. Adding a project selects it while keeping the task title and description. **Manage projects** provides rename and removal controls. Renaming updates existing task labels; removal hides the project from the picker while keeping its files and task history. Adding the same folder again restores the saved project. A project association does not execute any work.
+
 ## Configuration and data
 
 | Setting | Default | Purpose |

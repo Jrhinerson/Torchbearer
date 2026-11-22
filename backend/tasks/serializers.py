@@ -1,3 +1,5 @@
+from projects.models import Project
+from projects.serializers import ProjectSerializer
 from rest_framework import serializers
 
 from .git import repository_path
@@ -47,6 +49,14 @@ class RepositorySerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    project = ProjectSerializer(read_only=True)
+    project_id = serializers.PrimaryKeyRelatedField(
+        source="project",
+        queryset=Project.objects.filter(archived=False),
+        required=False,
+        allow_null=True,
+        write_only=True,
+    )
     latest_run = serializers.SerializerMethodField()
 
     def get_latest_run(self, obj):
@@ -60,6 +70,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
+            "project",
+            "project_id",
             "repository",
             "status",
             "revision",
@@ -82,6 +94,31 @@ class TaskSerializer(serializers.ModelSerializer):
             "branch",
             "base_commit",
         ]
+
+    def validate(self, data):
+        project = data.get("project")
+        if project and "repository" not in data:
+            try:
+                path = repository_path(project.path)
+            except ValueError:
+                # Ordinary folders are valid projects; execution still needs a Git repository.
+                data["repository"] = None
+            else:
+                data["repository"] = Repository.objects.get_or_create(
+                    path=path, defaults={"name": project.name}
+                )[0]
+        elif "repository" in data:
+            repository = data["repository"]
+            if project and (not repository or repository.path != project.path):
+                raise serializers.ValidationError(
+                    {"repository": ["The repository must match the selected project's folder."]}
+                )
+            if "project" not in data:
+                data["project"] = (
+                    Project.objects.filter(path=repository.path, archived=False).first()
+                    if repository else None
+                )
+        return data
 
     def to_internal_value(self, data):
         # Reject workflow assignments rather than silently accepting an ignored field.

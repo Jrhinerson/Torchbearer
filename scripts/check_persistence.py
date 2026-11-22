@@ -68,9 +68,23 @@ def main():
         try:
             with opener.open(f"{url}/api/v1/csrf/", timeout=3) as response:
                 token = json.load(response)["csrfToken"]
+            project_request = urllib.request.Request(
+                f"{url}/api/v1/projects/",
+                data=json.dumps({"name": "Persistent project", "path": str(ROOT)}).encode(),
+                headers={"Content-Type": "application/json", "X-CSRFToken": token},
+                method="POST",
+            )
+            with opener.open(project_request, timeout=3) as response:
+                assert response.status == 201
+                project = json.load(response)
             request = urllib.request.Request(
                 f"{url}/api/v1/tasks/",
-                data=json.dumps({"title": "Persist after a process restart"}).encode(),
+                data=json.dumps(
+                    {
+                        "title": "Persist after a process restart",
+                        "project_id": project["id"],
+                    }
+                ).encode(),
                 headers={"Content-Type": "application/json", "X-CSRFToken": token},
                 method="POST",
             )
@@ -87,9 +101,12 @@ def main():
             assert len(tasks) == 1
             assert tasks[0]["id"] == saved["id"]
             assert tasks[0]["title"] == saved["title"]
+            assert tasks[0]["project"]["id"] == project["id"]
+            with opener.open(f"{url}/api/v1/projects/", timeout=3) as response:
+                assert json.load(response)[0]["id"] == project["id"]
         finally:
             stop_process(process)
-    print("PASS: SQLite retained the task across a backend process restart.")
+    print("PASS: SQLite retained the task, project and association across a backend restart.")
 
 
 if __name__ == "__main__":

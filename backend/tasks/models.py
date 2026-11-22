@@ -39,6 +39,9 @@ class Task(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True, max_length=10000)
     repository = models.ForeignKey(Repository, null=True, blank=True, on_delete=models.PROTECT)
+    project = models.ForeignKey(
+        "projects.Project", null=True, blank=True, on_delete=models.SET_NULL, related_name="tasks"
+    )
     status = models.CharField(
         max_length=20, choices=Status.choices, default=Status.BACKLOG, editable=False
     )
