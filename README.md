@@ -79,7 +79,7 @@ npm.cmd run test:e2e
 
 On macOS/Linux, run `npx playwright install chromium` and `npm run test:e2e` from `frontend/`. Linux may require `npx playwright install --with-deps chromium` to install browser system dependencies.
 
-Browser checks use separate ports (frontend `15173`, backend `18000`), their own services, a fresh temporary database and repository, and deterministic fake agent CLIs. They never invoke authenticated models or use the developer's normal data. Override test ports with `TORCHBEARER_TEST_FRONTEND_PORT` and `TORCHBEARER_TEST_BACKEND_PORT`. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
+Browser checks use separate ports (frontend `15173`, backend `18000`), their own services, a fresh temporary database and repository, and deterministic fake agent CLIs. The regular development launcher can remain running. They never invoke authenticated models or use the developer's normal data. Override test ports with `TORCHBEARER_TEST_FRONTEND_PORT` and `TORCHBEARER_TEST_BACKEND_PORT`. Browser tests live in `frontend/tests/e2e/`, with screenshots and failure traces under the ignored root `test-results/` directory.
 
 Run `python scripts/check_launcher.py` from the repository root in a terminal to verify the backend, frontend, and worker start and stop together. Its Windows check requires a console to send Ctrl+Break. The restart and launcher checks also use temporary databases and available ports, leaving normal local data alone. Backend tests include killing a real worker process to verify child cleanup, queue persistence, and explicit retry of interrupted work.
 
@@ -88,6 +88,7 @@ Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.v
 ## Structure and review
 
 - [Architecture](docs/architecture.md): application boundaries, API contract, persistence, and process lifecycle.
+- [Styling system](docs/styling.md): locally bundled Inter, semantic dark/light palettes, reusable controls, and styling verification.
 - [Commit plan](docs/plans/001-app-foundation.md): frontend, backend, and database impacts for each planned commit.
 - [Agent routing plan](docs/plans/004-agentic-routing.md): agreed stage behavior, commit sequence, and verification scope.
 - [PR description draft](docs/pr-001-foundation.md): behavior, scope, and local validation results.

@@ -77,7 +77,7 @@ export function CardWorkflow({
           />
           <button
             type="button"
-            className="step-button"
+            className="button button-secondary step-button"
             disabled={busy || !task.repository || !routing?.assignments.plan}
             onClick={() => void change(() => performAction(task, 'start'))}
           >
@@ -108,8 +108,14 @@ export function CardWorkflow({
               </span>
             )}
           </p>
-          {run?.error && <p className="form-error">{run.error}</p>}
-          <button type="button" className="step-button" onClick={onReview}>
+          {run?.error && (
+            <p className="feedback feedback-error form-error">{run.error}</p>
+          )}
+          <button
+            type="button"
+            className="button button-secondary step-button"
+            onClick={onReview}
+          >
             {task.completed_at
               ? 'View history'
               : isActive(task)
@@ -119,7 +125,7 @@ export function CardWorkflow({
         </>
       )}
       {error && (
-        <p role="alert" className="form-error">
+        <p role="alert" className="feedback feedback-error form-error">
           {error}
         </p>
       )}
@@ -262,7 +268,7 @@ export function WorkflowDialog({
   return (
     <dialog
       ref={dialog}
-      className="task-dialog workflow-dialog"
+      className="surface surface-overlay task-dialog workflow-dialog"
       aria-labelledby="workflow-heading"
       onCancel={(event) => {
         if (busy) event.preventDefault()
@@ -277,7 +283,7 @@ export function WorkflowDialog({
         <button
           ref={closeButton}
           type="button"
-          className="close-dialog-button"
+          className="button button-quiet button-icon close-dialog-button"
           aria-label="Close task review"
           disabled={busy}
           onClick={() => dialog.current?.close()}
@@ -298,10 +304,10 @@ export function WorkflowDialog({
         </span>
       </p>
       {loadError && (
-        <p role="alert" className="form-error">
+        <p role="alert" className="feedback feedback-error form-error">
           {loadError}{' '}
           <button
-            className="text-button"
+            className="button button-link"
             onClick={() => setReload((value) => value + 1)}
           >
             Reload runs
@@ -311,8 +317,11 @@ export function WorkflowDialog({
       {!history && !loadError && <p role="status">Loading runs…</p>}
       {history && (
         <>
-          <label htmlFor="run-history">Run history</label>
+          <label className="field-label" htmlFor="run-history">
+            Run history
+          </label>
           <select
+            className="field"
             id="run-history"
             value={selectedRun || task.latest_run?.id || ''}
             onChange={(event) => setSelectedRun(event.target.value)}
@@ -333,7 +342,7 @@ export function WorkflowDialog({
                 </span>
               </p>
               {run.error && (
-                <p role="alert" className="form-error">
+                <p role="alert" className="feedback feedback-error form-error">
                   {run.error}
                 </p>
               )}
@@ -362,7 +371,10 @@ export function WorkflowDialog({
                 <details>
                   <summary>Current code changes</summary>
                   {workspaceError ? (
-                    <p role="alert" className="form-error">
+                    <p
+                      role="alert"
+                      className="feedback feedback-error form-error"
+                    >
                       {workspaceError}
                     </p>
                   ) : workspace ? (
@@ -386,7 +398,7 @@ export function WorkflowDialog({
                 <div className="review-actions">
                   {active ? (
                     <button
-                      className="secondary-button"
+                      className="button button-secondary"
                       type="button"
                       disabled={
                         busy || Boolean(task.latest_run?.cancel_requested)
@@ -415,7 +427,7 @@ export function WorkflowDialog({
                         {run.state === 'succeeded' && (
                           <button
                             type="button"
-                            className="primary-button"
+                            className="button button-primary"
                             disabled={
                               busy || !canApprove || Boolean(missingAgent)
                             }
@@ -440,7 +452,7 @@ export function WorkflowDialog({
                           task.status !== 'final_approval' && (
                             <button
                               type="button"
-                              className="secondary-button"
+                              className="button button-secondary"
                               disabled={busy}
                               onClick={() => void act('retry')}
                             >
@@ -448,10 +460,11 @@ export function WorkflowDialog({
                             </button>
                           )}
                       </div>
-                      <label htmlFor="review-feedback">
+                      <label className="field-label" htmlFor="review-feedback">
                         Revision or rework instructions
                       </label>
                       <textarea
+                        className="field"
                         id="review-feedback"
                         value={feedback}
                         onChange={(event) => setFeedback(event.target.value)}
@@ -464,7 +477,7 @@ export function WorkflowDialog({
                         {task.status !== 'final_approval' && (
                           <button
                             type="button"
-                            className="secondary-button"
+                            className="button button-secondary"
                             disabled={busy || !feedback.trim()}
                             onClick={() => void act('revise')}
                           >
@@ -474,7 +487,7 @@ export function WorkflowDialog({
                         {task.status !== 'plan' && (
                           <button
                             type="button"
-                            className="secondary-button"
+                            className="button button-secondary"
                             disabled={busy || !feedback.trim()}
                             onClick={() => void act('send_back')}
                           >
@@ -510,7 +523,7 @@ export function WorkflowDialog({
         </>
       )}
       {error && (
-        <p role="alert" className="form-error">
+        <p role="alert" className="feedback feedback-error form-error">
           {error}
         </p>
       )}
