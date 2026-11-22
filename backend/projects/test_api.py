@@ -126,6 +126,70 @@ def test_browse_defaults_to_home(client, tmp_path, monkeypatch):
     assert response.json()["path"] == str(tmp_path)
 
 
+def test_browse_marks_repositories_and_worktrees_before_other_folders(client, tmp_path):
+    for name in ["a-folder", "b-worktree", "Z-repository"]:
+        (tmp_path / name).mkdir()
+    (tmp_path / "Z-repository" / ".git").mkdir()
+    (tmp_path / "b-worktree" / ".git").write_text("gitdir: /some/repository/worktrees/test")
+    (tmp_path / ".git").mkdir()
+    listing = write(client, "post", reverse("project-folders"), {"path": str(tmp_path)}).json()
+    assert listing["is_repository"] is True
+    assert [(entry["name"], entry["is_repository"]) for entry in listing["folders"]] == [
+        ("b-worktree", True),
+        ("Z-repository", True),
+        ("a-folder", False),
+    ]
+
+
+def test_browse_provides_breadcrumbs_and_existing_locations(client, tmp_path, monkeypatch):
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    (tmp_path / "Desktop").mkdir()
+    nested = tmp_path / "Desktop" / "project"
+    nested.mkdir()
+    listing = write(client, "post", reverse("project-folders"), {"path": str(nested)}).json()
+    assert listing["breadcrumbs"][0]["path"] == nested.anchor
+    assert listing["breadcrumbs"][-2:] == [
+        {"name": "Desktop", "path": str(nested.parent)},
+        {"name": "project", "path": str(nested)},
+    ]
+    assert listing["locations"][:2] == [
+        {"name": "Home", "path": str(tmp_path)},
+        {"name": "Desktop", "path": str(tmp_path / "Desktop")},
+    ]
+    assert not any(item["name"] == "Downloads" for item in listing["locations"])
+
+
+def test_browse_skips_unreadable_entries(client, tmp_path, monkeypatch):
+    blocked = tmp_path / "blocked"
+    blocked.mkdir()
+    (tmp_path / "available").mkdir()
+    original = Path.is_dir
+
+    def is_dir(path):
+        if path == blocked:
+            raise PermissionError("Access denied")
+        return original(path)
+
+    monkeypatch.setattr(Path, "is_dir", is_dir)
+    response = write(client, "post", reverse("project-folders"), {"path": str(tmp_path)})
+    assert response.status_code == 200
+    assert [entry["name"] for entry in response.json()["folders"]] == ["available"]
+
+
+def test_browse_unreadable_directory_returns_validation_error(client, tmp_path, monkeypatch):
+    original = Path.iterdir
+
+    def iterdir(path):
+        if path == tmp_path:
+            raise PermissionError("Access denied")
+        return original(path)
+
+    monkeypatch.setattr(Path, "iterdir", iterdir)
+    response = write(client, "post", reverse("project-folders"), {"path": str(tmp_path)})
+    assert response.status_code == 400
+    assert "cannot be read" in response.json()["path"][0]
+
+
 @pytest.mark.parametrize("path", ["missing", None, [], {}])
 def test_browse_bad_input_returns_validation_error(client, path):
     response = write(client, "post", reverse("project-folders"), {"path": path})

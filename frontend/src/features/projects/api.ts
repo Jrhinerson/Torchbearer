@@ -9,10 +9,18 @@ export interface Project {
   updated_at: string
 }
 
+interface FolderLocation {
+  name: string
+  path: string
+}
+
 export interface FolderListing {
   path: string
   parent: string | null
-  folders: { name: string; path: string }[]
+  is_repository: boolean
+  breadcrumbs: FolderLocation[]
+  locations: FolderLocation[]
+  folders: (FolderLocation & { is_repository: boolean })[]
 }
 
 export function listProjects(signal?: AbortSignal) {

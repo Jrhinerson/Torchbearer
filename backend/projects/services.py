@@ -27,17 +27,50 @@ def resolve_folder(value):
         raise ValidationError({"path": ["Choose an existing, accessible local folder."]}) from None
 
 
+def is_repository(folder):
+    """Recognize checkout and worktree markers without running Git for every row."""
+    try:
+        marker = folder / ".git"
+        return marker.is_dir() or marker.is_file()
+    except OSError:
+        return False
+
+
+def folder_locations():
+    home = Path.home()
+    candidates = [("Home", home)]
+    candidates.extend((name, home / name) for name in ["Desktop", "Documents", "Downloads"])
+    drives = os.listdrives() if hasattr(os, "listdrives") else [home.anchor]
+    candidates.extend((drive, Path(drive)) for drive in drives)
+    locations = []
+    seen = set()
+    for name, path in candidates:
+        try:
+            path = path.resolve(strict=True)
+            if path.is_dir() and path not in seen:
+                locations.append({"name": name, "path": str(path)})
+                seen.add(path)
+        except OSError, RuntimeError:
+            continue
+    return locations
+
+
 def browse_folders(value=None):
     folder = resolve_folder(value or str(Path.home()))
+    entries = []
     try:
-        entries = sorted(
-            (
-                {"name": child.name, "path": str(child)}
-                for child in folder.iterdir()
-                if not child.name.startswith(".") and child.is_dir()
-            ),
-            key=lambda entry: entry["name"].casefold(),
-        )
+        for child in folder.iterdir():
+            try:
+                if not child.name.startswith(".") and child.is_dir():
+                    entries.append(
+                        {
+                            "name": child.name,
+                            "path": str(child),
+                            "is_repository": is_repository(child),
+                        }
+                    )
+            except OSError:
+                continue
     except OSError:
         raise ValidationError(
             {"path": ["This folder cannot be read. Choose another folder."]}
@@ -45,7 +78,15 @@ def browse_folders(value=None):
     return {
         "path": str(folder),
         "parent": str(folder.parent) if folder.parent != folder else None,
-        "folders": entries,
+        "is_repository": is_repository(folder),
+        "breadcrumbs": [
+            {"name": part.name or part.anchor, "path": str(part)}
+            for part in [*reversed(folder.parents), folder]
+        ],
+        "locations": folder_locations(),
+        "folders": sorted(
+            entries, key=lambda entry: (not entry["is_repository"], entry["name"].casefold())
+        ),
     }
 
 
