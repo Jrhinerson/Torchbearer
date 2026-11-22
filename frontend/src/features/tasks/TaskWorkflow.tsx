@@ -18,6 +18,7 @@ import type {
 } from './api'
 import { RepositoryPicker } from './RepositoryPicker'
 import { TaskRoutingEditor } from './TaskRouting'
+import { PlanningConversation } from './PlanningConversation'
 
 const states: Record<RunState, string> = {
   queued: 'Queued',
@@ -248,6 +249,8 @@ export function WorkflowDialog({
   const [feedback, setFeedback] = useState('')
   const [busy, setBusy] = useState(false)
   const [reload, setReload] = useState(0)
+  const acting = useRef(false)
+  const planning = task.status === 'plan'
   const run = history?.runs.find(
     (item) => item.id === (selectedRun || task.latest_run?.id),
   )
@@ -337,24 +340,29 @@ export function WorkflowDialog({
     reload,
   ])
 
-  async function act(action: TaskAction | 'cancel') {
+  async function act(action: TaskAction | 'cancel', message = feedback) {
+    if (acting.current) return false
+    acting.current = true
     setBusy(true)
     setError('')
     try {
       const updated =
         action === 'cancel'
           ? await cancelRun(task)
-          : await performAction(task, action, run, feedback)
+          : await performAction(task, action, run, message)
       onTask(updated)
       setFeedback('')
       setSelectedRun('')
       setReload((value) => value + 1)
+      return true
     } catch (cause) {
       setError(
         cause instanceof Error ? cause.message : 'Could not update this task.',
       )
       setReload((value) => value + 1)
+      return false
     } finally {
+      acting.current = false
       setBusy(false)
     }
   }
@@ -398,13 +406,15 @@ export function WorkflowDialog({
           onTask={onTask}
         />
       )}
-      <p className="workflow-hint">
-        {task.branch}
-        <br />
-        <span className="workspace-path">
-          {task.workspace_path || 'Preparing workspace…'}
-        </span>
-      </p>
+      {!planning && (
+        <p className="workflow-hint">
+          {task.branch}
+          <br />
+          <span className="workspace-path">
+            {task.workspace_path || 'Preparing workspace…'}
+          </span>
+        </p>
+      )}
       {loadError && (
         <p role="alert" className="feedback feedback-error form-error">
           {loadError}{' '}
@@ -417,7 +427,41 @@ export function WorkflowDialog({
         </p>
       )}
       {!history && !loadError && <p role="status">Loading runs…</p>}
-      {history && (
+      {history && planning && (
+        <>
+          <PlanningConversation
+            key={task.id}
+            task={task}
+            history={history}
+            run={run}
+            routing={routing}
+            active={active}
+            busy={busy}
+            canApprove={canApprove && !missingAgent}
+            approvalHint={
+              workspaceError ||
+              (!reviewCurrent
+                ? workspace
+                  ? 'Workspace changes have made this result stale. Send a message to refresh the plan before approving.'
+                  : 'Checking the workspace before approval…'
+                : missingAgent
+                  ? `The agent for ${next} must be configured and installed before continuing.`
+                  : '')
+            }
+            onMessage={(message) => act('plan_message', message)}
+            onRetry={() => void act('retry', '')}
+            onStop={() => void act('cancel')}
+            onApprove={() => void act('approve', '')}
+          />
+          {run?.log && (
+            <details>
+              <summary>Reply diagnostics</summary>
+              <pre className="run-log">{run.log}</pre>
+            </details>
+          )}
+        </>
+      )}
+      {history && !planning && (
         <>
           <label className="field-label" htmlFor="run-history">
             Run history

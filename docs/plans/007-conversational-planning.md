@@ -22,3 +22,9 @@ Validation covers revision and stage guards, durable full conversation context, 
 approval and implementation handoff, multi-turn browser interaction, refresh persistence,
 failed submissions, cancellation, and narrow-screen layout. Existing later-stage workflow
 checks continue to exercise review and approval through completion.
+
+Verified locally: 150 backend tests and 42 Chromium browser tests passed, including
+conversation persistence and refinement at 1,280px and 390px. Frontend build, lint,
+formatting, Python lint/formatting, Django system checks, and migration checks passed.
+Browser checks use deterministic CLI fixtures and a disposable database; no real agent
+was launched for verification. This change needs no database migration.

@@ -704,6 +704,95 @@ main {
 .workflow-dialog .field-label {
   margin-top: var(--space-4);
 }
+.planning-intro {
+  margin: 0 0 var(--space-4);
+}
+.planning-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  list-style: none;
+  margin: 0;
+  padding: var(--space-2);
+  min-height: 10rem;
+  max-height: min(45dvh, 34rem);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.planning-message {
+  min-width: 0;
+  max-width: 94%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-input);
+  font-size: var(--text-compact);
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.planning-message-user {
+  align-self: flex-end;
+  background: var(--color-surface);
+}
+.planning-message-agent {
+  align-self: flex-start;
+}
+.planning-speaker {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  font-weight: var(--weight-semibold);
+}
+.planning-message-summary {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+}
+.planning-message-text {
+  white-space: pre-wrap;
+}
+.planning-message-summary + .planning-message-text {
+  margin-top: var(--space-2);
+}
+.planning-reply-status {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+.planning-reply-error {
+  margin: var(--space-2) 0 0;
+  color: var(--color-error);
+}
+.planning-composer textarea {
+  resize: vertical;
+  max-height: 12rem;
+}
+.planning-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.planning-composer-actions .workflow-hint {
+  flex: 1 1 12rem;
+  margin: 0;
+}
+.planning-approval {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+  margin-top: var(--space-4);
+}
+.planning-approval > div {
+  flex: 1 1 14rem;
+}
+.planning-approval .workflow-hint {
+  margin: var(--space-1) 0 0;
+}
 .workspace-path {
   font-family: var(--font-mono);
 }
