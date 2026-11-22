@@ -1,4 +1,5 @@
 import { requestJson } from '../../lib/api'
+import type { Project } from '../projects/api'
 
 export type Stage = 'plan' | 'integrate' | 'test'
 export type Agent = 'codex' | 'claude' | 'pi'
@@ -71,6 +72,7 @@ export interface Task {
   id: string
   title: string
   description: string
+  project: Project | null
   repository: string | null
   status: 'backlog' | Stage | 'final_approval'
   revision: number
@@ -104,10 +106,12 @@ export function createTask(
   title: string,
   description: string,
   repository = '',
+  projectId: string | null = null,
 ) {
   return writeJson<Task>('tasks/', 'POST', {
     title: title.trim(),
     description: description.trim(),
+    project_id: projectId,
     ...(repository ? { repository } : {}),
   })
 }

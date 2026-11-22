@@ -25,6 +25,7 @@ def main():
         call_command("migrate", interactive=False, verbosity=0)
         from pathlib import Path
 
+        from projects.models import Project
         from tasks.git import git
         from tasks.models import Repository
 
@@ -44,6 +45,7 @@ def main():
             "Initial",
         )
         Repository.objects.create(name="Browser fixture repository", path=str(repository))
+        Project.objects.create(name="Browser fixture repository", path=str(repository))
         for agent in ["codex", "claude", "pi"]:
             os.environ[f"TORCHBEARER_{agent.upper()}_COMMAND"] = json.dumps(
                 [sys.executable, str(ROOT / "backend/tasks/fixtures/fake_cli.py"), agent, "browser"]

@@ -6,9 +6,11 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 
 - `frontend/src/app/`: application shell, theme-color synchronization, and layered shared styling. See the [styling system](styling.md) for font, token, and control conventions.
 - `frontend/src/features/tasks/`: five-column board, task-creation popup, and task-specific API operations.
+- `frontend/src/features/projects/`: searchable project selection, local-folder browser, cloning and project management inside task creation.
 - `frontend/src/lib/api.ts`: same-origin requests and useful HTTP/connection errors.
 - `backend/config/`: local settings, routing, health, and CSRF bootstrap.
 - `backend/tasks/`: task models, serializers, views, migrations, and API tests.
+- `backend/projects/`: stored projects, local directory and Git operations, serializers, views, migrations and API tests.
 - `scripts/`: setup, process management, verification, and isolated test services.
 
 During development, Vite serves `http://127.0.0.1:5173` and forwards `/api/` to Django at `127.0.0.1:8000`. Both bind to loopback. Frontend code uses relative API URLs so a later desktop wrapper can reuse the interface and local service boundary.
@@ -32,10 +34,19 @@ The board presents Backlog, Plan, Integrate, Test, and Final Approval in that or
 | GET | `/api/v1/tasks/<uuid>/runs/` | Attempt results, bounded live logs, and human decision history. |
 | POST | `/api/v1/tasks/<uuid>/runs/<run_uuid>/cancel/` | Cancel queued work or request active-run cancellation. |
 | GET | `/api/v1/tasks/<uuid>/workspace/` | Current code-change preview and fingerprint. |
+| GET | `/api/v1/projects/` | Saved active projects, ordered by name and ID. |
+| POST | `/api/v1/projects/` | Register a local folder or clone an HTTPS/SSH Git URL to a new folder. |
+| GET/PATCH | `/api/v1/projects/<uuid>/` | Read a project or update its display name. |
+| DELETE | `/api/v1/projects/<uuid>/` | Archive the project; keep files and associated tasks. |
+| POST | `/api/v1/projects/folders/` | Browse immediate visible subfolders and the parent of a local path; defaults to the server user's home. |
 
-A task contains a UUID, title, description, repository, stage, revision, workspace metadata, completion timestamp, and creation/update timestamps. Titles are limited to 200 characters and descriptions to 10,000. New tasks always begin in `backlog`; creating a task or assigning a column agent never starts execution. Clients cannot directly set stage, revision, workspace metadata, or completion. Existing tasks can remain without a repository until planning starts.
+A task contains a UUID, title, description, optional nested project, execution repository, stage, revision, workspace metadata, completion timestamp, and creation/update timestamps. Creation accepts an optional `project_id`; selecting a project whose folder is a validated Git repository root with a commit registers or reuses its execution repository. Ordinary folders remain valid projects, with execution requiring a repository before planning starts. Legacy repository requests remain supported; an explicit repository must match an explicitly selected project. Backlog repository changes also update or clear the saved-project association to keep the task context consistent. Titles are limited to 200 characters and descriptions to 10,000. New tasks always begin in `backlog`; creating a task or assigning a column agent never starts execution. Clients cannot directly set stage, revision, workspace metadata, or completion. Existing tasks can remain without a repository until planning starts.
 
-Django REST Framework serializers validate request data. Write requests explicitly use Django CSRF protection even for anonymous requests, and the React client retrieves a token before creating or deleting a task. The interface displays validation or connection errors and preserves an unsuccessful draft.
+A project has a UUID, a display name of up to 200 characters, a unique canonical absolute folder path, an archive flag and timestamps. Local registration accepts `path`, an optional `name`, and `source: "local"` (the default). Cloning accepts `source: "clone"`, `url`, a new destination `path` with an existing parent, and optional `name`. Folders may be ordinary workspaces or Git repositories. Filesystem operations run on the backend machine. Renaming only changes the display name, and PATCH cannot change the folder. DELETE archives the row; associated task responses keep the project details and archive flag. Re-registering an archived folder restores the same project ID. New tasks cannot select archived projects.
+
+Cloning runs Git without a shell, with noninteractive credentials, disabled Git hooks and file/ext protocols, and a 120-second timeout. HTTPS and SSH clone URLs are accepted; local paths and embedded HTTPS credentials are rejected. Git clones into a temporary sibling folder, then moves files into a newly reserved destination after success. Existing files are never replaced. Clone failures clean the temporary checkout and return an error without Git's raw output. This is a bounded synchronous operation, so the task dialog prevents dismissal or submission while it runs. Network authentication remains the responsibility of the machine's Git setup.
+
+Django REST Framework serializers validate request data. Write requests explicitly use Django CSRF protection even for anonymous requests, and the React client retrieves a token before modifying tasks or projects. Directory browsing also uses a CSRF-protected POST to keep local filesystem listings behind the same verification. The interface displays validation or connection errors and preserves an unsuccessful draft.
 
 Backlog tasks retain Delete with confirmation and failure recovery. Started tasks retain their workspace and history and cannot be deleted through the API. Repository changes are atomically limited to Backlog so they cannot race a start action.
 
@@ -57,9 +68,9 @@ Results require `outcome`, `summary`, `details`, and `tests`. Test cannot report
 
 The default database is `.local/torchbearer.sqlite3`. `TORCHBEARER_DATA_DIR` moves the database, workspaces, and run artifacts together; relative paths resolve against the working directory. SQLite uses immediate transactions with a busy timeout to avoid deferred read-to-write lock upgrades between API actions and the worker. Transactions protect transitions and claims; no database transaction stays open during agent execution. Database files and generated workspaces are ignored by Git.
 
-Django migrations are the source of schema changes. Setup applies migrations without replacing existing data. Startup checks for unapplied migrations and does not reset or seed the database.
+Django migrations are the source of schema changes. The merge migration joins the independent project and agent-workflow histories, adds previously registered repositories to saved projects, and preserves existing task associations and project names/archive state. Setup applies migrations without replacing existing data. Startup checks for unapplied migrations and does not reset or seed the database.
 
-API tests use Django's isolated test database. Browser tests start Django with a new temporary data directory, and restart verification starts two successive backend processes against one temporary SQLite database. These checks do not use the developer's normal database.
+API tests use Django's isolated test database. Browser tests start Django with a new temporary data directory, and restart verification starts two successive backend processes against one temporary SQLite database to check task, project and association persistence. These checks do not use the developer's normal database. Browser clone-success responses and API Git subprocess results are simulated; live remote authentication is not exercised.
 
 Browser tests default to ports 15173 (Vite) and 18000 (Django), with overrides through `TORCHBEARER_TEST_FRONTEND_PORT` and `TORCHBEARER_TEST_BACKEND_PORT`. Both services receive the selected `TORCHBEARER_FRONTEND_PORT` and `TORCHBEARER_BACKEND_PORT`, keeping the Vite proxy and trusted frontend origin aligned. Development retains ports 5173 and 8000, allowing verification alongside a running app.
 

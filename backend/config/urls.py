@@ -10,4 +10,5 @@ urlpatterns = [
     path("api/v1/routing/", RoutingView.as_view(), name="routing"),
     path("api/v1/routing/<str:stage>/", AssignmentView.as_view(), name="assignment"),
     path("api/v1/repositories/", RepositoryListView.as_view(), name="repositories"),
+    path("api/v1/projects/", include("projects.urls")),
 ]

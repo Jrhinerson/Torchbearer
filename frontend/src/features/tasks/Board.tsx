@@ -8,8 +8,10 @@ import {
   listTasks,
 } from './api'
 import type { Repository, Routing, Task } from './api'
-import { AgentSelect, RepositoryPicker } from './RoutingControls'
+import { AgentSelect } from './RoutingControls'
 import { CardWorkflow, WorkflowDialog } from './TaskWorkflow'
+import ProjectPicker from '../projects/ProjectPicker'
+import type { Project } from '../projects/api'
 
 const columns = [
   { id: 'backlog', title: 'Backlog' },
@@ -28,7 +30,6 @@ export default function Board() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [routing, setRouting] = useState<Routing | null>(null)
   const [repositories, setRepositories] = useState<Repository[]>([])
-  const [repository, setRepository] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [syncError, setSyncError] = useState('')
   const mutation = useRef(0)
@@ -37,6 +38,8 @@ export default function Board() {
   const [reload, setReload] = useState(0)
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [project, setProject] = useState<Project | null>(null)
+  const [projectBusy, setProjectBusy] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -49,6 +52,7 @@ export default function Board() {
   const newTaskButton = useRef<HTMLButtonElement>(null)
   const composer = useRef<HTMLDialogElement>(null)
   const selectedTask = tasks.find((task) => task.id === selectedId)
+  const formBusy = saving || projectBusy
 
   function updateTask(task: Task) {
     mutation.current++
@@ -136,16 +140,16 @@ export default function Board() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    if (formBusy) return
     setSaving(true)
     setSaveError('')
     setAnnouncement('')
     try {
-      const task = await createTask(title, description, repository)
+      const task = await createTask(title, description, '', project?.id ?? null)
       mutation.current++
       setTasks((current) => [task, ...current])
       setTitle('')
       setDescription('')
-      setRepository('')
       setAnnouncement(`Added ${task.title} to the backlog.`)
       composer.current?.close()
     } catch (error) {
@@ -294,6 +298,20 @@ export default function Board() {
                           aria-label={task.title}
                         >
                           <h3>{task.title}</h3>
+                          {task.project && (
+                            <p
+                              className="task-project"
+                              title={task.project.path}
+                            >
+                              <span aria-hidden="true">▱</span>{' '}
+                              {task.project.name}
+                              {task.project.archived && (
+                                <span className="removed-project-label">
+                                  Removed project
+                                </span>
+                              )}
+                            </p>
+                          )}
                           {task.description && (
                             <p className="task-description">
                               {task.description}
@@ -354,7 +372,7 @@ export default function Board() {
         aria-labelledby="new-task-heading"
         aria-describedby="new-task-description"
         onCancel={(event) => {
-          if (saving) event.preventDefault()
+          if (formBusy) event.preventDefault()
         }}
         onClose={() => newTaskButton.current?.focus()}
       >
@@ -368,7 +386,7 @@ export default function Board() {
             className="button button-quiet button-icon close-dialog-button"
             aria-label="Close new task"
             onClick={() => composer.current?.close()}
-            disabled={saving}
+            disabled={formBusy}
           >
             ×
           </button>
@@ -393,14 +411,7 @@ export default function Board() {
             placeholder="What needs to happen?"
             maxLength={200}
             required
-            disabled={saving}
-          />
-          <RepositoryPicker
-            repositories={repositories}
-            value={repository}
-            onChange={setRepository}
-            disabled={saving}
-            onAdded={repositoryAdded}
+            disabled={formBusy}
           />
           <label className="field-label" htmlFor="task-description">
             Description <span className="optional">optional</span>
@@ -413,7 +424,23 @@ export default function Board() {
             placeholder="Describe the goal, context, or a useful starting point."
             rows={5}
             maxLength={10000}
-            disabled={saving}
+            disabled={formBusy}
+          />
+          <ProjectPicker
+            selected={project}
+            onSelect={setProject}
+            disabled={formBusy}
+            onBusyChange={setProjectBusy}
+            onProjectChange={(updated) => {
+              mutation.current++
+              setTasks((current) =>
+                current.map((task) =>
+                  task.project?.id === updated.id
+                    ? { ...task, project: updated }
+                    : task,
+                ),
+              )
+            }}
           />
           {saveError && (
             <p className="feedback feedback-error form-error" role="alert">
@@ -425,7 +452,7 @@ export default function Board() {
               type="button"
               className="button button-secondary"
               onClick={() => composer.current?.close()}
-              disabled={saving}
+              disabled={formBusy}
             >
               Cancel
             </button>
@@ -433,7 +460,7 @@ export default function Board() {
               type="submit"
               className="button button-primary"
               aria-busy={saving}
-              disabled={saving}
+              disabled={formBusy}
             >
               {saving ? 'Adding task…' : 'Add to backlog'}
               <span aria-hidden="true">↗</span>
