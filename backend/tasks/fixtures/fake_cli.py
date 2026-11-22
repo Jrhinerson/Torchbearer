@@ -16,6 +16,15 @@ if "--version" in sys.argv:
 prompt = sys.stdin.read()
 context = json.loads(prompt)
 stage = context.get("stage", "plan")
+if scenario == "browser":
+    title = context.get("task", {}).get("title", "")
+    scenario = (
+        "hang"
+        if "[cancel]" in title
+        else "test_fail"
+        if "[test fails]" in title and stage == "test"
+        else "implement"
+    )
 if scenario == "hang":
     subprocess.Popen(
         [
@@ -68,6 +77,8 @@ elif agent == "claude":
             "permission_denials": [{"tool_name": "Bash"}] if scenario == "denied" else [],
         }
     ]
+    if scenario == "denied_event":
+        records.insert(0, {"type": "system", "subtype": "permission_denied"})
 else:
     records = [
         {

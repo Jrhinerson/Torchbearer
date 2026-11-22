@@ -12,7 +12,8 @@ TORCHBEARER_RUN_TIMEOUT = max(1, int(os.environ.get("TORCHBEARER_RUN_TIMEOUT", "
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "torchbearer-local-development-key-only")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 ALLOWED_HOSTS = ["127.0.0.1", "localhost", "[::1]"]
-CSRF_TRUSTED_ORIGINS = ["http://127.0.0.1:5173", "http://localhost:5173"]
+FRONTEND_PORT = int(os.environ.get("TORCHBEARER_FRONTEND_PORT", "5173"))
+CSRF_TRUSTED_ORIGINS = [f"http://127.0.0.1:{FRONTEND_PORT}", f"http://localhost:{FRONTEND_PORT}"]
 
 INSTALLED_APPS = [
     "django.contrib.auth",
@@ -36,7 +37,7 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": DATA_DIR / "torchbearer.sqlite3",
-        "OPTIONS": {"timeout": 10},
+        "OPTIONS": {"timeout": 10, "transaction_mode": "IMMEDIATE"},
     }
 }
 REST_FRAMEWORK = {

@@ -38,8 +38,9 @@ def test_failed_or_malformed_cli_is_not_a_success(scenario, fake_cli, tmp_path):
         run_fixture(tmp_path, "codex")
 
 
-def test_denied_tools_are_blocked(fake_cli, tmp_path):
-    fake_cli("claude", "denied")
+@pytest.mark.parametrize("scenario", ["denied", "denied_event"])
+def test_denied_tools_are_blocked(fake_cli, tmp_path, scenario):
+    fake_cli("claude", scenario)
     with pytest.raises(RunnerFailure) as error:
         run_fixture(tmp_path, "claude")
     assert error.value.state == "blocked"

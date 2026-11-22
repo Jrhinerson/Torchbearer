@@ -141,15 +141,14 @@ class Worker:
 
     def heartbeat(self, active=None, force=False):
         if force or time.monotonic() - self.last_heartbeat >= 1:
-            WorkerStatus.objects.update_or_create(
-                pk=1,
-                defaults={
-                    "worker_id": self.id,
-                    "heartbeat": timezone.now(),
-                    "running": True,
-                    "active_run": active,
-                },
-            )
+            values = {
+                "worker_id": self.id,
+                "heartbeat": timezone.now(),
+                "running": True,
+                "active_run": active,
+            }
+            if not WorkerStatus.objects.filter(pk=1).update(**values):
+                WorkerStatus.objects.create(pk=1, **values)
             self.last_heartbeat = time.monotonic()
 
     @transaction.atomic

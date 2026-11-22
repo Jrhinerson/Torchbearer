@@ -191,7 +191,7 @@ class Events:
             if kind == "result":
                 self.complete = True
                 self.result = event.get("structured_output") or event.get("result", "")
-                self.denied = bool(event.get("permission_denials"))
+                self.denied = self.denied or bool(event.get("permission_denials"))
                 if event.get("is_error"):
                     self.failure = str(
                         event.get("result") or event.get("errors") or "Claude Code failed."
