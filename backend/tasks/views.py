@@ -17,6 +17,7 @@ from .serializers import (
     RunSerializer,
     TaskSerializer,
 )
+from .worker import worker_status
 from .workflow import Conflict, act, cancel
 from .workspaces import changes
 
@@ -36,6 +37,7 @@ class RoutingView(LocalView):
                 "assignments": {
                     stage: assignments.get(stage, "") for stage in ColumnAssignment.Stage
                 },
+                "worker": worker_status(),
             }
         )
 

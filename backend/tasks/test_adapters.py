@@ -76,5 +76,6 @@ def test_test_stage_requires_reported_passing_commands():
             {"outcome": "complete", "summary": "Done", "details": "No tests", "tests": []}, "test"
         )
     assert "workspace-write" in arguments("codex", "integrate", "schema")
-    assert "read-only" in arguments("codex", "test", "schema")
+    assert "read-only" in arguments("codex", "plan", "schema")
+    assert "workspace-write" in arguments("codex", "test", "schema")
     assert "edit" not in arguments("pi", "test", "schema")[-1]

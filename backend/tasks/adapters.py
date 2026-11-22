@@ -73,7 +73,7 @@ def preflight(agent):
 
 def arguments(agent, stage, schema_path):
     if agent == "codex":
-        sandbox = "workspace-write" if stage == "integrate" else "read-only"
+        sandbox = "read-only" if stage == "plan" else "workspace-write"
         return [
             "-a",
             "never",
@@ -224,7 +224,7 @@ def execute(
     schema_path,
     on_log,
     should_stop,
-    on_started=lambda: None,
+    on_started=lambda version: None,
     timeout=1800,
 ):
     command, version = preflight(agent)
@@ -268,7 +268,7 @@ def execute(
     writer.start()
     closed = set()
     try:
-        on_started()
+        on_started(version)
         while len(closed) < 2 or tree.process.poll() is None:
             stop = should_stop()
             if stop:

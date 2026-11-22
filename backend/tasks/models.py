@@ -79,6 +79,9 @@ class AgentRun(models.Model):
     error = models.TextField(blank=True)
     review_fingerprint = models.CharField(max_length=64, blank=True)
     input_fingerprint = models.CharField(max_length=64, blank=True)
+    input_context = models.JSONField(default=dict)
+    cli_version = models.CharField(max_length=64, blank=True)
+    worker_id = models.UUIDField(null=True, blank=True)
     cancel_requested = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     started_at = models.DateTimeField(null=True, blank=True)
@@ -109,3 +112,11 @@ class Decision(models.Model):
 
     class Meta:
         ordering = ["id"]
+
+
+class WorkerStatus(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    worker_id = models.UUIDField()
+    heartbeat = models.DateTimeField()
+    running = models.BooleanField(default=True)
+    active_run = models.ForeignKey(AgentRun, null=True, on_delete=models.SET_NULL)

@@ -55,9 +55,12 @@ def main():
     if not args.backend_only:
         check_port(5173)
     run([str(PYTHON), "backend/manage.py", "migrate", "--check"])
-    commands = [[str(PYTHON), "backend/manage.py", "runserver", "127.0.0.1:8000", "--noreload"]]
+    commands = [
+        ([str(PYTHON), "backend/manage.py", "runserver", "127.0.0.1:8000", "--noreload"], ROOT),
+        ([str(PYTHON), "backend/manage.py", "runagentworker"], ROOT),
+    ]
     if not args.backend_only:
-        commands.append([node, str(vite)])
+        commands.append(([node, str(vite)], ROOT / "frontend"))
     options = (
         {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
         if sys.platform == "win32"
@@ -72,8 +75,7 @@ def main():
     if sys.platform == "win32":
         signal.signal(signal.SIGBREAK, interrupt)
     try:
-        for command in commands:
-            cwd = ROOT if command == commands[0] else ROOT / "frontend"
+        for command, cwd in commands:
             processes.append(
                 subprocess.Popen(command, cwd=cwd, stdin=subprocess.DEVNULL, **options)
             )

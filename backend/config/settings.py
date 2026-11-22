@@ -7,6 +7,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_DIR = BASE_DIR.parent
 DATA_DIR = Path(os.environ.get("TORCHBEARER_DATA_DIR", PROJECT_DIR / ".local")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+TORCHBEARER_RUN_TIMEOUT = max(1, int(os.environ.get("TORCHBEARER_RUN_TIMEOUT", "1800")))
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "torchbearer-local-development-key-only")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
