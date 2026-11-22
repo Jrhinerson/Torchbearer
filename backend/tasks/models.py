@@ -30,6 +30,10 @@ class ColumnAssignment(models.Model):
 class Task(models.Model):
     class Status(models.TextChoices):
         BACKLOG = "backlog", "Backlog"
+        PLAN = "plan", "Plan"
+        INTEGRATE = "integrate", "Integrate"
+        TEST = "test", "Test"
+        FINAL_APPROVAL = "final_approval", "Final Approval"
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200)
@@ -40,9 +44,64 @@ class Task(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    revision = models.PositiveIntegerField(default=0)
+    completed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ["-created_at", "-id"]
 
     def __str__(self):
         return self.title
+
+
+class AgentRun(models.Model):
+    class State(models.TextChoices):
+        QUEUED = "queued", "Queued"
+        RUNNING = "running", "Running"
+        SUCCEEDED = "succeeded", "Awaiting review"
+        BLOCKED = "blocked", "Blocked"
+        FAILED = "failed", "Failed"
+        CANCELLED = "cancelled", "Cancelled"
+        INTERRUPTED = "interrupted", "Interrupted"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="runs")
+    sequence = models.PositiveIntegerField()
+    stage = models.CharField(max_length=20, choices=ColumnAssignment.Stage.choices)
+    agent = models.CharField(max_length=20, choices=ColumnAssignment.Agent.choices)
+    state = models.CharField(max_length=20, choices=State.choices, default=State.QUEUED)
+    feedback = models.TextField(blank=True)
+    result = models.JSONField(default=dict)
+    log = models.TextField(blank=True)
+    error = models.TextField(blank=True)
+    review_fingerprint = models.CharField(max_length=64, blank=True)
+    cancel_requested = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    finished_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-sequence"]
+        constraints = [
+            models.UniqueConstraint(fields=["task", "sequence"], name="unique_task_attempt"),
+            models.UniqueConstraint(
+                fields=["task"],
+                condition=models.Q(state__in=["queued", "running"]),
+                name="one_active_run_per_task",
+            ),
+        ]
+
+
+class Decision(models.Model):
+    task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="decisions")
+    run = models.ForeignKey(AgentRun, null=True, on_delete=models.PROTECT)
+    action = models.CharField(max_length=20)
+    from_stage = models.CharField(max_length=20)
+    to_stage = models.CharField(max_length=20)
+    task_revision = models.PositiveIntegerField()
+    feedback = models.TextField(blank=True)
+    review_fingerprint = models.CharField(max_length=64, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["id"]

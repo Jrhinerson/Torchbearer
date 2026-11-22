@@ -1,3 +1,6 @@
+from django.db import transaction
+from django.db.models import F
+from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
 from rest_framework import generics, serializers
@@ -7,7 +10,14 @@ from rest_framework.views import APIView
 
 from .cli import agent_catalog
 from .models import ColumnAssignment, Repository, Task
-from .serializers import RepositorySerializer, TaskSerializer
+from .serializers import (
+    ActionSerializer,
+    DecisionSerializer,
+    RepositorySerializer,
+    RunSerializer,
+    TaskSerializer,
+)
+from .workflow import Conflict, act, cancel
 
 
 @method_decorator(csrf_protect, name="dispatch")
@@ -70,5 +80,47 @@ class TaskDeleteView(generics.RetrieveUpdateDestroyAPIView):
             raise serializers.ValidationError("Only a backlog task's repository can be changed.")
         return self.partial_update(request, *args, **kwargs)
 
+    @transaction.atomic
+    def perform_update(self, serializer):
+        if not Task.objects.filter(pk=serializer.instance.pk, status="backlog").update(
+            repository=serializer.validated_data["repository"], revision=F("revision") + 1
+        ):
+            raise Conflict("A task's repository cannot change after planning starts.")
+        serializer.instance.refresh_from_db()
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        Task.objects.filter(pk=instance.pk).update(revision=F("revision") + 1)
+        instance.refresh_from_db()
+        if instance.status != "backlog":
+            raise Conflict(
+                "Started tasks retain their workspace and history. Cancel active runs instead."
+            )
+        instance.delete()
+
     def put(self, request, *args, **kwargs):
         return Response(status=405)
+
+
+class TaskActionView(LocalView):
+    def post(self, request, pk):
+        serializer = ActionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        task = act(pk, **serializer.validated_data)
+        return Response(TaskSerializer(task).data)
+
+
+class TaskRunsView(LocalView):
+    def get(self, request, pk):
+        task = get_object_or_404(Task, pk=pk)
+        return Response(
+            {
+                "runs": RunSerializer(task.runs.all(), many=True).data,
+                "decisions": DecisionSerializer(task.decisions.all(), many=True).data,
+            }
+        )
+
+
+class CancelRunView(LocalView):
+    def post(self, request, pk, run_id):
+        return Response(TaskSerializer(cancel(pk, run_id)).data)
