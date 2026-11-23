@@ -72,12 +72,59 @@ const task = {
   updated_at: timestamp,
 }
 
-async function openPlanning(page: Page, theme: string) {
+async function openPlanning(
+  page: Page,
+  theme: string,
+  status = 'plan',
+  completed = false,
+) {
+  const stages = ['plan', 'integrate', 'test', 'code_review']
+  const count = status === 'final_approval' ? 4 : stages.indexOf(status) + 1
+  const attempts = stages.slice(0, count).map((stage, index) => ({
+    ...run,
+    id: run.id.slice(0, -1) + String(index + 1),
+    stage,
+    sequence: index + 1,
+    state: status === 'plan' ? 'blocked' : 'succeeded',
+    review_fingerprint: 'snapshot',
+    result: {
+      ...run.result,
+      outcome: status === 'plan' ? 'blocked' : 'complete',
+      summary: status === 'plan' ? run.result.summary : `${stage} result`,
+      tests:
+        stage === 'test'
+          ? [
+              {
+                command: 'python -m pytest',
+                outcome: 'pass',
+                details: 'All relevant checks passed.',
+              },
+            ]
+          : [],
+    },
+  }))
+  const currentTask = {
+    ...task,
+    status,
+    latest_run: attempts.at(-1),
+    completed_at: completed ? timestamp : null,
+    workspace_path: 'C:/fixtures/task-workspace',
+    branch: 'torchbearer/task',
+  }
   await page.route('**/api/v1/tasks/', (route) =>
-    route.fulfill({ json: [task] }),
+    route.fulfill({ json: [currentTask] }),
   )
   await page.route(`**/api/v1/tasks/${task.id}/runs/`, (route) =>
-    route.fulfill({ json: { runs: [run], decisions: [] } }),
+    route.fulfill({ json: { runs: [...attempts].reverse(), decisions: [] } }),
+  )
+  await page.route(`**/api/v1/tasks/${task.id}/workspace/`, (route) =>
+    route.fulfill({
+      json: {
+        fingerprint: 'snapshot',
+        diff: '+Reviewed change',
+        truncated: false,
+      },
+    }),
   )
   await page.goto('/')
   await page.evaluate((value) => {
@@ -196,4 +243,124 @@ for (const width of [1280, 390, 320]) {
       expect(pageErrors).toEqual([])
     })
   }
+}
+
+const reviewStages = [
+  { status: 'integrate', count: 2, approve: 'Approve changes & start Test' },
+  { status: 'test', count: 3, approve: 'Approve test & start Code Review' },
+  {
+    status: 'code_review',
+    count: 4,
+    approve: 'Approve code review & continue',
+  },
+  { status: 'final_approval', count: 4, approve: 'Give final approval' },
+]
+
+for (const stage of reviewStages) {
+  for (const width of [1280, 320]) {
+    test(`${stage.status} uses the shared conversation at ${width}px`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width, height: 850 })
+      const dialog = await openPlanning(
+        page,
+        width === 320 ? 'light' : 'dark',
+        stage.status,
+      )
+      const thread = dialog.getByRole('list', { name: 'Task conversation' })
+      const composer = dialog.locator('.planning-composer')
+      await expect(dialog.locator('.workflow-run')).toHaveCount(stage.count)
+      await expect(dialog.locator('[data-current-run="true"]')).toContainText(
+        `${stage.status === 'final_approval' ? 'code_review' : stage.status} result`,
+      )
+      await expect(
+        dialog.getByRole('button', { name: stage.approve, exact: true }),
+      ).toBeEnabled()
+      await expect(composer).toBeInViewport()
+      if (stage.count >= 3) {
+        await expect(thread.locator('.workflow-test-report')).toContainText(
+          'Passed',
+        )
+        await expect(thread.locator('.workflow-test-report')).toContainText(
+          'python -m pytest',
+        )
+      }
+      const before = await composer.boundingBox()
+      await thread.evaluate((element) => {
+        element.scrollTop = 0
+      })
+      await expect(
+        dialog.getByRole('button', { name: 'Jump to latest' }),
+      ).toBeVisible()
+      const after = await composer.boundingBox()
+      expect(Math.abs(before!.y - after!.y)).toBeLessThan(2)
+      await dialog.getByRole('button', { name: 'Jump to latest' }).click()
+      await thread.getByText('Current code changes', { exact: true }).click()
+      await expect(
+        thread.getByText('+Reviewed change', { exact: true }),
+      ).toBeVisible()
+      await expect(dialog.getByLabel('Run history')).toHaveCount(0)
+      await dialog
+        .getByLabel('Revision or rework instructions')
+        .fill('Please refine this result.')
+      if (stage.status === 'final_approval') {
+        await expect(
+          dialog.getByRole('button', {
+            name: 'Send back to Integrate',
+            exact: true,
+          }),
+        ).toBeEnabled()
+        await expect(
+          dialog.getByText('Sending returns the task to Integrate', {
+            exact: false,
+          }),
+        ).toBeVisible()
+      } else {
+        await expect(
+          dialog.getByRole('button', { name: 'Request revision', exact: true }),
+        ).toBeEnabled()
+        await dialog.getByLabel('Message action').selectOption('send_back')
+        await expect(
+          dialog.getByRole('button', {
+            name:
+              stage.status === 'integrate'
+                ? 'Send back to Plan'
+                : 'Send back to Integrate',
+            exact: true,
+          }),
+        ).toBeEnabled()
+      }
+      await expect(composer).toBeInViewport()
+      expect(
+        await dialog.evaluate(
+          (element) => element.scrollWidth > element.clientWidth,
+        ),
+      ).toBe(false)
+      const bounds = await dialog.boundingBox()
+      expect(bounds!.x).toBeGreaterThanOrEqual(0)
+      expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width)
+    })
+  }
+}
+
+for (const width of [1280, 320]) {
+  test(`completed tasks preserve a read-only conversation at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 850 })
+    const dialog = await openPlanning(page, 'dark', 'final_approval', true)
+    await expect(dialog.locator('.workflow-run')).toHaveCount(4)
+    await expect(dialog.getByText(/^Approved/)).toBeVisible()
+    await expect(dialog.getByRole('textbox')).toHaveCount(0)
+    await expect(
+      dialog.getByRole('button', { name: 'Give final approval' }),
+    ).toHaveCount(0)
+    await expect(
+      dialog.getByRole('button', { name: 'Request revision' }),
+    ).toHaveCount(0)
+    await dialog.getByRole('button', { name: 'Close task review' }).click()
+    await expect(
+      page.getByRole('button', { name: `Open ${task.title}`, exact: true }),
+    ).toBeFocused()
+  })
 }

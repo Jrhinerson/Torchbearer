@@ -220,9 +220,8 @@ for (const policy of [
       .click()
     await expect(card).toContainText('Approved')
     await card.getByRole('button', { name: 'View history' }).click()
-    await expect(page.getByLabel('Run history').locator('option')).toHaveCount(
-      4,
-    )
+    await expect(review.locator('.workflow-run')).toHaveCount(4)
+    await expect(review.getByRole('textbox')).toHaveCount(0)
   })
 }
 
@@ -282,9 +281,12 @@ for (const failure of ['test', 'review']) {
     await review
       .getByLabel('Revision or rework instructions')
       .fill('Fix the reported regression.')
+    await review.getByLabel('Message action').selectOption('send_back')
     await review.getByRole('button', { name: 'Send back to Integrate' }).click()
     await expect(
-      review.getByText('Integrate completed by pi', { exact: true }),
+      review
+        .locator('[data-current-run="true"]')
+        .getByText('Integrate completed by pi', { exact: true }),
     ).toBeVisible({ timeout: 20000 })
     if (failure === 'review') {
       await advance(review, 'Approve changes & start Test')
@@ -292,9 +294,7 @@ for (const failure of ['test', 'review']) {
       await advance(review, 'Approve code review & continue')
       await advance(review, 'Give final approval')
       await expect(review.getByText(/^Approved/)).toBeVisible()
-      await expect(
-        review.getByLabel('Run history').locator('option'),
-      ).toHaveCount(7)
+      await expect(review.locator('.workflow-run')).toHaveCount(7)
     }
   })
 }
@@ -337,6 +337,144 @@ test('prevents approval after the reviewed code changes', async ({ page }) => {
   )
   await expect(approve).toBeDisabled({ timeout: 10000 })
   await expect(review.getByText(/made this result stale/)).toBeVisible()
+})
+
+test('revises working stages in the conversation and requests changes from final approval', async ({
+  page,
+}) => {
+  test.setTimeout(120000)
+  await page.goto('/')
+  const title = `Conversation through review ${Date.now()}`
+  const card = await backlog(page, title)
+  const review = await start(page, card, title)
+  await advance(review, 'Approve plan & start Integrate')
+  const stages = [
+    {
+      id: 'integrate',
+      summary: 'Integrate completed by pi',
+      approve: 'Approve changes & start Test',
+    },
+    {
+      id: 'test',
+      summary: 'Test completed by pi',
+      approve: 'Approve test & start Code Review',
+    },
+    {
+      id: 'code_review',
+      summary: 'Code_Review completed by codex',
+      approve: 'Approve code review & continue',
+    },
+  ]
+  let count = 2
+  for (const stage of stages) {
+    await expect(review.locator('[data-current-run="true"]')).toContainText(
+      stage.summary,
+      { timeout: 20000 },
+    )
+    const input = review.getByLabel('Revision or rework instructions')
+    const message = `Refine the ${stage.id} result using the agreed criteria.`
+    if (stage.id === 'integrate') {
+      await page.route('**/api/v1/tasks/*/actions/', (route) =>
+        route.fulfill({
+          status: 500,
+          json: { detail: 'Could not submit revision' },
+        }),
+      )
+      await input.fill(message)
+      await review
+        .getByRole('button', { name: 'Request revision', exact: true })
+        .click()
+      await expect(review.getByRole('alert')).toContainText(
+        'Could not submit revision',
+      )
+      await expect(input).toHaveValue(message)
+      await expect(review.locator('.workflow-run')).toHaveCount(count)
+      await page.unroute('**/api/v1/tasks/*/actions/')
+    }
+    await input.fill(message)
+    await expect(
+      review.getByRole('button', { name: 'Request revision', exact: true }),
+    ).toBeEnabled()
+    await input.press('Enter')
+    await expect(input).toHaveValue('')
+    count++
+    await expect(review.locator('.workflow-run')).toHaveCount(count, {
+      timeout: 20000,
+    })
+    await expect(review.locator('[data-current-run="true"]')).toContainText(
+      stage.summary,
+    )
+    await expect(
+      review.getByRole('list', { name: 'Task conversation' }),
+    ).toContainText(message)
+    await expect(
+      page
+        .locator(`.workflow-column[data-stage="${stage.id}"]`)
+        .getByRole('article', { name: title, exact: true }),
+    ).toBeVisible()
+    await advance(review, stage.approve)
+    if (stage.id !== 'code_review') count++
+  }
+  await expect(
+    review.getByRole('button', { name: 'Give final approval' }),
+  ).toBeEnabled()
+  await review
+    .getByLabel('Revision or rework instructions')
+    .fill('Make the final correction before approval.')
+  await review
+    .getByRole('button', { name: 'Send back to Integrate', exact: true })
+    .click()
+  await expect(review.locator('.workflow-run')).toHaveCount(8, {
+    timeout: 20000,
+  })
+  await expect(review.locator('[data-current-run="true"]')).toContainText(
+    'Integrate completed by pi',
+  )
+  await expect(
+    review.getByRole('list', { name: 'Task conversation' }),
+  ).toContainText('Make the final correction before approval.')
+  await review.getByRole('button', { name: 'Close task review' }).click()
+  await page.reload()
+  await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  await expect(review.locator('.workflow-run')).toHaveCount(8)
+  await expect(
+    review.getByRole('list', { name: 'Task conversation' }),
+  ).toContainText('Refine the test result using the agreed criteria.')
+})
+
+test('returns to Plan from the Integrate composer with the full conversation preserved', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const title = `Replan from conversation ${Date.now()}`
+  const review = await start(page, await backlog(page, title), title)
+  await advance(review, 'Approve plan & start Integrate')
+  await expect(review.locator('[data-current-run="true"]')).toContainText(
+    'Integrate completed by pi',
+    { timeout: 20000 },
+  )
+  await review.getByLabel('Message action').selectOption('send_back')
+  await review
+    .getByLabel('Revision or rework instructions')
+    .fill('Revisit the plan before making these changes.')
+  await review
+    .getByRole('button', { name: 'Send back to Plan', exact: true })
+    .click()
+  await expect(review.locator('.workflow-run')).toHaveCount(3, {
+    timeout: 20000,
+  })
+  await expect(review.locator('[data-current-run="true"]')).toContainText(
+    'Plan completed by codex',
+  )
+  await expect(
+    review.getByRole('list', { name: 'Planning conversation' }),
+  ).toContainText('Revisit the plan before making these changes.')
+  await expect(review.getByLabel('Message your planning agent')).toBeVisible()
+  await expect(review.locator('.workspace-path')).toHaveCount(0)
+  await advance(review, 'Approve plan & start Integrate')
+  await expect(review.locator('.workflow-run')).toHaveCount(4, {
+    timeout: 20000,
+  })
 })
 
 for (const width of [1280, 390]) {
@@ -396,7 +534,9 @@ for (const width of [1280, 390]) {
     await expect(
       thread().locator('.planning-message-agent').last(),
     ).toContainText(firstMessage)
-    await expect(page.locator('[data-stage="plan"]')).toContainText(title)
+    await expect(
+      page.locator('.workflow-column[data-stage="plan"]'),
+    ).toContainText(title)
 
     await page.reload()
     // The title opens the conversation directly while the card remains collapsed.
@@ -424,10 +564,12 @@ for (const width of [1280, 390]) {
     await expect(
       review.getByText('Integrate completed by pi', { exact: true }),
     ).toBeVisible({ timeout: 20000 })
-    // Later-stage reports keep their existing run selector and review controls.
+    // The conversation continues into Integrate with every planning turn intact.
+    await expect(review.locator('.workflow-run')).toHaveCount(4)
+    await expect(review.getByLabel('Run history')).toHaveCount(0)
     await expect(
-      review.getByLabel('Run history').locator('option'),
-    ).toHaveCount(4)
+      review.getByRole('list', { name: 'Task conversation' }),
+    ).toContainText(firstMessage)
     const tasks = await page.request.get('/api/v1/tasks/').then((r) => r.json())
     const task = tasks.find((item: { title: string }) => item.title === title)
     const history = await page.request

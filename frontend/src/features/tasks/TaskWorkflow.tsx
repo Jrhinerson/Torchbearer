@@ -18,7 +18,8 @@ import type {
 } from './api'
 import { RepositoryPicker } from './RepositoryPicker'
 import { TaskRoutingEditor } from './TaskRouting'
-import { PlanningConversation } from './PlanningConversation'
+import { WorkflowConversation } from './WorkflowConversation'
+import { stageLabels } from './workflowLabels'
 
 const states: Record<RunState, string> = {
   queued: 'Queued',
@@ -245,28 +246,24 @@ export function WorkflowDialog({
   const [workspaceError, setWorkspaceError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [error, setError] = useState('')
-  const [selectedRun, setSelectedRun] = useState('')
-  const [feedback, setFeedback] = useState('')
   const [busy, setBusy] = useState(false)
   const [reload, setReload] = useState(0)
   const acting = useRef(false)
-  const planning = task.status === 'plan'
-  const run = history?.runs.find(
-    (item) => item.id === (selectedRun || task.latest_run?.id),
-  )
-  const latest = Boolean(run && run.id === task.latest_run?.id)
+  const run = history?.runs.find((item) => item.id === task.latest_run?.id)
   const active = isActive(task)
   const reviewCurrent = Boolean(
     run?.review_fingerprint &&
     workspace?.fingerprint === run.review_fingerprint,
   )
-  const canApprove =
-    latest &&
-    Boolean(task.routing_mode) &&
-    run?.state === 'succeeded' &&
+  const canApprove = Boolean(
+    run &&
+    task.routing_mode &&
+    run.state === 'succeeded' &&
+    run.result.outcome === 'complete' &&
     reviewCurrent &&
     !active &&
-    !task.completed_at
+    !task.completed_at,
+  )
   const next = task.next_stage
   const missingAgent =
     next &&
@@ -340,7 +337,7 @@ export function WorkflowDialog({
     reload,
   ])
 
-  async function act(action: TaskAction | 'cancel', message = feedback) {
+  async function act(action: TaskAction | 'cancel', message = '') {
     if (acting.current) return false
     acting.current = true
     setBusy(true)
@@ -351,8 +348,6 @@ export function WorkflowDialog({
           ? await cancelRun(task)
           : await performAction(task, action, run, message)
       onTask(updated)
-      setFeedback('')
-      setSelectedRun('')
       setReload((value) => value + 1)
       return true
     } catch (cause) {
@@ -370,7 +365,7 @@ export function WorkflowDialog({
   return (
     <dialog
       ref={dialog}
-      className={`surface surface-overlay task-dialog workflow-dialog${planning ? ' planning-dialog' : ''}`}
+      className="surface surface-overlay task-dialog workflow-dialog planning-dialog"
       aria-labelledby="workflow-heading"
       onCancel={(event) => {
         if (busy) event.preventDefault()
@@ -379,15 +374,11 @@ export function WorkflowDialog({
     >
       <div className="dialog-heading">
         <div>
-          {planning ? (
-            <p className="planning-context">
-              <span>{task.project?.name || 'Task'}</span>
-              <span aria-hidden="true">/</span>
-              <span>Plan</span>
-            </p>
-          ) : (
-            <p className="eyebrow">{task.status.replace('_', ' ')}</p>
-          )}
+          <p className="planning-context">
+            <span>{task.project?.name || 'Task'}</span>
+            <span aria-hidden="true">/</span>
+            <span>{stageLabels[task.status]}</span>
+          </p>
           <h2 id="workflow-heading">{task.title}</h2>
         </div>
         <button
@@ -401,11 +392,6 @@ export function WorkflowDialog({
           ×
         </button>
       </div>
-      {task.completed_at && (
-        <p className="run-state state-approved">
-          Approved · {new Date(task.completed_at).toLocaleString()}
-        </p>
-      )}
       {!task.completed_at && !task.routing_mode && (
         <TaskRoutingEditor
           task={task}
@@ -413,15 +399,6 @@ export function WorkflowDialog({
           disabled={busy || active}
           onTask={onTask}
         />
-      )}
-      {!planning && (
-        <p className="workflow-hint">
-          {task.branch}
-          <br />
-          <span className="workspace-path">
-            {task.workspace_path || 'Preparing workspace…'}
-          </span>
-        </p>
       )}
       {loadError && (
         <p role="alert" className="feedback feedback-error form-error">
@@ -435,9 +412,9 @@ export function WorkflowDialog({
         </p>
       )}
       {!history && !loadError && <p role="status">Loading runs…</p>}
-      {history && planning && (
-        <PlanningConversation
-          key={task.id}
+      {history && (
+        <WorkflowConversation
+          key={task.id + ':' + task.status}
           task={task}
           history={history}
           run={run}
@@ -445,237 +422,30 @@ export function WorkflowDialog({
           active={active}
           busy={busy}
           error={error}
+          workspace={workspace}
+          workspaceError={workspaceError}
           canApprove={canApprove && !missingAgent}
           approvalHint={
             workspaceError ||
             (!reviewCurrent
               ? workspace
-                ? 'Workspace changes have made this result stale. Send a message to refresh the plan before approving.'
+                ? 'Workspace changes have made this result stale. Request a new reply before approving.'
                 : 'Checking the workspace before approval…'
               : missingAgent
-                ? `The agent for ${next} must be configured and installed before continuing.`
+                ? 'The agent for ' +
+                  stageLabels[next!] +
+                  ' must be configured and installed before continuing.'
                 : '')
           }
-          onMessage={(message) => act('plan_message', message)}
-          onRetry={() => void act('retry', '')}
+          onMessage={(action, message) => act(action, message)}
+          onRetry={() => void act('retry')}
           onStop={() => void act('cancel')}
-          onApprove={() => void act('approve', '')}
+          onApprove={() =>
+            void act(
+              task.status === 'final_approval' ? 'final_approve' : 'approve',
+            )
+          }
         />
-      )}
-      {history && !planning && (
-        <>
-          <label className="field-label" htmlFor="run-history">
-            Run history
-          </label>
-          <select
-            className="field"
-            id="run-history"
-            value={selectedRun || task.latest_run?.id || ''}
-            onChange={(event) => setSelectedRun(event.target.value)}
-          >
-            {history.runs.map((attempt) => (
-              <option key={attempt.id} value={attempt.id}>
-                Run {attempt.sequence} · {attempt.stage} ·{' '}
-                {agentLabel(attempt.agent, routing)} · {states[attempt.state]}
-              </option>
-            ))}
-          </select>
-          {run && (
-            <div className="run-review">
-              <p className={`run-state state-${run.state}`}>
-                {states[run.state]}{' '}
-                <span>
-                  {agentLabel(run.agent, routing)} {run.cli_version}
-                </span>
-              </p>
-              {run.error && (
-                <p role="alert" className="feedback feedback-error form-error">
-                  {run.error}
-                </p>
-              )}
-              {run.result.summary && <h3>{run.result.summary}</h3>}
-              {run.result.details && (
-                <pre className="stage-result">{run.result.details}</pre>
-              )}
-              {Boolean(run.result.tests?.length) && (
-                <ul className="test-report">
-                  {run.result.tests!.map((test, index) => (
-                    <li key={index}>
-                      <strong>{test.outcome}</strong>{' '}
-                      <code>{test.command}</code>
-                      <p>{test.details}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              <details>
-                <summary>Execution log</summary>
-                <pre className="run-log">
-                  {run.log || 'Waiting for output…'}
-                </pre>
-              </details>
-              {!active && (
-                <details>
-                  <summary>Current code changes</summary>
-                  {workspaceError ? (
-                    <p
-                      role="alert"
-                      className="feedback feedback-error form-error"
-                    >
-                      {workspaceError}
-                    </p>
-                  ) : workspace ? (
-                    <>
-                      <pre className="run-log">
-                        {workspace.diff || 'No code changes.'}
-                      </pre>
-                      {workspace.truncated && (
-                        <p className="workflow-hint">
-                          Preview truncated. Review the full diff in the task
-                          worktree.
-                        </p>
-                      )}
-                    </>
-                  ) : (
-                    <p role="status">Loading code changes…</p>
-                  )}
-                </details>
-              )}
-              {latest && !task.completed_at && (
-                <div className="review-actions">
-                  {active ? (
-                    <button
-                      className="button button-secondary"
-                      type="button"
-                      disabled={
-                        busy || Boolean(task.latest_run?.cancel_requested)
-                      }
-                      onClick={() => void act('cancel')}
-                    >
-                      {task.latest_run?.cancel_requested
-                        ? 'Cancelling…'
-                        : 'Cancel run'}
-                    </button>
-                  ) : (
-                    <>
-                      {run.state === 'succeeded' && !reviewCurrent && (
-                        <p className="workflow-hint">
-                          {workspace
-                            ? 'Workspace changes have made this result stale. Request a new run before approving.'
-                            : 'Code changes must load before you can approve.'}
-                        </p>
-                      )}
-                      {missingAgent && (
-                        <p className="workflow-hint">
-                          The agent for {next} must be configured and installed
-                          before continuing.
-                        </p>
-                      )}
-                      <div className="review-primary-actions">
-                        {run.state === 'succeeded' && (
-                          <button
-                            type="button"
-                            className="button button-primary"
-                            disabled={
-                              busy || !canApprove || Boolean(missingAgent)
-                            }
-                            onClick={() =>
-                              void act(
-                                task.status === 'final_approval'
-                                  ? 'final_approve'
-                                  : 'approve',
-                              )
-                            }
-                          >
-                            {task.status === 'final_approval'
-                              ? 'Give final approval'
-                              : task.status === 'plan'
-                                ? 'Approve plan & start Integrate'
-                                : task.status === 'integrate'
-                                  ? 'Approve changes & start Test'
-                                  : task.status === 'test'
-                                    ? 'Approve test & start Code Review'
-                                    : 'Approve code review & continue'}
-                          </button>
-                        )}
-                        {run.state !== 'succeeded' &&
-                          task.status !== 'final_approval' && (
-                            <button
-                              type="button"
-                              className="button button-secondary"
-                              disabled={busy || !task.routing_mode}
-                              onClick={() => void act('retry')}
-                            >
-                              Retry step
-                            </button>
-                          )}
-                      </div>
-                      <label className="field-label" htmlFor="review-feedback">
-                        Revision or rework instructions
-                      </label>
-                      <textarea
-                        className="field"
-                        id="review-feedback"
-                        value={feedback}
-                        onChange={(event) => setFeedback(event.target.value)}
-                        maxLength={4000}
-                        rows={3}
-                        disabled={busy || !task.routing_mode}
-                        placeholder="Describe what needs to change…"
-                      />
-                      <div className="review-secondary-actions">
-                        {task.status !== 'final_approval' && (
-                          <button
-                            type="button"
-                            className="button button-secondary"
-                            disabled={busy || !feedback.trim()}
-                            onClick={() => void act('revise')}
-                          >
-                            Request revision
-                          </button>
-                        )}
-                        {task.status !== 'plan' && (
-                          <button
-                            type="button"
-                            className="button button-secondary"
-                            disabled={busy || !feedback.trim()}
-                            onClick={() => void act('send_back')}
-                          >
-                            {task.status === 'integrate'
-                              ? 'Send back to Plan'
-                              : 'Send back to Integrate'}
-                          </button>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-          {history.decisions.length > 0 && (
-            <details className="decision-history">
-              <summary>Human decisions</summary>
-              <ol>
-                {history.decisions.map((decision) => (
-                  <li key={decision.id}>
-                    <strong>{decision.action.replaceAll('_', ' ')}</strong> ·{' '}
-                    {decision.from_stage} → {decision.to_stage}
-                    <time dateTime={decision.created_at}>
-                      {new Date(decision.created_at).toLocaleString()}
-                    </time>
-                    {decision.feedback && <p>{decision.feedback}</p>}
-                  </li>
-                ))}
-              </ol>
-            </details>
-          )}
-        </>
-      )}
-      {error && !planning && (
-        <p role="alert" className="feedback feedback-error form-error">
-          {error}
-        </p>
       )}
     </dialog>
   )

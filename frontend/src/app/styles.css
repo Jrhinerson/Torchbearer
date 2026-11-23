@@ -1068,11 +1068,6 @@ main {
 .workspace-path {
   font-family: var(--font-mono);
 }
-.run-review h3 {
-  font-size: var(--text-body);
-  line-height: 1.5;
-}
-.stage-result,
 .run-log {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -1085,9 +1080,6 @@ main {
   border-radius: 6px;
   padding: 14px;
 }
-.stage-result {
-  font-family: inherit;
-}
 .run-log {
   font-family: var(--font-mono);
 }
@@ -1099,23 +1091,6 @@ main {
   cursor: pointer;
   color: var(--color-text);
   min-height: var(--control-size);
-}
-.review-actions {
-  border-top: 1px solid var(--color-border);
-  margin-top: 20px;
-  padding-top: 20px;
-}
-.review-primary-actions,
-.review-secondary-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.review-secondary-actions {
-  margin-top: 12px;
-}
-.review-actions textarea {
-  min-height: 90px;
 }
 .decision-history li {
   margin: 12px 0;
@@ -1132,6 +1107,77 @@ main {
 }
 .test-report p {
   color: var(--color-text-muted);
+}
+.workflow-message-action {
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--control-size);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  font-size: var(--text-meta);
+}
+.workflow-stage-marker {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+}
+.workflow-stage-marker::before,
+.workflow-stage-marker::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--color-border);
+}
+.workflow-run-meta {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+}
+.workflow-evidence {
+  min-width: 0;
+  flex-shrink: 0;
+}
+.workflow-evidence details {
+  margin: 0;
+}
+.workflow-test-report {
+  list-style: none;
+  margin: var(--space-4) 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-input);
+}
+.workflow-test-report > li {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+.workflow-test-report > li + li {
+  border-top: 1px solid var(--color-border);
+}
+.workflow-test-report code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.workflow-test-report p {
+  margin: 0;
+}
+.test-outcome {
+  width: fit-content;
+  color: var(--color-text-muted);
+}
+.test-outcome-pass {
+  color: var(--color-success);
+}
+.test-outcome-fail {
+  color: var(--color-error);
+}
+.workflow-completed {
+  margin: 0;
+  padding-block: var(--space-3);
 }
 
 @media (max-width: 47.5rem) {
