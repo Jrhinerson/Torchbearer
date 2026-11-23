@@ -21,6 +21,8 @@ if scenario == "browser":
     scenario = (
         "hang"
         if "[cancel]" in title
+        else "conversation"
+        if "[conversation]" in title
         else "test_fail"
         if "[test fails]" in title and stage == "test"
         else "review_fail"
@@ -48,7 +50,7 @@ if scenario == "malformed":
     sys.exit(0)
 if scenario == "modify":
     Path(f"violation-{stage}.txt").write_text("Unexpected edit\n", encoding="utf-8")
-if stage == "integrate" and scenario == "implement":
+if stage == "integrate" and scenario in {"implement", "conversation"}:
     Path("feature.txt").write_text("Implemented by the fixture\n", encoding="utf-8")
 result = {
     "outcome": "failed"
@@ -68,6 +70,17 @@ result = {
     if stage == "test"
     else [],
 }
+if scenario == "conversation" and stage == "plan":
+    messages = [
+        message["content"] for message in context["plan_conversation"] if message["role"] == "user"
+    ]
+    result.update(
+        outcome="blocked" if len(messages) == 1 else "complete",
+        summary="Let's clarify the plan" if len(messages) == 1 else "Updated plan",
+        details="What should happen when no matching files are found?"
+        if len(messages) == 1
+        else "Implement the agreed behavior:\n" + "\n\n".join(messages),
+    )
 text = json.dumps(result, ensure_ascii=False)
 if scenario == "verbose":
     print("diagnostic output\n" * 10000, file=sys.stderr, flush=True)
