@@ -111,7 +111,12 @@
   border-radius: var(--radius-control);
   color: var(--color-primary-text);
   background: var(--color-primary);
-  font-size: var(--text-title);
+  flex-shrink: 0;
+}
+.brand-mark svg {
+  width: 1.5rem;
+  height: 1.5rem;
+  fill: currentColor;
 }
 .local-label {
   margin-left: var(--space-1);
@@ -227,6 +232,54 @@ main {
   font-weight: var(--weight-semibold);
   line-height: var(--leading-body);
 }
+.task-card-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.task-card-summary {
+  flex: 1;
+  min-width: 0;
+}
+.task-card-summary .task-project {
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+.task-project-name {
+  min-width: 0;
+}
+.task-collapse-button {
+  margin-top: calc(-1 * var(--space-2));
+  margin-right: calc(-1 * var(--space-2));
+}
+.task-collapse-button svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.task-collapse-button[aria-expanded='false'] svg {
+  transform: rotate(-90deg);
+}
+.task-title-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-weight: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.task-title-button:hover {
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
+}
 .task-description {
   margin: var(--space-2) 0 var(--space-4);
   color: var(--color-text-muted);
@@ -245,7 +298,17 @@ main {
   font-size: var(--text-meta);
 }
 .delete-task-button {
-  font-size: var(--text-meta);
+  width: var(--control-size);
+  height: var(--control-size);
+}
+.delete-task-button svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .column-empty-state,
 .state-message {
@@ -489,12 +552,84 @@ main {
   flex-wrap: wrap;
   margin-top: 12px;
 }
+.folder-browser-dialog {
+  position: fixed;
+  width: min(44rem, calc(100% - var(--space-8)));
+  max-height: calc(100dvh - var(--space-8));
+  padding: 0;
+  overflow-y: auto;
+}
+.folder-browser-dialog::backdrop {
+  background: var(--color-backdrop);
+}
 .folder-browser {
-  margin-top: 12px;
-  padding: 12px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
+  padding: var(--space-4);
   background: var(--color-surface);
+}
+.folder-locations,
+.folder-toolbar,
+.selected-project-folder {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.folder-locations .button,
+.folder-toolbar .button {
+  font-size: var(--text-meta);
+}
+.folder-toolbar,
+.selected-project-folder {
+  justify-content: space-between;
+  margin-block: var(--space-3);
+}
+.folder-breadcrumbs {
+  margin-top: var(--space-3);
+  max-height: 8rem;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  font-size: var(--text-meta);
+}
+.folder-breadcrumbs .button {
+  display: inline;
+  min-width: 0;
+  min-height: var(--control-size);
+  padding: var(--space-2);
+  font-size: inherit;
+}
+.folder-breadcrumbs [aria-current='location'] {
+  color: var(--color-text);
+  background: var(--color-surface-active);
+}
+.project-panel .folder-filter {
+  margin-block: var(--space-3);
+}
+.folder-browser .folder-list {
+  min-height: 8rem;
+  max-height: 16rem;
+  border-block: var(--border-width) solid var(--color-border);
+}
+.folder-current {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+}
+.folder-current-path {
+  overflow-wrap: anywhere;
+  white-space: normal;
+  font-size: var(--text-meta);
+}
+.folder-name {
+  flex: 1;
+  min-width: 0;
+}
+.folder-row .badge {
+  flex-shrink: 0;
+  max-width: 6rem;
+  text-align: center;
 }
 .folder-row {
   display: flex;
@@ -644,14 +779,370 @@ main {
 .workflow-dialog .field-label {
   margin-top: var(--space-4);
 }
+.planning-dialog {
+  width: min(58rem, calc(100vw - 2 * var(--space-4)));
+  height: min(54rem, calc(100dvh - 2 * var(--space-4)));
+  padding: 0;
+  overflow: hidden;
+  background: var(--color-canvas);
+}
+.planning-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.planning-dialog > .dialog-heading {
+  flex-shrink: 0;
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border-bottom: 1px solid var(--color-border);
+}
+.planning-dialog .dialog-heading > div {
+  flex: 1;
+}
+.planning-dialog .close-dialog-button {
+  margin: 0;
+}
+.planning-dialog #workflow-heading {
+  margin-top: var(--space-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-brand);
+  line-height: 1.5;
+}
+.planning-context {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+}
+.planning-context span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.planning-dialog > .task-routing-editor,
+.planning-dialog > .feedback {
+  flex-shrink: 0;
+  margin: var(--space-3) var(--space-5);
+  max-height: 35dvh;
+  overflow: auto;
+}
+.planning-dialog > [role='status'] {
+  margin: var(--space-5);
+}
+.planning-conversation {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.planning-thread {
+  display: flex;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+.planning-messages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  width: 100%;
+  max-width: 52rem;
+  min-height: 0;
+  list-style: none;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.planning-message {
+  min-width: 0;
+  flex-shrink: 0;
+  font-size: var(--text-body);
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.planning-message-user {
+  align-self: flex-end;
+  max-width: 84%;
+  border-radius: 1rem;
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-selection);
+}
+.planning-message-agent {
+  align-self: stretch;
+  padding-inline: var(--space-1);
+}
+.planning-message-summary {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+}
+.planning-message-text {
+  white-space: pre-wrap;
+}
+.planning-message-summary + .planning-message-text,
+.planning-message-summary + .planning-markdown {
+  margin-top: var(--space-3);
+}
+.planning-reply-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  color: var(--color-text-muted);
+}
+.planning-thinking-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+.planning-reply-error {
+  margin: var(--space-2) 0 0;
+  color: var(--color-error);
+}
+.planning-jump {
+  position: absolute;
+  right: max(var(--space-5), calc((100% - 48rem) / 2));
+  bottom: var(--space-3);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-meta);
+  box-shadow: var(--shadow-card);
+}
+.planning-jump svg,
+.planning-agent svg {
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.planning-footer {
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 52rem;
+  margin-inline: auto;
+  padding: var(--space-3) var(--space-5);
+}
+.planning-composer {
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: 1.25rem;
+  background: var(--color-surface-raised);
+}
+.planning-composer:focus-within {
+  border-color: var(--color-focus);
+}
+.planning-composer textarea.field {
+  min-height: 4.25rem;
+  max-height: min(11rem, 22dvh);
+  border: 0;
+  padding: var(--space-2);
+  border-radius: 0.75rem;
+  background: transparent;
+  resize: none;
+  outline: none;
+}
+.planning-composer-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.planning-composer-context {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-left: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+}
+.planning-mode {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  line-height: 1.5;
+}
+.planning-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.planning-send {
+  width: var(--control-size);
+  height: var(--control-size);
+  border-radius: 50%;
+}
+.planning-send svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.planning-stop svg {
+  fill: currentColor;
+  stroke: none;
+}
+.planning-retry {
+  font-size: var(--text-meta);
+}
+.planning-composer-hint {
+  margin: var(--space-2) 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  text-align: center;
+}
+.planning-approval {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0 var(--space-4);
+  font-size: var(--text-compact);
+}
+.planning-approval > div {
+  flex: 1 1 14rem;
+}
+.planning-approval .workflow-hint {
+  margin: var(--space-1) 0 0;
+  line-height: 1.5;
+}
+.planning-dialog .planning-diagnostics details {
+  margin: 0;
+}
+.planning-dialog .planning-diagnostics summary {
+  display: flex;
+  align-items: center;
+  color: var(--color-text-muted);
+  gap: var(--space-2);
+  font-size: var(--text-meta);
+}
+.planning-diagnostics summary::before {
+  content: '›';
+}
+.planning-diagnostics details[open] summary::before {
+  transform: rotate(90deg);
+}
+.planning-diagnostics .run-log {
+  margin: 0;
+}
+.planning-markdown > :first-child {
+  margin-top: 0;
+}
+.planning-markdown > :last-child {
+  margin-bottom: 0;
+}
+.planning-markdown p,
+.planning-markdown ul,
+.planning-markdown ol,
+.planning-markdown blockquote,
+.planning-markdown pre,
+.planning-table {
+  margin-block: var(--space-4);
+}
+.planning-markdown :is(h1, h2, h3, h4, h5, h6) {
+  margin: var(--space-6) 0 var(--space-3);
+  font-size: var(--text-brand);
+  line-height: 1.5;
+}
+.planning-markdown ul,
+.planning-markdown ol {
+  padding-left: var(--space-6);
+}
+.planning-markdown li + li {
+  margin-top: var(--space-2);
+}
+.planning-markdown li > p {
+  margin-block: var(--space-2);
+}
+.planning-markdown a {
+  color: var(--color-info);
+  text-underline-offset: 3px;
+}
+.planning-markdown code {
+  padding: 2px 5px;
+  border-radius: var(--radius-control);
+  background: var(--color-input);
+  overflow-wrap: anywhere;
+}
+.planning-markdown pre {
+  max-width: 100%;
+  padding: var(--space-4);
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-input);
+  white-space: pre;
+  line-height: 1.7;
+}
+.planning-markdown pre code {
+  padding: 0;
+  background: transparent;
+  overflow-wrap: normal;
+}
+.planning-markdown blockquote {
+  padding-left: var(--space-4);
+  border-left: 2px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+.planning-markdown hr {
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  margin-block: var(--space-6);
+}
+.planning-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.planning-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-compact);
+}
+.planning-table th,
+.planning-table td {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  text-align: left;
+}
+@media (max-width: 47.5rem) {
+  .task-dialog.planning-dialog {
+    padding: 0;
+  }
+  .planning-messages,
+  .planning-footer {
+    padding-inline: var(--space-4);
+  }
+}
+@media (max-width: 30rem) {
+  .planning-dialog {
+    width: calc(100vw - var(--space-4));
+    height: calc(100dvh - var(--space-4));
+    max-height: calc(100dvh - var(--space-4));
+  }
+  .planning-dialog > .dialog-heading {
+    padding: var(--space-3) var(--space-4);
+  }
+  .planning-composer-hint {
+    font-size: 0.6875rem;
+  }
+}
 .workspace-path {
   font-family: var(--font-mono);
 }
-.run-review h3 {
-  font-size: var(--text-body);
-  line-height: 1.5;
-}
-.stage-result,
 .run-log {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -664,9 +1155,6 @@ main {
   border-radius: 6px;
   padding: 14px;
 }
-.stage-result {
-  font-family: inherit;
-}
 .run-log {
   font-family: var(--font-mono);
 }
@@ -678,23 +1166,6 @@ main {
   cursor: pointer;
   color: var(--color-text);
   min-height: var(--control-size);
-}
-.review-actions {
-  border-top: 1px solid var(--color-border);
-  margin-top: 20px;
-  padding-top: 20px;
-}
-.review-primary-actions,
-.review-secondary-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.review-secondary-actions {
-  margin-top: 12px;
-}
-.review-actions textarea {
-  min-height: 90px;
 }
 .decision-history li {
   margin: 12px 0;
@@ -711,6 +1182,77 @@ main {
 }
 .test-report p {
   color: var(--color-text-muted);
+}
+.workflow-message-action {
+  min-width: 0;
+  max-width: 100%;
+  min-height: var(--control-size);
+  color: var(--color-text);
+  background: var(--color-surface-raised);
+  font-size: var(--text-meta);
+}
+.workflow-stage-marker {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+}
+.workflow-stage-marker::before,
+.workflow-stage-marker::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--color-border);
+}
+.workflow-run-meta {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+}
+.workflow-evidence {
+  min-width: 0;
+  flex-shrink: 0;
+}
+.workflow-evidence details {
+  margin: 0;
+}
+.workflow-test-report {
+  list-style: none;
+  margin: var(--space-4) 0;
+  padding: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  background: var(--color-input);
+}
+.workflow-test-report > li {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+}
+.workflow-test-report > li + li {
+  border-top: 1px solid var(--color-border);
+}
+.workflow-test-report code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.workflow-test-report p {
+  margin: 0;
+}
+.test-outcome {
+  width: fit-content;
+  color: var(--color-text-muted);
+}
+.test-outcome-pass {
+  color: var(--color-success);
+}
+.test-outcome-fail {
+  color: var(--color-error);
+}
+.workflow-completed {
+  margin: 0;
+  padding-block: var(--space-3);
 }
 
 @media (max-width: 47.5rem) {

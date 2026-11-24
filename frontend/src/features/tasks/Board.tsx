@@ -9,7 +9,11 @@ import {
 } from './api'
 import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
 import { RoutingFields } from './TaskRouting'
-import { CardWorkflow, WorkflowDialog } from './TaskWorkflow'
+import {
+  CardWorkflow,
+  TaskSettingsDialog,
+  WorkflowDialog,
+} from './TaskWorkflow'
 import ProjectPicker from '../projects/ProjectPicker'
 import type { Project } from '../projects/api'
 
@@ -29,6 +33,9 @@ const dateFormat = new Intl.DateTimeFormat(undefined, {
 
 export default function Board() {
   const [tasks, setTasks] = useState<Task[]>([])
+  const [expandedTasks, setExpandedTasks] = useState<Set<string>>(
+    () => new Set(),
+  )
   const [routing, setRouting] = useState<Routing | null>(null)
   const [repositories, setRepositories] = useState<Repository[]>([])
   const [routingMode, setRoutingMode] = useState<Approach>('frontier')
@@ -62,6 +69,15 @@ export default function Board() {
     setTasks((current) =>
       current.map((item) => (item.id === task.id ? task : item)),
     )
+  }
+
+  function toggleTask(id: string) {
+    setExpandedTasks((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   function repositoryAdded(added: Repository) {
@@ -287,64 +303,111 @@ export default function Board() {
                           className="surface surface-raised task-card"
                           aria-label={task.title}
                         >
-                          <h3>{task.title}</h3>
-                          {task.project && (
-                            <p
-                              className="task-project"
-                              title={task.project.path}
-                            >
-                              <span aria-hidden="true">▱</span>{' '}
-                              {task.project.name}
-                              {task.project.archived && (
-                                <span className="removed-project-label">
-                                  Removed project
-                                </span>
+                          <div className="task-card-heading">
+                            <div className="task-card-summary">
+                              <h3>
+                                <button
+                                  type="button"
+                                  className="task-title-button"
+                                  aria-label={`Open ${task.title}`}
+                                  onClick={() => setSelectedId(task.id)}
+                                >
+                                  {task.title}
+                                </button>
+                              </h3>
+                              {task.project ? (
+                                <p
+                                  className="task-project"
+                                  title={task.project.path}
+                                >
+                                  <span aria-hidden="true">▱</span>{' '}
+                                  <span className="task-project-name">
+                                    {task.project.name}
+                                    {task.project.archived && (
+                                      <span className="removed-project-label">
+                                        {' '}
+                                        Removed project
+                                      </span>
+                                    )}
+                                  </span>
+                                </p>
+                              ) : (
+                                <p className="task-project">No project</p>
                               )}
-                            </p>
-                          )}
-                          {task.description && (
-                            <p className="task-description">
-                              {task.description}
-                            </p>
-                          )}
-                          <CardWorkflow
-                            task={task}
-                            repositories={repositories}
-                            routing={routing}
-                            onTask={updateTask}
-                            onAdded={repositoryAdded}
-                            onReview={() => setSelectedId(task.id)}
-                          />
-                          <footer className="task-footer">
-                            <span>
-                              Added{' '}
-                              <time dateTime={task.created_at}>
-                                {dateFormat.format(new Date(task.created_at))}
-                              </time>
-                            </span>
-                            {task.status === 'backlog' && (
-                              <button
-                                type="button"
-                                className="button button-destructive delete-task-button"
-                                aria-busy={deletingId === task.id}
-                                aria-label={`Delete ${task.title}`}
-                                disabled={deletingId !== null}
-                                onClick={() => handleDelete(task)}
-                              >
-                                {deletingId === task.id
-                                  ? 'Deleting…'
-                                  : 'Delete'}
-                              </button>
-                            )}
-                          </footer>
-                          {deleteError?.id === task.id && (
-                            <p
-                              className="feedback feedback-error form-error"
-                              role="alert"
+                            </div>
+                            <button
+                              type="button"
+                              className="button button-quiet button-icon task-collapse-button"
+                              aria-label={`${expandedTasks.has(task.id) ? 'Collapse' : 'Expand'} ${task.title}`}
+                              aria-expanded={expandedTasks.has(task.id)}
+                              aria-controls={`task-details-${task.id}`}
+                              onClick={() => toggleTask(task.id)}
                             >
-                              {deleteError.message}
-                            </p>
-                          )}
+                              <svg
+                                viewBox="0 0 16 16"
+                                aria-hidden="true"
+                                focusable="false"
+                              >
+                                <path d="m4 6 4 4 4-4" />
+                              </svg>
+                            </button>
+                          </div>
+                          <div
+                            id={`task-details-${task.id}`}
+                            hidden={!expandedTasks.has(task.id)}
+                          >
+                            {task.description && (
+                              <p className="task-description">
+                                {task.description}
+                              </p>
+                            )}
+                            <CardWorkflow
+                              task={task}
+                              repositories={repositories}
+                              routing={routing}
+                              onTask={updateTask}
+                              onReview={() => setSelectedId(task.id)}
+                            />
+                            <footer className="task-footer">
+                              <span>
+                                Added{' '}
+                                <time dateTime={task.created_at}>
+                                  {dateFormat.format(new Date(task.created_at))}
+                                </time>
+                              </span>
+                              {task.status === 'backlog' && (
+                                <button
+                                  type="button"
+                                  className="button button-destructive button-icon delete-task-button"
+                                  aria-busy={deletingId === task.id}
+                                  aria-label={`Delete ${task.title}`}
+                                  title={
+                                    deletingId === task.id
+                                      ? 'Deleting task…'
+                                      : 'Delete task'
+                                  }
+                                  disabled={deletingId !== null}
+                                  onClick={() => handleDelete(task)}
+                                >
+                                  <svg
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                    focusable="false"
+                                  >
+                                    <path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7" />
+                                  </svg>
+                                </button>
+                              )}
+                            </footer>
+                            {deleteError?.id === task.id && (
+                              <p
+                                className="feedback feedback-error form-error"
+                                role="alert"
+                              >
+                                {deleteError.message}
+                              </p>
+                            )}
+                          </div>
                         </article>
                       </li>
                     ))}
@@ -469,7 +532,17 @@ export default function Board() {
           A task captures intent. You decide when it is ready to move forward.
         </p>
       </dialog>
-      {selectedTask && (
+      {selectedTask?.status === 'backlog' ? (
+        <TaskSettingsDialog
+          key={selectedTask.id}
+          task={selectedTask}
+          repositories={repositories}
+          routing={routing}
+          onTask={updateTask}
+          onAdded={repositoryAdded}
+          onClose={() => setSelectedId(null)}
+        />
+      ) : selectedTask ? (
         <WorkflowDialog
           key={selectedTask.id}
           task={selectedTask}
@@ -477,7 +550,7 @@ export default function Board() {
           onTask={updateTask}
           onClose={() => setSelectedId(null)}
         />
-      )}
+      ) : null}
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>

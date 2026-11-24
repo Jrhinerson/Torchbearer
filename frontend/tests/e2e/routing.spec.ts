@@ -34,6 +34,9 @@ async function backlog(
 
 async function start(page: Page, card: Locator, title: string) {
   await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
+  await card
     .getByRole('button', { name: 'Start planning', exact: true })
     .click()
   await card.getByRole('button', { name: /View run|Review step/ }).click()
@@ -67,22 +70,38 @@ test('defaults to Frontier and Codex and edits only the chosen backlog task', as
   const card = await backlog(page, title, 'frontier')
   const otherTitle = `Independent routing ${Date.now()}`
   await backlog(page, otherTitle, 'frontier', 'claude')
-  await card.getByText('Edit routing', { exact: true }).click()
-  await card.getByLabel('Approach', { exact: true }).selectOption('local_only')
-  await expect(card.getByLabel('Frontier agent')).toHaveCount(0)
-  await card.getByRole('button', { name: 'Save routing' }).click()
+  await expect(card.getByLabel('Approach')).toHaveCount(0)
+  await expect(card.getByLabel('Repository', { exact: true })).toHaveCount(0)
+  await expect(card.getByText('Edit routing', { exact: true })).toHaveCount(0)
   await expect(
-    card.getByRole('button', { name: 'Save routing', includeHidden: true }),
+    card.getByRole('button', { name: 'Add repository', exact: true }),
+  ).toHaveCount(0)
+  await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  const settings = page.getByRole('dialog', { name: title, exact: true })
+  await settings
+    .getByLabel('Approach', { exact: true })
+    .selectOption('local_only')
+  await expect(settings.getByLabel('Frontier agent')).toHaveCount(0)
+  await settings.getByRole('button', { name: 'Save routing' }).click()
+  await expect(
+    settings.getByRole('button', { name: 'Save routing' }),
   ).toBeDisabled()
-  await page.reload()
-  await expect(card.getByLabel('Approach', { exact: true })).toHaveValue(
-    'local_only',
-  )
+  await settings.getByRole('button', { name: 'Close task settings' }).click()
   await expect(
-    page
-      .getByRole('article', { name: otherTitle, exact: true })
-      .getByLabel('Frontier agent'),
-  ).toHaveValue('claude')
+    card.getByRole('button', { name: `Open ${title}`, exact: true }),
+  ).toBeFocused()
+  await page.reload()
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
+  await page
+    .getByRole('article', { name: otherTitle, exact: true })
+    .getByRole('button', { name: `Expand ${otherTitle}`, exact: true })
+    .click()
+  await expect(card).toContainText('Local Only')
+  await expect(
+    page.getByRole('article', { name: otherTitle, exact: true }),
+  ).toContainText('Frontier - Claude Code')
 })
 
 test('retains routing drafts and reports failed saves', async ({ page }) => {
@@ -94,18 +113,60 @@ test('retains routing drafts and reports failed saves', async ({ page }) => {
       ? route.fulfill({ status: 500, json: { detail: 'Routing save failed' } })
       : route.continue(),
   )
-  await card.getByText('Edit routing', { exact: true }).click()
-  await card.getByLabel('Approach', { exact: true }).selectOption('local_only')
-  await card.getByRole('button', { name: 'Save routing' }).click()
-  await expect(card.getByRole('alert')).toContainText('Routing save failed')
-  await expect(card.getByLabel('Approach', { exact: true })).toHaveValue(
+  await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  const settings = page.getByRole('dialog', { name: title, exact: true })
+  await settings
+    .getByLabel('Approach', { exact: true })
+    .selectOption('local_only')
+  await settings.getByRole('button', { name: 'Save routing' }).click()
+  await expect(settings.getByRole('alert')).toContainText('Routing save failed')
+  await expect(settings.getByLabel('Approach', { exact: true })).toHaveValue(
     'local_only',
   )
   await page.unroute('**/api/v1/tasks/*/')
-  await card.getByRole('button', { name: 'Save routing' }).click()
+  await settings.getByRole('button', { name: 'Save routing' }).click()
   await expect(
-    card.getByRole('button', { name: 'Save routing', includeHidden: true }),
+    settings.getByRole('button', { name: 'Save routing' }),
   ).toBeDisabled()
+})
+
+test('chooses a missing repository in settings while keeping card controls compact', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const title = `Repository settings ${Date.now()}`
+  await page.getByRole('button', { name: 'New Task', exact: true }).click()
+  const composer = page.getByRole('dialog', { name: 'New task', exact: true })
+  await composer.getByLabel('Title', { exact: false }).fill(title)
+  await composer.getByRole('button', { name: 'Add to backlog' }).click()
+  const card = page.getByRole('article', { name: title, exact: true })
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
+  await expect(card.getByRole('combobox')).toHaveCount(0)
+  await expect(
+    card.getByRole('button', { name: 'Start planning', exact: true }),
+  ).toBeDisabled()
+  await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  const settings = page.getByRole('dialog', { name: title, exact: true })
+  const repository = settings.getByRole('combobox', {
+    name: 'Repository',
+    exact: true,
+  })
+  const id = await repository.locator('option').nth(1).getAttribute('value')
+  await repository.selectOption(id!)
+  await expect(repository).toHaveValue(id!)
+  await page.keyboard.press('Escape')
+  await expect(settings).toHaveCount(0)
+  await expect(
+    card.getByRole('button', { name: `Open ${title}`, exact: true }),
+  ).toBeFocused()
+  await expect(
+    card.getByRole('button', { name: 'Start planning', exact: true }),
+  ).toBeEnabled()
+  await page.reload()
+  await expect(card).toContainText('Browser fixture repository')
+  await expect(card.getByRole('combobox')).toHaveCount(0)
 })
 
 for (const policy of [
@@ -154,11 +215,13 @@ for (const policy of [
     await expect(review.getByText(/^Approved/)).toBeVisible()
     await review.getByRole('button', { name: 'Close task review' }).click()
     await page.reload()
+    await card
+      .getByRole('button', { name: `Expand ${title}`, exact: true })
+      .click()
     await expect(card).toContainText('Approved')
     await card.getByRole('button', { name: 'View history' }).click()
-    await expect(page.getByLabel('Run history').locator('option')).toHaveCount(
-      4,
-    )
+    await expect(review.locator('.workflow-run')).toHaveCount(4)
+    await expect(review.getByRole('textbox')).toHaveCount(0)
   })
 }
 
@@ -170,26 +233,34 @@ test('requires one routing choice before continuing an existing started task', a
     name: 'Existing task needs routing',
     exact: true,
   })
-  await expect(card).toContainText('Choose routing before continuing')
-  await card.getByLabel('Approach', { exact: true }).focus()
-  await card.getByLabel('Approach', { exact: true }).press('End')
-  await expect(card.getByLabel('Approach', { exact: true })).toHaveValue(
-    'local_only',
-  )
-  await card.getByRole('button', { name: 'Save routing' }).click()
+  await card
+    .getByRole('button', {
+      name: 'Expand Existing task needs routing',
+      exact: true,
+    })
+    .click()
   await expect(card.getByLabel('Approach')).toHaveCount(0)
   await card.getByRole('button', { name: 'Review step' }).click()
   const review = page.getByRole('dialog', {
     name: 'Existing task needs routing',
     exact: true,
   })
-  await advance(review, 'Retry step')
+  await expect(review).toContainText('Choose routing before continuing')
+  await review.getByLabel('Approach', { exact: true }).focus()
+  await review.getByLabel('Approach', { exact: true }).press('End')
+  await expect(review.getByLabel('Approach', { exact: true })).toHaveValue(
+    'local_only',
+  )
+  await review.getByRole('button', { name: 'Save routing' }).click()
+  await expect(review.getByLabel('Approach')).toHaveCount(0)
+  await advance(review, 'Retry reply')
   await expect(
     review.getByText('Plan completed by pi', { exact: true }),
   ).toBeVisible({ timeout: 20000 })
-  await expect(review.getByLabel('Run history').locator('option')).toHaveCount(
-    2,
-  )
+  await expect(review.getByLabel('Run history')).toHaveCount(0)
+  await expect(
+    review.getByRole('list', { name: 'Planning conversation' }),
+  ).toContainText('Reply interrupted.')
 })
 
 for (const failure of ['test', 'review']) {
@@ -210,9 +281,12 @@ for (const failure of ['test', 'review']) {
     await review
       .getByLabel('Revision or rework instructions')
       .fill('Fix the reported regression.')
+    await review.getByLabel('Message action').selectOption('send_back')
     await review.getByRole('button', { name: 'Send back to Integrate' }).click()
     await expect(
-      review.getByText('Integrate completed by pi', { exact: true }),
+      review
+        .locator('[data-current-run="true"]')
+        .getByText('Integrate completed by pi', { exact: true }),
     ).toBeVisible({ timeout: 20000 })
     if (failure === 'review') {
       await advance(review, 'Approve changes & start Test')
@@ -220,9 +294,7 @@ for (const failure of ['test', 'review']) {
       await advance(review, 'Approve code review & continue')
       await advance(review, 'Give final approval')
       await expect(review.getByText(/^Approved/)).toBeVisible()
-      await expect(
-        review.getByLabel('Run history').locator('option'),
-      ).toHaveCount(7)
+      await expect(review.locator('.workflow-run')).toHaveCount(7)
     }
   })
 }
@@ -233,16 +305,18 @@ test('cancels a running process and preserves its history', async ({
   await page.goto('/')
   const title = `[cancel] Long task ${Date.now()}`
   const review = await start(page, await backlog(page, title), title)
-  await expect(review.locator('.run-review > .run-state')).toContainText(
-    'Running',
-    { timeout: 20000 },
+  await expect(review.getByRole('status')).toHaveText('Thinking…', {
+    timeout: 20000,
+  })
+  await review.getByRole('button', { name: 'Stop reply', exact: true }).click()
+  await expect(review.getByText('Reply stopped.', { exact: true })).toBeVisible(
+    {
+      timeout: 10000,
+    },
   )
-  await review.getByRole('button', { name: 'Cancel run', exact: true }).click()
-  await expect(review.locator('.run-review > .run-state')).toContainText(
-    'Cancelled',
-    { timeout: 10000 },
-  )
-  await expect(review.getByRole('button', { name: 'Retry step' })).toBeEnabled()
+  await expect(
+    review.getByRole('button', { name: 'Retry reply' }),
+  ).toBeEnabled()
 })
 
 test('prevents approval after the reviewed code changes', async ({ page }) => {
@@ -264,3 +338,245 @@ test('prevents approval after the reviewed code changes', async ({ page }) => {
   await expect(approve).toBeDisabled({ timeout: 10000 })
   await expect(review.getByText(/made this result stale/)).toBeVisible()
 })
+
+test('revises working stages in the conversation and requests changes from final approval', async ({
+  page,
+}) => {
+  test.setTimeout(120000)
+  await page.goto('/')
+  const title = `Conversation through review ${Date.now()}`
+  const card = await backlog(page, title)
+  const review = await start(page, card, title)
+  await advance(review, 'Approve plan & start Integrate')
+  const stages = [
+    {
+      id: 'integrate',
+      summary: 'Integrate completed by pi',
+      approve: 'Approve changes & start Test',
+    },
+    {
+      id: 'test',
+      summary: 'Test completed by pi',
+      approve: 'Approve test & start Code Review',
+    },
+    {
+      id: 'code_review',
+      summary: 'Code_Review completed by codex',
+      approve: 'Approve code review & continue',
+    },
+  ]
+  let count = 2
+  for (const stage of stages) {
+    await expect(review.locator('[data-current-run="true"]')).toContainText(
+      stage.summary,
+      { timeout: 20000 },
+    )
+    const input = review.getByLabel('Revision or rework instructions')
+    const message = `Refine the ${stage.id} result using the agreed criteria.`
+    if (stage.id === 'integrate') {
+      await page.route('**/api/v1/tasks/*/actions/', (route) =>
+        route.fulfill({
+          status: 500,
+          json: { detail: 'Could not submit revision' },
+        }),
+      )
+      await input.fill(message)
+      await review
+        .getByRole('button', { name: 'Request revision', exact: true })
+        .click()
+      await expect(review.getByRole('alert')).toContainText(
+        'Could not submit revision',
+      )
+      await expect(input).toHaveValue(message)
+      await expect(review.locator('.workflow-run')).toHaveCount(count)
+      await page.unroute('**/api/v1/tasks/*/actions/')
+    }
+    await input.fill(message)
+    await expect(
+      review.getByRole('button', { name: 'Request revision', exact: true }),
+    ).toBeEnabled()
+    await input.press('Enter')
+    await expect(input).toHaveValue('')
+    count++
+    await expect(review.locator('.workflow-run')).toHaveCount(count, {
+      timeout: 20000,
+    })
+    await expect(review.locator('[data-current-run="true"]')).toContainText(
+      stage.summary,
+    )
+    await expect(
+      review.getByRole('list', { name: 'Task conversation' }),
+    ).toContainText(message)
+    await expect(
+      page
+        .locator(`.workflow-column[data-stage="${stage.id}"]`)
+        .getByRole('article', { name: title, exact: true }),
+    ).toBeVisible()
+    await advance(review, stage.approve)
+    if (stage.id !== 'code_review') count++
+  }
+  await expect(
+    review.getByRole('button', { name: 'Give final approval' }),
+  ).toBeEnabled()
+  await review
+    .getByLabel('Revision or rework instructions')
+    .fill('Make the final correction before approval.')
+  await review
+    .getByRole('button', { name: 'Send back to Integrate', exact: true })
+    .click()
+  await expect(review.locator('.workflow-run')).toHaveCount(8, {
+    timeout: 20000,
+  })
+  await expect(review.locator('[data-current-run="true"]')).toContainText(
+    'Integrate completed by pi',
+  )
+  await expect(
+    review.getByRole('list', { name: 'Task conversation' }),
+  ).toContainText('Make the final correction before approval.')
+  await review.getByRole('button', { name: 'Close task review' }).click()
+  await page.reload()
+  await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  await expect(review.locator('.workflow-run')).toHaveCount(8)
+  await expect(
+    review.getByRole('list', { name: 'Task conversation' }),
+  ).toContainText('Refine the test result using the agreed criteria.')
+})
+
+test('returns to Plan from the Integrate composer with the full conversation preserved', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const title = `Replan from conversation ${Date.now()}`
+  const review = await start(page, await backlog(page, title), title)
+  await advance(review, 'Approve plan & start Integrate')
+  await expect(review.locator('[data-current-run="true"]')).toContainText(
+    'Integrate completed by pi',
+    { timeout: 20000 },
+  )
+  await review.getByLabel('Message action').selectOption('send_back')
+  await review
+    .getByLabel('Revision or rework instructions')
+    .fill('Revisit the plan before making these changes.')
+  await review
+    .getByRole('button', { name: 'Send back to Plan', exact: true })
+    .click()
+  await expect(review.locator('.workflow-run')).toHaveCount(3, {
+    timeout: 20000,
+  })
+  await expect(review.locator('[data-current-run="true"]')).toContainText(
+    'Plan completed by codex',
+  )
+  await expect(
+    review.getByRole('list', { name: 'Planning conversation' }),
+  ).toContainText('Revisit the plan before making these changes.')
+  await expect(review.getByLabel('Message your planning agent')).toBeVisible()
+  await expect(review.locator('.workspace-path')).toHaveCount(0)
+  await advance(review, 'Approve plan & start Integrate')
+  await expect(review.locator('.workflow-run')).toHaveCount(4, {
+    timeout: 20000,
+  })
+})
+
+for (const width of [1280, 390]) {
+  test(`refines a saved planning conversation before approval at ${width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto('/')
+    const title = `[conversation] Folder search ${width} ${Date.now()}`
+    const card = await backlog(page, title)
+    let review = await start(page, card, title)
+    const thread = () =>
+      review.getByRole('list', { name: 'Planning conversation' })
+    const message = () => review.getByLabel('Message your planning agent')
+    await expect(thread()).toContainText(
+      'What should happen when no matching files are found?',
+      { timeout: 20000 },
+    )
+    await expect(review.getByLabel('Run history')).toHaveCount(0)
+    await expect(review.locator('.workspace-path')).toHaveCount(0)
+    await expect(review.locator('.test-report')).toHaveCount(0)
+    await expect(
+      review.getByRole('button', { name: 'Approve plan & start Integrate' }),
+    ).toHaveCount(0)
+    await expect(
+      review.getByRole('button', { name: 'Send message' }),
+    ).toBeDisabled()
+
+    // Failed writes preserve the draft and never add phantom conversation turns.
+    await page.route('**/api/v1/tasks/*/actions/', (route) =>
+      route.fulfill({
+        status: 500,
+        json: { detail: 'Could not send message' },
+      }),
+    )
+    await message().fill('Show an empty state.')
+    await message().press('Shift+Enter')
+    await message().press('End')
+    await message().type('Keep the search field.')
+    const firstMessage = await message().inputValue()
+    await expect(message()).toHaveValue(
+      'Show an empty state.\nKeep the search field.',
+    )
+    await review.getByRole('button', { name: 'Send message' }).click()
+    await expect(review.getByRole('alert')).toContainText(
+      'Could not send message',
+    )
+    await expect(message()).toHaveValue(firstMessage)
+    await expect(thread().locator('.planning-message-user')).toHaveCount(1)
+    await page.unroute('**/api/v1/tasks/*/actions/')
+    await message().press('Enter')
+    await expect(message()).toHaveValue('')
+    await expect(
+      review.getByRole('button', { name: 'Approve plan & start Integrate' }),
+    ).toBeEnabled({ timeout: 20000 })
+    await expect(thread().locator('.planning-message-user')).toHaveCount(2)
+    await expect(
+      thread().locator('.planning-message-agent').last(),
+    ).toContainText(firstMessage)
+    await expect(
+      page.locator('.workflow-column[data-stage="plan"]'),
+    ).toContainText(title)
+
+    await page.reload()
+    // The title opens the conversation directly while the card remains collapsed.
+    await card
+      .getByRole('button', { name: `Open ${title}`, exact: true })
+      .click()
+    review = page.getByRole('dialog', { name: title, exact: true })
+    await expect(thread().locator('.planning-message-user')).toHaveCount(2)
+    await expect(thread()).toContainText(firstMessage)
+    await message().fill('Also offer a clear filter button.')
+    await expect(
+      review.getByRole('button', { name: 'Send message' }),
+    ).toBeEnabled()
+    await message().press('Enter')
+    await expect(thread().locator('.planning-message-user')).toHaveCount(3)
+    await expect(thread().locator('.planning-message-agent')).toHaveCount(3)
+    await expect(
+      thread().locator('.planning-message-agent').last(),
+    ).toContainText('clear filter button')
+    const overflow = await review.evaluate(
+      (element) => element.scrollWidth > element.clientWidth,
+    )
+    expect(overflow).toBe(false)
+    await advance(review, 'Approve plan & start Integrate')
+    await expect(
+      review.getByText('Integrate completed by pi', { exact: true }),
+    ).toBeVisible({ timeout: 20000 })
+    // The conversation continues into Integrate with every planning turn intact.
+    await expect(review.locator('.workflow-run')).toHaveCount(4)
+    await expect(review.getByLabel('Run history')).toHaveCount(0)
+    await expect(
+      review.getByRole('list', { name: 'Task conversation' }),
+    ).toContainText(firstMessage)
+    const tasks = await page.request.get('/api/v1/tasks/').then((r) => r.json())
+    const task = tasks.find((item: { title: string }) => item.title === title)
+    const history = await page.request
+      .get(`/api/v1/tasks/${task.id}/runs/`)
+      .then((r) => r.json())
+    expect(
+      history.runs[0].input_context.artifacts.approved_plan.result.details,
+    ).toContain('clear filter button')
+  })
+}

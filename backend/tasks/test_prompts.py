@@ -78,6 +78,49 @@ def test_required_context_is_never_silently_truncated(repository):
     assert error.value.state == "blocked"
 
 
+def test_planning_replays_every_turn_without_truncating_earlier_decisions(repository):
+    task = Task.objects.create(
+        title="Folder search", description="Preserve Unicode: café", repository=repository
+    )
+    for sequence in range(1, 10):
+        AgentRun.objects.create(
+            task=task,
+            stage="plan",
+            sequence=sequence,
+            agent="codex",
+            state="blocked" if sequence == 1 else "succeeded",
+            feedback=f"Human decision {sequence}" if sequence > 1 else "",
+            result={"summary": f"Reply {sequence}", "details": "x" * 13000 + f" End {sequence}"},
+        )
+    run = AgentRun.objects.create(
+        task=task, stage="plan", sequence=10, agent="codex", feedback="Keep all earlier decisions."
+    )
+    context = prompt_for(run)
+    messages = context["plan_conversation"]
+    assert messages[0] == {"role": "user", "content": "Folder search\n\nPreserve Unicode: café"}
+    assert messages[1]["content"].endswith("End 1")
+    assert len(messages[1]["content"]) > 13000
+    assert [message["role"] for message in messages] == ["user", "assistant"] * 9 + ["user"]
+    assert messages[-1]["content"] == run.feedback
+    assert context["prior_runs"] == []
+    assert "self-contained implementation plan" in context["instructions"]
+
+
+def test_oversized_planning_conversation_blocks_instead_of_forgetting(repository):
+    task = Task.objects.create(title="Long conversation", repository=repository)
+    AgentRun.objects.create(
+        task=task,
+        stage="plan",
+        sequence=1,
+        agent="codex",
+        state="succeeded",
+        result={"summary": "Earlier decisions", "details": "x" * 200001},
+    )
+    run = AgentRun.objects.create(task=task, stage="plan", sequence=2, agent="codex")
+    with pytest.raises(RunnerFailure, match="supported limit"):
+        prompt_for(run)
+
+
 @pytest.mark.parametrize("evidence", ["missing", "failed", "stale", "valid"])
 def test_review_needs_current_passing_test_evidence(repository, evidence):
     task = Task.objects.create(title="Review task", repository=repository)

@@ -116,7 +116,7 @@ export function TaskRoutingEditor({
       setBusy(false)
     }
   }
-  const controls = (
+  return (
     <div className="task-routing-editor">
       {!task.routing_mode && (
         <p className="feedback feedback-warning">
@@ -145,13 +145,5 @@ export function TaskRoutingEditor({
         </p>
       )}
     </div>
-  )
-  return task.routing_mode ? (
-    <details className="task-routing-editor">
-      <summary className="button button-link">Edit routing</summary>
-      {controls}
-    </details>
-  ) : (
-    controls
   )
 }

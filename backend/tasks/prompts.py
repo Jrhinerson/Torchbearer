@@ -6,15 +6,25 @@ from .adapters import RESULT_SCHEMA, RunnerFailure, validate_result
 
 INSTRUCTIONS = {
     "plan": (
-        "Inspect the repository and produce a detailed implementation plan in details, following "
-        "the repository planning format. Include scope, acceptance criteria, repository findings, "
+        "Have a back-and-forth planning conversation with the human. Read plan_conversation in "
+        "order and respond to the latest human message naturally in details. Inspect the "
+        "repository as needed. Ask focused clarifying questions when requirements or decisions "
+        "are unresolved; "
+        "use outcome blocked for these replies so the human can answer before implementation. "
+        "Discuss alternatives and incorporate corrections without starting implementation. Once "
+        "requirements are clear, use outcome complete only when details contains the full current, "
+        "self-contained implementation plan, incorporating all agreed decisions from the "
+        "conversation. Follow the repository planning format. Include scope, acceptance criteria, "
+        "repository findings, "
         "concrete file paths and symbols, ordered steps and dependencies, effects on the "
         "frontend, backend, and database, "
         "API and data contracts, migrations and existing-data handling, error behavior, "
         "edge cases, validation commands, fixtures, environment prerequisites, expected outcomes, "
         "and code review criteria. The plan must be sufficient for a local agent to implement "
         "without guessing product or architectural decisions. Report blocked for unresolved "
-        "requirements. Do not edit files or execute tests."
+        "requirements. A complete plan still needs explicit human approval; sending a message is "
+        "never approval. Do not edit files or execute tests. Leave tests empty for planning "
+        "replies."
     ),
     "integrate": (
         "Implement the full human-approved plan from artifacts.approved_plan, incorporating human "
@@ -75,6 +85,37 @@ def approved_run(run, stage, after=0):
     return decision.run
 
 
+def plan_conversation(run):
+    """Replay every planning turn because adapters start fresh CLI sessions."""
+    messages = [
+        {
+            "role": "user",
+            "content": "\n\n".join(filter(None, [run.task.title, run.task.description])),
+        }
+    ]
+    for attempt in run.task.runs.filter(stage="plan", sequence__lte=run.sequence).order_by(
+        "sequence"
+    ):
+        if attempt.feedback:
+            messages.append(
+                {"role": "user", "content": attempt.feedback, "sequence": attempt.sequence}
+            )
+        if attempt.sequence < run.sequence and attempt.result:
+            content = "\n\n".join(
+                filter(None, [attempt.result.get("summary"), attempt.result.get("details")])
+            )
+            if content:
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": content,
+                        "sequence": attempt.sequence,
+                        "agent": attempt.agent,
+                    }
+                )
+    return messages
+
+
 def prompt_for(run):
     task = run.task
     artifacts = {}
@@ -117,7 +158,11 @@ def prompt_for(run):
                 rework.append({**artifact(decision.run), "feedback": decision.feedback})
         artifacts["rework"] = rework
     previous = []
-    for attempt in task.runs.filter(sequence__lt=run.sequence).order_by("-sequence")[:6]:
+    attempts = task.runs.filter(sequence__lt=run.sequence)
+    if run.stage == "plan":
+        # The full conversation below already contains these results without truncation.
+        attempts = attempts.exclude(stage="plan")
+    for attempt in attempts.order_by("-sequence")[:6]:
         result = dict(attempt.result)
         details = result.get("details", "")
         if len(details) > 12000:
@@ -165,6 +210,8 @@ def prompt_for(run):
         ),
         "result_schema": RESULT_SCHEMA,
     }
+    if run.stage == "plan":
+        context["plan_conversation"] = plan_conversation(run)
     if len(json.dumps(context, ensure_ascii=False)) > 200000:
         raise RunnerFailure(
             "Required handoff context exceeds the supported limit. Revise the plan or reports "
