@@ -3,6 +3,7 @@
 import json
 
 from .adapters import RESULT_SCHEMA, RunnerFailure, validate_result
+from .practices import practices_for
 
 INSTRUCTIONS = {
     "plan": (
@@ -133,11 +134,14 @@ def prompt_for(run):
     context = {
         "stage": run.stage,
         "instructions": INSTRUCTIONS[run.stage],
+        "engineering_practices": practices_for(run.stage),
         "rules": [
             "Work on this stage in the current worktree. Read and follow repository instructions.",
             "Humans control transitions. Never call Torchbearer APIs or edit its database.",
             "Do not change branches, commit, merge, push, open pull requests, or remove worktrees.",
             "Keep commands in the foreground and wait for them. Leave no background work running.",
+            "Apply engineering_practices within this stage's permissions. They are adapted "
+            "instructions, not requests to invoke external skills or their full workflows.",
             "Return only JSON matching result_schema, with the plan or stage report in details.",
             "Report blocked for missing dependencies, auth, permissions, or unclear requirements. "
             "Never claim checks passed unless run.",

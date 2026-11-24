@@ -10,6 +10,7 @@ import {
 import type {
   Repository,
   Routing,
+  Run,
   RunHistory,
   RunState,
   Task,
@@ -30,6 +31,29 @@ const states: Record<RunState, string> = {
 }
 const isActive = (task: Task) =>
   task.latest_run?.state === 'queued' || task.latest_run?.state === 'running'
+
+function ValidationReport({
+  tests,
+  title = 'Validation evidence',
+}: {
+  tests: Run['result']['tests']
+  title?: string
+}) {
+  if (!tests?.length) return null
+  return (
+    <section aria-label={title}>
+      <h3>{title}</h3>
+      <ul className="test-report">
+        {tests.map((test, index) => (
+          <li key={index}>
+            <strong>{test.outcome}</strong> <code>{test.command}</code>
+            <p>{test.details}</p>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
 
 export function CardWorkflow({
   task,
@@ -179,6 +203,7 @@ export function WorkflowDialog({
     (item) => item.id === (selectedRun || task.latest_run?.id),
   )
   const latest = Boolean(run && run.id === task.latest_run?.id)
+  const implementation = run?.input_context?.artifacts?.implementation
   const active = isActive(task)
   const reviewCurrent = Boolean(
     run?.review_fingerprint &&
@@ -367,20 +392,30 @@ export function WorkflowDialog({
                   {run.error}
                 </p>
               )}
-              {run.result.summary && <h3>{run.result.summary}</h3>}
+              {task.status === 'final_approval' &&
+              run.stage === 'code_review' ? (
+                <section aria-label="Final approval brief">
+                  <h3>{run.result.summary}</h3>
+                  {implementation?.result.summary && (
+                    <p>{implementation.result.summary}</p>
+                  )}
+                  <p className="workflow-hint">
+                    Review the delivered behavior, how to try it, and remaining
+                    risks below.
+                  </p>
+                </section>
+              ) : (
+                run.result.summary && <h3>{run.result.summary}</h3>
+              )}
               {run.result.details && (
                 <pre className="stage-result">{run.result.details}</pre>
               )}
-              {Boolean(run.result.tests?.length) && (
-                <ul className="test-report">
-                  {run.result.tests!.map((test, index) => (
-                    <li key={index}>
-                      <strong>{test.outcome}</strong>{' '}
-                      <code>{test.command}</code>
-                      <p>{test.details}</p>
-                    </li>
-                  ))}
-                </ul>
+              <ValidationReport tests={run.result.tests} />
+              {run.stage === 'code_review' && (
+                <ValidationReport
+                  title="Implementation validation"
+                  tests={implementation?.result.tests}
+                />
               )}
               <details>
                 <summary>Execution log</summary>

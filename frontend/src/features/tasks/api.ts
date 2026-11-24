@@ -56,6 +56,14 @@ export interface Run extends RunSummary {
   created_at: string
   started_at: string | null
   finished_at: string | null
+  input_context?: {
+    artifacts?: {
+      implementation?: {
+        run_id: string
+        result: Run['result']
+      }
+    }
+  }
 }
 export interface Decision {
   id: number

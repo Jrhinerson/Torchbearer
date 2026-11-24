@@ -149,6 +149,12 @@ for (const policy of [
       await expect(card.getByLabel('Approach')).toHaveCount(0)
       await advance(review, buttons[index])
     }
+    await expect(
+      review.getByRole('region', { name: 'Final approval brief' }),
+    ).toBeVisible()
+    await expect(
+      review.getByRole('region', { name: 'Implementation validation' }),
+    ).toContainText('python -m pytest')
     await advance(review, 'Give final approval')
     await expect(review.getByText(/^Approved/)).toBeVisible()
     await review.getByRole('button', { name: 'Close task review' }).click()

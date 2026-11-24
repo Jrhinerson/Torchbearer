@@ -14,11 +14,31 @@ import ProjectPicker from '../projects/ProjectPicker'
 import type { Project } from '../projects/api'
 
 const columns = [
-  { id: 'backlog', title: 'Backlog' },
-  { id: 'plan', title: 'Plan' },
-  { id: 'integrate', title: 'Integrate' },
-  { id: 'code_review', title: 'Code Review' },
-  { id: 'final_approval', title: 'Final Approval' },
+  {
+    id: 'backlog',
+    title: 'Backlog',
+    description: 'Capture the problem and desired outcome.',
+  },
+  {
+    id: 'plan',
+    title: 'Plan',
+    description: 'Agree on scope, design, and how to verify success.',
+  },
+  {
+    id: 'integrate',
+    title: 'Integrate',
+    description: 'Implement in small steps and validate the result.',
+  },
+  {
+    id: 'code_review',
+    title: 'Code Review',
+    description: 'Independently check requirements, design, and evidence.',
+  },
+  {
+    id: 'final_approval',
+    title: 'Final Approval',
+    description: 'Review the delivered behavior and decide.',
+  },
 ] as const
 
 const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -243,6 +263,9 @@ export default function Board() {
                     {columnTasks.length}
                   </span>
                 </div>
+                <p className="workflow-hint column-description">
+                  {column.description}
+                </p>
                 {isBacklog && (
                   <button
                     type="button"

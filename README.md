@@ -70,6 +70,10 @@ Logs retain the last 128,000 characters per run. JSONL records are limited to 2 
 
 Adapters use [Codex non-interactive JSON output](https://learn.chatgpt.com/docs/non-interactive-mode), [Claude Code's structured headless interface](https://code.claude.com/docs/en/headless), and [Pi's JSON mode](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/cli.md). Windows npm wrappers are resolved to their underlying Node entry points, keeping prompts off command shells. For nonstandard installations, `TORCHBEARER_CODEX_COMMAND`, `TORCHBEARER_CLAUDE_COMMAND`, and `TORCHBEARER_PI_COMMAND` accept JSON arrays containing an executable and fixed arguments; shell-script overrides are rejected. Set these only in the launcher's environment, never through the task UI.
 
+## Engineering practices
+
+Each column applies built-in engineering practices adapted from Matt Pocock's skills. Plan defines acceptance criteria and test boundaries; Integrate implements and validates; Code Review independently checks Standards and Spec and presents the implementation's validation evidence for final approval. No global skill installation is required. See [engineering practices](docs/engineering-practices.md) for the stage mapping and adaptations.
+
 ## Verify changes
 
 Run the portable checks after setup:
