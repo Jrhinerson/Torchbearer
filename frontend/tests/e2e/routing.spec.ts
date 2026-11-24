@@ -112,19 +112,19 @@ for (const policy of [
   {
     mode: 'frontier',
     frontier: 'codex',
-    agents: ['codex', 'codex', 'codex', 'codex'],
+    agents: ['codex', 'codex', 'codex'],
   },
   {
     mode: 'frontier',
     frontier: 'claude',
-    agents: ['claude', 'claude', 'claude', 'claude'],
+    agents: ['claude', 'claude', 'claude'],
   },
   {
     mode: 'hybrid',
     frontier: 'claude',
-    agents: ['claude', 'pi', 'pi', 'claude'],
+    agents: ['claude', 'pi', 'claude'],
   },
-  { mode: 'local_only', frontier: 'codex', agents: ['pi', 'pi', 'pi', 'pi'] },
+  { mode: 'local_only', frontier: 'codex', agents: ['pi', 'pi', 'pi'] },
 ]) {
   test(`runs ${policy.mode} with ${policy.frontier} through Code Review and final approval`, async ({
     page,
@@ -133,11 +133,10 @@ for (const policy of [
     const title = `${policy.mode} ${policy.frontier} workflow ${Date.now()}`
     const card = await backlog(page, title, policy.mode, policy.frontier)
     const review = await start(page, card, title)
-    const stages = ['Plan', 'Integrate', 'Test', 'Code_Review']
+    const stages = ['Plan', 'Integrate', 'Code_Review']
     const buttons = [
       'Approve plan & start Integrate',
-      'Approve changes & start Test',
-      'Approve test & start Code Review',
+      'Approve implementation & start Code Review',
       'Approve code review & continue',
     ]
     for (let index = 0; index < stages.length; index++) {
@@ -157,7 +156,7 @@ for (const policy of [
     await expect(card).toContainText('Approved')
     await card.getByRole('button', { name: 'View history' }).click()
     await expect(page.getByLabel('Run history').locator('option')).toHaveCount(
-      4,
+      3,
     )
   })
 }
@@ -192,7 +191,7 @@ test('requires one routing choice before continuing an existing started task', a
   )
 })
 
-for (const failure of ['test', 'review']) {
+for (const failure of ['validation', 'review']) {
   test(`leaves failed ${failure} for human-directed rework`, async ({
     page,
   }) => {
@@ -201,28 +200,31 @@ for (const failure of ['test', 'review']) {
     const card = await backlog(page, title)
     const review = await start(page, card, title)
     await advance(review, 'Approve plan & start Integrate')
-    await advance(review, 'Approve changes & start Test')
     if (failure === 'review')
-      await advance(review, 'Approve test & start Code Review')
+      await advance(review, 'Approve implementation & start Code Review')
     await expect(
       review.getByRole('button', { name: 'Retry step' }),
     ).toBeEnabled({ timeout: 20000 })
     await review
       .getByLabel('Revision or rework instructions')
       .fill('Fix the reported regression.')
-    await review.getByRole('button', { name: 'Send back to Integrate' }).click()
+    await review
+      .getByRole('button', {
+        name:
+          failure === 'review' ? 'Send back to Integrate' : 'Request revision',
+      })
+      .click()
     await expect(
       review.getByText('Integrate completed by pi', { exact: true }),
     ).toBeVisible({ timeout: 20000 })
     if (failure === 'review') {
-      await advance(review, 'Approve changes & start Test')
-      await advance(review, 'Approve test & start Code Review')
+      await advance(review, 'Approve implementation & start Code Review')
       await advance(review, 'Approve code review & continue')
       await advance(review, 'Give final approval')
       await expect(review.getByText(/^Approved/)).toBeVisible()
       await expect(
         review.getByLabel('Run history').locator('option'),
-      ).toHaveCount(7)
+      ).toHaveCount(5)
     }
   })
 }

@@ -17,7 +17,7 @@ python scripts/setup.py
 python scripts/dev.py
 ```
 
-Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Test, Code Review, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use a backlog card's Delete button and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
+Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Code Review, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use a backlog card's Delete button and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
 
 Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations, then starts Django, the agent worker, and Vite together. After a schema change, rerun setup or apply migrations explicitly. Use `--backend-port` and `--frontend-port` with the launcher when the default ports are occupied; separate app instances also need separate data directories.
 
@@ -46,7 +46,7 @@ SQLite files, environment files containing secrets, dependency directories, buil
 
 ## Agent routing
 
-Choose an approach for each task in **New Task**. **Frontier** is the default, with **Codex** selected; **Claude Code** is the other frontier agent. **Hybrid** uses the selected frontier agent for detailed planning and Code Review, while **Pi** implements and tests. **Local Only** routes all four stages to Pi using its existing model configuration; local inference setup is separate.
+Choose an approach for each task in **New Task**. **Frontier** is the default, with **Codex** selected; **Claude Code** is the other frontier agent. **Hybrid** uses the selected frontier agent for detailed planning and Code Review, while **Pi** implements and tests. **Local Only** routes all three working stages to Pi using its existing model configuration; local inference setup is separate.
 
 Routing can change in Backlog using **Save routing** and is locked when planning starts. Each queued attempt records its own agent. Missing installations or execution failures never substitute another agent. Backlog and Final Approval remain human-controlled.
 
@@ -54,17 +54,17 @@ Install and authenticate each CLI you want to use, and configure its default mod
 
 1. Create a task, choose its approach and frontier agent when applicable, and select a saved Git project. Use **Add Project** to register a local folder or clone a Git URL; existing Backlog tasks can also select an execution repository on the card.
 2. Click **Start planning**. Torchbearer creates a branch and worktree from the repository's committed HEAD; uncommitted changes and ignored dependencies in the original checkout are not copied.
-3. Open **Review step** to read the detailed plan, logs, and changes. Approving Plan queues Integrate; approving Integrate queues Test. Required artifacts are passed in full, independently of the bounded recent-run history.
-4. Test runs validation and reports actual command outcomes. Approve passing results to start Code Review, which inspects the complete task changes against the approved plan and test evidence. Every successful stage waits for human approval before advancing.
+3. Open **Review step** to read the detailed plan, logs, and changes. Approving Plan queues Integrate; approving its implementation and validation queues Code Review. Required artifacts are passed in full, independently of the bounded recent-run history.
+4. Integrate writes tests and runs validation, reporting actual command outcomes. Code Review inspects the complete task changes against the approved plan and test evidence. Every successful stage waits for human approval before advancing.
 5. Approve Code Review to continue to Final Approval, then choose **Give final approval**. The task remains in the final column with an Approved badge and its history. Merging and worktree cleanup remain manual.
 
-**Request revision** reruns the current stage with your instructions. Integrate can return to Plan; Test, Code Review, and Final Approval can return to Integrate. Rework must pass Test and Code Review again. **Cancel run** stops the running process tree or removes a queued attempt from execution. Started tasks retain their history and workspace; only backlog tasks can be deleted.
+**Request revision** reruns the current stage with your instructions. Integrate can return to Plan; Code Review and Final Approval can return to Integrate. Rework must pass implementation validation and Code Review again. **Cancel run** stops the running process tree or removes a queued attempt from execution. Started tasks retain their history and workspace; only backlog tasks can be deleted.
 
-When upgrading from column routing, stop the launcher before applying migrations and restart afterward. Unfinished existing tasks display **Choose routing before continuing**; choose once after queued or running work finishes or is cancelled. Existing attempt agents and history are retained. Unfinished tasks formerly awaiting Final Approval return to Test so their result can be approved to start Code Review. Completed tasks remain unchanged.
+When upgrading from column routing, stop the launcher before applying migrations and restart afterward. Unfinished existing tasks display **Choose routing before continuing**; choose once after queued or running work finishes or is cancelled. Existing attempt agents and history are retained. Unfinished tasks in Test, Code Review, or Final Approval return to Integrate to produce current validation evidence; old queued attempts are interrupted and all historical reports remain readable. Completed tasks remain unchanged.
 
 The worker processes one run at a time. Queued runs survive shutdown, while runs interrupted by a worker crash require explicit retry after reviewing the workspace. An offline notice appears when no worker is available; start with `python scripts/dev.py`, or run `.venv/Scripts/python.exe backend/manage.py runagentworker` separately on Windows (`.venv/bin/python` on macOS/Linux). Running Django alone does not start the worker.
 
-Approvals are bound to both the latest result and the code snapshot. Edits after review invalidate approval, and edits after queuing block the next run. Plan, Test, and Code Review results are blocked if tracked or untracked non-ignored workspace files change; ignored test caches can be generated. CLI tool permissions still apply, and CLIs run as the current OS user. Worktrees containing submodules or nested repositories are not supported yet. Required dependencies must be prepared in the task worktree before validation can succeed.
+Approvals are bound to both the latest result and the code snapshot. Edits after review invalidate approval, and edits after queuing block the next run. Plan and Code Review results are blocked if tracked or untracked non-ignored workspace files change; ignored test caches can be generated. CLI tool permissions still apply, and CLIs run as the current OS user. Worktrees containing submodules or nested repositories are not supported yet. Required dependencies must be prepared in the task worktree before validation can succeed.
 
 Logs retain the last 128,000 characters per run. JSONL records are limited to 2 MiB and total CLI output to 20 MiB; exceeding these limits fails the run. The review dialog previews up to 64,000 characters of code changes and identifies truncated diffs so the full workspace can be reviewed separately.
 

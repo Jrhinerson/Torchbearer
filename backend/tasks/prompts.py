@@ -18,19 +18,15 @@ INSTRUCTIONS = {
     ),
     "integrate": (
         "Implement the full human-approved plan from artifacts.approved_plan, incorporating human "
-        "feedback and artifacts.rework findings. Run relevant checks. If the scope requires a new "
+        "feedback and artifacts.rework findings. Write meaningful behavior tests and run all "
+        "agreed validation commands, reporting each command and its actual outcome in tests. "
+        "Complete only when validation passes. If the scope requires a new "
         "plan or the handoff is insufficient, report blocked rather than inventing requirements."
-    ),
-    "test": (
-        "Validate the implementation from artifacts.implementation using artifacts.approved_plan "
-        "and repository test instructions. Run actual validation commands and report each outcome. "
-        "Do not edit source, tests, configuration, or lockfiles. Use ignored temporary directories "
-        "for generated files. Report failed when validation fails, and blocked when no validation "
-        "can run. Never fix failures in this stage."
     ),
     "code_review": (
         "Review all task changes against artifacts.approved_plan, artifacts.implementation, "
-        "artifacts.test, and rework findings. Inspect the complete diff against task.base_commit "
+        "its validation evidence in result.tests, and rework findings. Inspect the complete diff "
+        "against task.base_commit "
         "with git diff --no-ext-diff --no-textconv and inspect new files listed by "
         "git ls-files --others --exclude-standard. Read full files as needed; a bounded UI diff "
         "is not the complete review. Check correctness, acceptance criteria, edge cases, API/data "
@@ -77,6 +73,8 @@ def approved_run(run, stage, after=0):
 
 def prompt_for(run):
     task = run.task
+    if run.stage not in INSTRUCTIONS:
+        raise RunnerFailure("This stage was retired. Resume the task in Integrate.", "blocked")
     artifacts = {}
     if run.stage != "plan":
         plan = approved_run(run, "plan")
@@ -85,22 +83,20 @@ def prompt_for(run):
             implementation = approved_run(run, "integrate", after=plan.sequence)
             artifacts["implementation"] = artifact(implementation)
         if run.stage == "code_review":
-            test = approved_run(run, "test", after=implementation.sequence)
             try:
-                validate_result(test.result, "test")
+                validate_result(implementation.result, "integrate")
             except RunnerFailure as error:
                 raise RunnerFailure(
-                    "Code Review needs passing Test evidence. Rerun Test.", "blocked"
+                    "Code Review needs passing Integrate validation. Return to Integrate.",
+                    "blocked",
                 ) from error
             if not run.input_fingerprint or not (
-                run.input_fingerprint
-                == test.review_fingerprint
-                == implementation.review_fingerprint
+                run.input_fingerprint == implementation.review_fingerprint
             ):
                 raise RunnerFailure(
-                    "Code Review evidence is stale. Return to Integrate and rerun Test.", "blocked"
+                    "Code Review evidence is stale. Return to Integrate and rerun validation.",
+                    "blocked",
                 )
-            artifacts["test"] = artifact(test)
         rework = []
         for stage in ["test", "code_review"]:
             decision = (

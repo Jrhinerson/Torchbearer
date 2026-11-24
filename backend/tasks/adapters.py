@@ -90,7 +90,7 @@ def arguments(agent, stage, schema_path):
         tools = "Read,Grep,Glob"
         if stage == "integrate":
             tools += ",Edit,Write,Bash"
-        elif stage in {"test", "code_review"}:
+        elif stage == "code_review":
             tools += ",Bash"
         return [
             "-p",
@@ -109,7 +109,7 @@ def arguments(agent, stage, schema_path):
     tools = "read,grep,find,ls"
     if stage == "integrate":
         tools += ",edit,write,bash"
-    elif stage in {"test", "code_review"}:
+    elif stage == "code_review":
         tools += ",bash"
     return ["--mode", "json", "--no-session", "--tools", tools]
 
@@ -152,11 +152,11 @@ def validate_result(value, stage):
         ):
             raise RunnerFailure("The agent returned an invalid test report entry.")
     if (
-        stage == "test"
+        stage == "integrate"
         and value["outcome"] == "complete"
         and (not tests or any(test["outcome"] != "pass" for test in tests))
     ):
-        raise RunnerFailure("Test cannot complete without passing validation commands.")
+        raise RunnerFailure("Integrate cannot complete without passing validation commands.")
     return value
 
 

@@ -17,7 +17,6 @@ const columns = [
   { id: 'backlog', title: 'Backlog' },
   { id: 'plan', title: 'Plan' },
   { id: 'integrate', title: 'Integrate' },
-  { id: 'test', title: 'Test' },
   { id: 'code_review', title: 'Code Review' },
   { id: 'final_approval', title: 'Final Approval' },
 ] as const

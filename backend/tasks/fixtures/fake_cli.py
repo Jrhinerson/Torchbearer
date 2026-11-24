@@ -22,7 +22,7 @@ if scenario == "browser":
         "hang"
         if "[cancel]" in title
         else "test_fail"
-        if "[test fails]" in title and stage == "test"
+        if "[validation fails]" in title and stage == "integrate" and not context.get("feedback")
         else "review_fail"
         if "[review fails]" in title
         and stage == "code_review"
@@ -52,7 +52,7 @@ if stage == "integrate" and scenario == "implement":
     Path("feature.txt").write_text("Implemented by the fixture\n", encoding="utf-8")
 result = {
     "outcome": "failed"
-    if scenario == "review_fail" or (scenario == "test_fail" and stage == "test")
+    if scenario == "review_fail" or (scenario == "test_fail" and stage == "integrate")
     else "complete",
     "summary": f"{stage.title()} completed by {agent}",
     "details": prompt
@@ -65,7 +65,7 @@ result = {
             "details": "Fixture test report",
         }
     ]
-    if stage == "test"
+    if stage == "integrate"
     else [],
 }
 text = json.dumps(result, ensure_ascii=False)

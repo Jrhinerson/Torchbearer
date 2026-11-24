@@ -466,10 +466,8 @@ export function WorkflowDialog({
                               : task.status === 'plan'
                                 ? 'Approve plan & start Integrate'
                                 : task.status === 'integrate'
-                                  ? 'Approve changes & start Test'
-                                  : task.status === 'test'
-                                    ? 'Approve test & start Code Review'
-                                    : 'Approve code review & continue'}
+                                  ? 'Approve implementation & start Code Review'
+                                  : 'Approve code review & continue'}
                           </button>
                         )}
                         {run.state !== 'succeeded' &&

@@ -108,7 +108,6 @@ def main():
             assert tasks[0]["stage_agents"] == {
                 "plan": "claude",
                 "integrate": "pi",
-                "test": "pi",
                 "code_review": "claude",
             }
             assert tasks[0]["project"]["id"] == project["id"]

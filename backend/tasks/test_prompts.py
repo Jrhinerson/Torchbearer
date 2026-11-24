@@ -14,7 +14,14 @@ def approval(task, stage, sequence, details="Complete report"):
         sequence=sequence,
         agent="codex",
         state="succeeded",
-        result={"outcome": "complete", "summary": "Approved", "details": details, "tests": []},
+        result={
+            "outcome": "complete",
+            "summary": "Approved",
+            "details": details,
+            "tests": [{"command": "pytest", "outcome": "pass", "details": "Passed"}]
+            if stage == "integrate"
+            else [],
+        },
     )
     Decision.objects.create(
         task=task,
@@ -59,12 +66,12 @@ def test_full_plan_and_rework_survive_long_retry_history(repository):
     assert context["artifacts"]["rework"][0]["result"] == failed.result
 
 
-def test_test_requires_implementation_for_current_approved_plan(repository):
+def test_review_requires_implementation_for_current_approved_plan(repository):
     task = Task.objects.create(title="Replanned task", repository=repository)
     approval(task, "plan", 1)
     approval(task, "integrate", 2)
     approval(task, "plan", 3)
-    run = AgentRun.objects.create(task=task, stage="test", sequence=4, agent="pi")
+    run = AgentRun.objects.create(task=task, stage="code_review", sequence=4, agent="pi")
     with pytest.raises(RunnerFailure, match="human-approved integrate"):
         prompt_for(run)
 
@@ -78,24 +85,26 @@ def test_required_context_is_never_silently_truncated(repository):
     assert error.value.state == "blocked"
 
 
-@pytest.mark.parametrize("evidence", ["missing", "failed", "stale", "valid"])
-def test_review_needs_current_passing_test_evidence(repository, evidence):
+@pytest.mark.parametrize("evidence", ["missing", "failed", "not_run", "stale", "valid"])
+def test_review_needs_current_passing_implementation_evidence(repository, evidence):
     task = Task.objects.create(title="Review task", repository=repository)
     approval(task, "plan", 1)
     implementation = approval(task, "integrate", 2)
-    implementation.review_fingerprint = "snapshot"
-    implementation.save()
+    implementation.review_fingerprint = "old" if evidence == "stale" else "snapshot"
+    implementation.result["tests"] = []
     if evidence != "missing":
-        test = approval(task, "test", 3)
-        test.result["tests"] = [
+        implementation.result["tests"] = [
             {
                 "command": "python -m pytest",
-                "outcome": "fail" if evidence == "failed" else "pass",
+                "outcome": "fail"
+                if evidence == "failed"
+                else "not_run"
+                if evidence == "not_run"
+                else "pass",
                 "details": "Test evidence",
             }
         ]
-        test.review_fingerprint = "old" if evidence == "stale" else "snapshot"
-        test.save()
+    implementation.save()
     run = AgentRun.objects.create(
         task=task,
         stage="code_review",
@@ -105,7 +114,7 @@ def test_review_needs_current_passing_test_evidence(repository, evidence):
     )
     if evidence == "valid":
         context = prompt_for(run)
-        assert context["artifacts"]["test"]["run_id"] == str(test.id)
+        assert "test" not in context["artifacts"]
         assert context["artifacts"]["implementation"]["run_id"] == str(implementation.id)
     else:
         with pytest.raises(RunnerFailure) as error:

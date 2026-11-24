@@ -44,8 +44,8 @@ def test_upgrade_requires_routing_preserves_runs_and_reopens_unreviewed_tasks():
         assert Run.objects.get(pk=queued.id).agent == "claude"
         assert Run.objects.get(pk=queued.id).state == "queued"
         assert Run.objects.get(pk=test.id).stage == "test"
-        assert Task.objects.get(pk=final.id).status == "test"
-        assert Task.objects.get(pk=final.id).revision == 10
+        assert Task.objects.get(pk=final.id).status == "integrate"
+        assert Task.objects.get(pk=final.id).revision == 11
         assert Task.objects.get(pk=completed.id).status == "final_approval"
         assert Task.objects.get(pk=completed.id).revision == 5
         assert Task.objects.get(pk=completed.id).completed_at == completed.completed_at

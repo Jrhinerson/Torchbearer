@@ -7,6 +7,7 @@ from django.utils import timezone
 from projects.models import Project
 from rest_framework.exceptions import APIException, ValidationError
 
+from .adapters import RunnerFailure, validate_result
 from .cli import resolve_command
 from .models import AgentRun, Decision, Task
 from .routing import NEXT_STAGE, Agent, Approach, agent_for, validate_routing
@@ -28,6 +29,11 @@ def validate_review(task, run, fingerprint):
         or fingerprint != run.review_fingerprint
     ):
         raise Conflict("Review the latest successful result before approving.")
+    if run.stage == "integrate":
+        try:
+            validate_result(run.result, "integrate")
+        except RunnerFailure as error:
+            raise Conflict(str(error)) from error
     try:
         current = workspace_fingerprint(task)
     except (OSError, ValueError) as error:
@@ -117,10 +123,7 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
             raise Conflict("Describe the requested revision.")
         target = previous
     elif action == "send_back":
-        if (
-            previous not in {"integrate", "test", "code_review", "final_approval"}
-            or not feedback.strip()
-        ):
+        if previous not in {"integrate", "code_review", "final_approval"} or not feedback.strip():
             raise Conflict("Describe the changes needed before sending this task back.")
         target = "plan" if previous == "integrate" else "integrate"
     elif action in {"approve", "final_approve"}:

@@ -1,7 +1,7 @@
 import { requestJson } from '../../lib/api'
 import type { Project } from '../projects/api'
 
-export type Stage = 'plan' | 'integrate' | 'test' | 'code_review'
+export type Stage = 'plan' | 'integrate' | 'code_review'
 export type Agent = 'codex' | 'claude' | 'pi'
 export type Approach = 'frontier' | 'hybrid' | 'local_only'
 export type FrontierAgent = Exclude<Agent, 'pi'>
@@ -35,7 +35,7 @@ export type RunState =
   | 'interrupted'
 export interface RunSummary {
   id: string
-  stage: Stage
+  stage: Stage | 'test'
   agent: Agent
   state: RunState
   sequence: number
