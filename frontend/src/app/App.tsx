@@ -95,12 +95,8 @@ export default function App() {
               <path d="M6.5 15h11l-2.7 4.1h-1.3v3.4h-3v-3.4H9.2L6.5 15Z" />
             </svg>
           </span>
-          Torchbearer<span className="badge local-label">LOCAL</span>
+          Torchbearer
         </a>
-        <span className="device-label">
-          <span className="device-dot" />
-          On this device
-        </span>
       </header>
       <div className="app-layout">
         <aside className="app-sidebar">
@@ -146,8 +142,10 @@ export default function App() {
             )}
           </main>
           <footer className="app-footer">
-            <span>Thoughtful work starts with a clear decision.</span>
-            <span>YOUR WORK. YOUR CALL.</span>
+            <span>
+              Thy word is a lamp unto my feet, and a light unto my path. — Psalm
+              119:105
+            </span>
           </footer>
         </div>
       </div>
