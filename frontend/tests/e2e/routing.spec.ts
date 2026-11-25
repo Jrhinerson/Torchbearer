@@ -254,8 +254,12 @@ for (const policy of [
       .click()
     await expect(card).toContainText('Approved')
     await card.getByRole('button', { name: 'View history' }).click()
-    await expect(review.locator('.workflow-run')).toHaveCount(4)
-    await expect(review.getByRole('textbox')).toHaveCount(0)
+    await expect(review.locator('.workflow-run')).toHaveCount(
+      policy.mode === 'hybrid' ? 4 : 3,
+    )
+    await expect(review.getByRole('textbox')).toHaveCount(
+      policy.mode === 'hybrid' ? 1 : 0,
+    )
   })
 }
 
@@ -265,10 +269,13 @@ test('refines a Backlog task through questions and carries the answers into Plan
   await page.goto('/')
   const title = `[refine] Add task priorities ${Date.now()}`
   const card = await backlog(page, title, 'frontier', 'codex')
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
   await card.getByRole('button', { name: 'Refine task', exact: true }).click()
   const review = page.getByRole('dialog', { name: title, exact: true })
   await expect(
-    review.getByRole('heading', { name: 'Clarify task scope', exact: true }),
+    review.getByText('Clarify task scope', { exact: true }),
   ).toBeVisible({ timeout: 20000 })
   await expect(
     page
@@ -358,8 +365,15 @@ for (const failure of ['validation', 'review']) {
     await review
       .getByLabel('Revision or rework instructions')
       .fill('Fix the reported regression.')
-    await review.getByLabel('Message action').selectOption('send_back')
-    await review.getByRole('button', { name: 'Send back to Integrate' }).click()
+    if (failure === 'review')
+      await review.getByLabel('Message action').selectOption('send_back')
+    await review
+      .getByRole('button', {
+        name:
+          failure === 'review' ? 'Send back to Integrate' : 'Request revision',
+        exact: true,
+      })
+      .click()
     await expect(
       review
         .locator('[data-current-run="true"]')
@@ -370,7 +384,7 @@ for (const failure of ['validation', 'review']) {
       await advance(review, 'Approve code review & continue')
       await advance(review, 'Give final approval')
       await expect(review.getByText(/^Approved/)).toBeVisible()
-      await expect(review.locator('.workflow-run')).toHaveCount(7)
+      await expect(review.locator('.workflow-run')).toHaveCount(5)
     }
   })
 }
@@ -428,12 +442,7 @@ test('revises working stages in the conversation and requests changes from final
     {
       id: 'integrate',
       summary: 'Integrate completed by pi',
-      approve: 'Approve changes & start Test',
-    },
-    {
-      id: 'test',
-      summary: 'Test completed by pi',
-      approve: 'Approve test & start Code Review',
+      approve: 'Approve implementation & start Code Review',
     },
     {
       id: 'code_review',
@@ -500,7 +509,7 @@ test('revises working stages in the conversation and requests changes from final
   await review
     .getByRole('button', { name: 'Send back to Integrate', exact: true })
     .click()
-  await expect(review.locator('.workflow-run')).toHaveCount(8, {
+  await expect(review.locator('.workflow-run')).toHaveCount(6, {
     timeout: 20000,
   })
   await expect(review.locator('[data-current-run="true"]')).toContainText(
@@ -512,10 +521,10 @@ test('revises working stages in the conversation and requests changes from final
   await review.getByRole('button', { name: 'Close task review' }).click()
   await page.reload()
   await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
-  await expect(review.locator('.workflow-run')).toHaveCount(8)
+  await expect(review.locator('.workflow-run')).toHaveCount(6)
   await expect(
     review.getByRole('list', { name: 'Task conversation' }),
-  ).toContainText('Refine the test result using the agreed criteria.')
+  ).toContainText('Refine the integrate result using the agreed criteria.')
 })
 
 test('returns to Plan from the Integrate composer with the full conversation preserved', async ({

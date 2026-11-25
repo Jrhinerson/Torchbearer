@@ -397,29 +397,30 @@ export default function Board() {
                                   {dateFormat.format(new Date(task.created_at))}
                                 </time>
                               </span>
-                              {task.status === 'backlog' && !task.latest_run && (
-                                <button
-                                  type="button"
-                                  className="button button-destructive button-icon delete-task-button"
-                                  aria-busy={deletingId === task.id}
-                                  aria-label={`Delete ${task.title}`}
-                                  title={
-                                    deletingId === task.id
-                                      ? 'Deleting task…'
-                                      : 'Delete task'
-                                  }
-                                  disabled={deletingId !== null}
-                                  onClick={() => handleDelete(task)}
-                                >
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    aria-hidden="true"
-                                    focusable="false"
+                              {task.status === 'backlog' &&
+                                !task.latest_run && (
+                                  <button
+                                    type="button"
+                                    className="button button-destructive button-icon delete-task-button"
+                                    aria-busy={deletingId === task.id}
+                                    aria-label={`Delete ${task.title}`}
+                                    title={
+                                      deletingId === task.id
+                                        ? 'Deleting task…'
+                                        : 'Delete task'
+                                    }
+                                    disabled={deletingId !== null}
+                                    onClick={() => handleDelete(task)}
                                   >
-                                    <path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7" />
-                                  </svg>
-                                </button>
-                              )}
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      aria-hidden="true"
+                                      focusable="false"
+                                    >
+                                      <path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7" />
+                                    </svg>
+                                  </button>
+                                )}
                             </footer>
                             {deleteError?.id === task.id && (
                               <p

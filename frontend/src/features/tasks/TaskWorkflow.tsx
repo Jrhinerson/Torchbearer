@@ -10,7 +10,6 @@ import {
 import type {
   Repository,
   Routing,
-  Run,
   RunHistory,
   RunState,
   Task,
@@ -458,7 +457,13 @@ export function WorkflowDialog({
       {!history && !loadError && <p role="status">Loading runs…</p>}
       {history && (
         <WorkflowConversation
-          key={task.id + ':' + task.status}
+          key={
+            task.id +
+            ':' +
+            task.status +
+            ':' +
+            (task.latest_run?.stage === 'retro' ? 'retro' : 'workflow')
+          }
           task={task}
           history={history}
           run={run}
@@ -483,7 +488,11 @@ export function WorkflowDialog({
           }
           onMessage={(action, message) => act(action, message)}
           onRetry={() =>
-            void act(run?.stage === 'refine' || run?.stage === 'retro' ? run.stage : 'retry')
+            void act(
+              run?.stage === 'refine' || run?.stage === 'retro'
+                ? run.stage
+                : 'retry',
+            )
           }
           onStop={() => void act('cancel')}
           onRetrospective={() => void act('retro')}
