@@ -9,6 +9,8 @@ import {
 } from './api'
 import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
 import { RoutingFields } from './TaskRouting'
+import { TaskAgent } from './TaskAgent'
+import { taskCardStatus } from './taskCardStatus'
 import {
   CardWorkflow,
   TaskSettingsDialog,
@@ -323,9 +325,26 @@ export default function Board() {
                       <li key={task.id}>
                         <article
                           className="surface surface-raised task-card"
+                          data-activity={taskCardStatus(task).activity}
                           aria-label={task.title}
                         >
                           <div className="task-card-heading">
+                            <button
+                              type="button"
+                              className="button button-quiet button-icon task-collapse-button"
+                              aria-label={`${expandedTasks.has(task.id) ? 'Collapse' : 'Expand'} ${task.title}`}
+                              aria-expanded={expandedTasks.has(task.id)}
+                              aria-controls={`task-details-${task.id}`}
+                              onClick={() => toggleTask(task.id)}
+                            >
+                              <svg
+                                viewBox="0 0 16 16"
+                                aria-hidden="true"
+                                focusable="false"
+                              >
+                                <path d="m4 6 4 4 4-4" />
+                              </svg>
+                            </button>
                             <div className="task-card-summary">
                               <h3>
                                 <button
@@ -357,22 +376,7 @@ export default function Board() {
                                 <p className="task-project">No project</p>
                               )}
                             </div>
-                            <button
-                              type="button"
-                              className="button button-quiet button-icon task-collapse-button"
-                              aria-label={`${expandedTasks.has(task.id) ? 'Collapse' : 'Expand'} ${task.title}`}
-                              aria-expanded={expandedTasks.has(task.id)}
-                              aria-controls={`task-details-${task.id}`}
-                              onClick={() => toggleTask(task.id)}
-                            >
-                              <svg
-                                viewBox="0 0 16 16"
-                                aria-hidden="true"
-                                focusable="false"
-                              >
-                                <path d="m4 6 4 4 4-4" />
-                              </svg>
-                            </button>
+                            <TaskAgent task={task} routing={routing} />
                           </div>
                           <div
                             id={`task-details-${task.id}`}

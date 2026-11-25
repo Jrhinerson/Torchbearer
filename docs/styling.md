@@ -97,6 +97,23 @@ The additional feedback variants are `feedback-success`, `feedback-warning`, and
 `feedback-info`. Supply meaningful text and semantics for the situation. Workflow
 stage names accompany the colored stage dots.
 
+## Ticket indicators
+
+Task headers keep the expand/collapse target before the title and the agent emblem
+at the far right, aligned with the first title line. Agent SVGs are bundled locally
+under `frontend/src/assets/agents/`, with their provenance recorded there. The Codex
+mark switches between white and black with the application theme; Claude and Pi
+retain their supplied colors. A reserved spinner slot prevents title reflow when
+execution starts or stops.
+
+Running attempts rotate a ring every 0.9 seconds. Results awaiting review, blocked
+attempts, and unfinished Final Approval cards pulse a noninteractive inset and
+outer glow over four seconds; the glow uses the same primary gold as the selected
+navigation border without fading the text or controls. Completed cards and
+inactive attempts do not animate. `prefers-reduced-motion: reduce` freezes the ring
+and replaces the pulse with a steady glow. Agent/status labels remain available to
+assistive technology and as hover text in every state.
+
 ## Verification
 
 Run `python scripts/check.py` from the repository root and `npm run test:e2e` from

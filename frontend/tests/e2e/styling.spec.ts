@@ -212,7 +212,6 @@ for (const theme of ['dark', 'light'] as const) {
     )
     for (const selector of [
       '.brand',
-      '.device-label',
       '.column-heading h2',
       '.task-count',
       '.task-card h3',
