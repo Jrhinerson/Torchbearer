@@ -38,7 +38,7 @@ def approve(task, final=False):
 def test_mixed_agents_handoff_and_final_approval(queued_task):
     task = queued_task
     worker = Worker()
-    for stage in ["plan", "integrate", "test", "code_review"]:
+    for stage in ["plan", "integrate", "code_review"]:
         assert worker.run_once()
         task.refresh_from_db()
         run = task.runs.first()
@@ -53,7 +53,7 @@ def test_mixed_agents_handoff_and_final_approval(queued_task):
         approve(task)
     task.refresh_from_db()
     assert task.status == "final_approval" and task.completed_at is None
-    assert task.runs.count() == 4
+    assert task.runs.count() == 3
     assert (Path(task.workspace_path) / "feature.txt").is_file()
     assert not (Path(task.repository.path) / "feature.txt").exists()
     approve(task, final=True)
@@ -107,15 +107,9 @@ def test_planning_conversation_preserves_clarifications_and_hands_off_latest_pla
     )
 
 
-def test_report_only_test_agent_cannot_succeed_after_edits(queued_task, fake_cli):
+def test_report_only_plan_agent_cannot_succeed_after_edits(queued_task, fake_cli):
     worker = Worker()
-    worker.run_once()
-    approve(queued_task)
-    # Leave Integrate's result unchanged so a new file in Test is observable.
-    fake_cli("pi", "normal")
-    worker.run_once()
-    approve(queued_task)
-    fake_cli("pi", "modify")
+    fake_cli("codex", "modify")
     worker.run_once()
     run = queued_task.runs.first()
     assert run.state == "blocked"
@@ -125,7 +119,7 @@ def test_report_only_test_agent_cannot_succeed_after_edits(queued_task, fake_cli
 
 def test_code_review_cannot_succeed_after_edits(queued_task, fake_cli):
     worker = Worker()
-    for _ in range(3):
+    for _ in range(2):
         worker.run_once()
         approve(queued_task)
     fake_cli("codex", "modify")
@@ -205,18 +199,16 @@ def test_handoff_context_contains_human_rework_feedback(queued_task, fake_cli):
     worker = Worker()
     worker.run_once()
     approve(queued_task)
-    worker.run_once()
-    approve(queued_task)
     fake_cli("pi", "test_fail")
     worker.run_once()
     task = queued_task
     task.refresh_from_db()
     run = task.runs.first()
     assert run.state == "failed"
-    assert task.status == "test"
+    assert task.status == "integrate"
     act(
         task.id,
-        action="send_back",
+        action="revise",
         revision=task.revision,
         run_id=run.id,
         feedback="Fix validation.",

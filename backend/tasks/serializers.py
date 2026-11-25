@@ -10,6 +10,7 @@ from .routing import (
     Agent,
     Approach,
     Stage,
+    SupportStage,
     agent_for,
     validate_routing,
 )
@@ -37,6 +38,8 @@ class ActionSerializer(serializers.Serializer):
             "revise",
             "send_back",
             "final_approve",
+            "refine",
+            "retro",
         ]
     )
     revision = serializers.IntegerField(min_value=0)
@@ -84,7 +87,7 @@ class TaskSerializer(serializers.ModelSerializer):
     def get_stage_agents(self, obj):
         if obj.routing_mode is None:
             return {}
-        return {stage: agent_for(obj, stage) for stage in Stage}
+        return {stage: agent_for(obj, stage) for stage in [*Stage, *SupportStage]}
 
     def get_latest_run(self, obj):
         return obj.runs.values(

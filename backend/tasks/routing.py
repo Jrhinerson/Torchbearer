@@ -12,8 +12,12 @@ class Agent(models.TextChoices):
 class Stage(models.TextChoices):
     PLAN = "plan", "Plan"
     INTEGRATE = "integrate", "Integrate"
-    TEST = "test", "Test"
     CODE_REVIEW = "code_review", "Code Review"
+
+
+class SupportStage(models.TextChoices):
+    REFINE = "refine", "Refinement"
+    RETRO = "retro", "Retrospective"
 
 
 class Approach(models.TextChoices):
@@ -25,11 +29,10 @@ class Approach(models.TextChoices):
 FRONTIER_AGENTS = [Agent.CODEX, Agent.CLAUDE]
 NEXT_STAGE = {
     Stage.PLAN: Stage.INTEGRATE,
-    Stage.INTEGRATE: Stage.TEST,
-    Stage.TEST: Stage.CODE_REVIEW,
+    Stage.INTEGRATE: Stage.CODE_REVIEW,
     Stage.CODE_REVIEW: "final_approval",
 }
-REPORT_ONLY_STAGES = {Stage.PLAN, Stage.TEST, Stage.CODE_REVIEW}
+REPORT_ONLY_STAGES = {Stage.PLAN, Stage.CODE_REVIEW, *SupportStage.values}
 
 
 def validate_routing(mode, frontier_agent):
@@ -44,10 +47,10 @@ def validate_routing(mode, frontier_agent):
 
 def agent_for(task, stage):
     validate_routing(task.routing_mode, task.frontier_agent)
-    if stage not in Stage.values:
-        raise ValueError("Only working stages run agents.")
+    if stage not in [*Stage.values, *SupportStage.values]:
+        raise ValueError("Only working stages and optional support actions run agents.")
     if task.routing_mode == Approach.LOCAL or (
-        task.routing_mode == Approach.HYBRID and stage in {Stage.INTEGRATE, Stage.TEST}
+        task.routing_mode == Approach.HYBRID and stage == Stage.INTEGRATE
     ):
         return Agent.PI
     return task.frontier_agent

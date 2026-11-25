@@ -1,7 +1,8 @@
 import { requestJson } from '../../lib/api'
 import type { Project } from '../projects/api'
 
-export type Stage = 'plan' | 'integrate' | 'test' | 'code_review'
+export type Stage = 'plan' | 'integrate' | 'code_review'
+export type SupportStage = 'refine' | 'retro'
 export type Agent = 'codex' | 'claude' | 'pi'
 export type Approach = 'frontier' | 'hybrid' | 'local_only'
 export type FrontierAgent = Exclude<Agent, 'pi'>
@@ -35,7 +36,7 @@ export type RunState =
   | 'interrupted'
 export interface RunSummary {
   id: string
-  stage: Stage
+  stage: Stage | SupportStage | 'test'
   agent: Agent
   state: RunState
   sequence: number
@@ -56,6 +57,14 @@ export interface Run extends RunSummary {
   created_at: string
   started_at: string | null
   finished_at: string | null
+  input_context?: {
+    artifacts?: {
+      implementation?: {
+        run_id: string
+        result: Run['result']
+      }
+    }
+  }
 }
 export interface Decision {
   id: number
@@ -83,7 +92,7 @@ export interface Task {
   repository: string | null
   routing_mode: Approach | null
   frontier_agent: FrontierAgent | null
-  stage_agents: Partial<Record<Stage, Agent>>
+  stage_agents: Partial<Record<Stage | SupportStage, Agent>>
   next_stage: Stage | 'final_approval' | null
   status: 'backlog' | Stage | 'final_approval'
   revision: number
@@ -164,6 +173,8 @@ export type TaskAction =
   | 'revise'
   | 'send_back'
   | 'final_approve'
+  | 'refine'
+  | 'retro'
 export const performAction = (
   task: Task,
   action: TaskAction,

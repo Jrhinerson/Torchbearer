@@ -2,7 +2,7 @@ import uuid
 
 from django.db import models
 
-from .routing import Agent, Approach, Stage
+from .routing import Agent, Approach, Stage, SupportStage
 
 
 class Repository(models.Model):
@@ -19,7 +19,6 @@ class Task(models.Model):
         BACKLOG = "backlog", "Backlog"
         PLAN = "plan", "Plan"
         INTEGRATE = "integrate", "Integrate"
-        TEST = "test", "Test"
         CODE_REVIEW = "code_review", "Code Review"
         FINAL_APPROVAL = "final_approval", "Final Approval"
 
@@ -90,7 +89,9 @@ class AgentRun(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name="runs")
     sequence = models.PositiveIntegerField()
-    stage = models.CharField(max_length=20, choices=Stage.choices)
+    stage = models.CharField(
+        max_length=20, choices=[*Stage.choices, *SupportStage.choices, ("test", "Test (legacy)")]
+    )
     agent = models.CharField(max_length=20, choices=Agent.choices)
     state = models.CharField(max_length=20, choices=State.choices, default=State.QUEUED)
     feedback = models.TextField(blank=True)

@@ -13,7 +13,6 @@ const sampleTask = {
   stage_agents: {
     plan: 'codex',
     integrate: 'codex',
-    test: 'codex',
     code_review: 'codex',
   },
   repository: null,

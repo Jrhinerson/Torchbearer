@@ -3,8 +3,18 @@
 import json
 
 from .adapters import RESULT_SCHEMA, RunnerFailure, validate_result
+from .practices import practices_for
 
 INSTRUCTIONS = {
+    "refine": (
+        "Refine the Backlog task without implementing it or changing its column. Inspect the "
+        "repository and use artifacts.refinement, prior feedback, and the task description. "
+        "Return Problem, Desired outcome, Scope, Settled decisions, and Open questions in details. "
+        "Retain all previously settled decisions in every report so a later Plan has the full "
+        "context. Ask only material unanswered decisions, with recommended answers. Report blocked "
+        "when answers are needed and complete when the intent is clear enough to plan. "
+        "Do not edit files, execute tests, publish issues, or start planning automatically."
+    ),
     "plan": (
         "Have a back-and-forth planning conversation with the human. Read plan_conversation in "
         "order and respond to the latest human message naturally in details. Inspect the "
@@ -28,19 +38,15 @@ INSTRUCTIONS = {
     ),
     "integrate": (
         "Implement the full human-approved plan from artifacts.approved_plan, incorporating human "
-        "feedback and artifacts.rework findings. Run relevant checks. If the scope requires a new "
+        "feedback and artifacts.rework findings. Write meaningful behavior tests and run all "
+        "agreed validation commands, reporting each command and its actual outcome in tests. "
+        "Complete only when validation passes. If the scope requires a new "
         "plan or the handoff is insufficient, report blocked rather than inventing requirements."
-    ),
-    "test": (
-        "Validate the implementation from artifacts.implementation using artifacts.approved_plan "
-        "and repository test instructions. Run actual validation commands and report each outcome. "
-        "Do not edit source, tests, configuration, or lockfiles. Use ignored temporary directories "
-        "for generated files. Report failed when validation fails, and blocked when no validation "
-        "can run. Never fix failures in this stage."
     ),
     "code_review": (
         "Review all task changes against artifacts.approved_plan, artifacts.implementation, "
-        "artifacts.test, and rework findings. Inspect the complete diff against task.base_commit "
+        "its validation evidence in result.tests, and rework findings. Inspect the complete diff "
+        "against task.base_commit "
         "with git diff --no-ext-diff --no-textconv and inspect new files listed by "
         "git ls-files --others --exclude-standard. Read full files as needed; a bounded UI diff "
         "is not the complete review. Check correctness, acceptance criteria, edge cases, API/data "
@@ -49,6 +55,16 @@ INSTRUCTIONS = {
         "Explain remaining risks and test evidence. Report complete only with no unresolved "
         "findings that block acceptance, failed when rework is needed, and blocked when evidence "
         "or access is insufficient. Do not edit any workspace files or fix findings."
+    ),
+    "retro": (
+        "Review artifacts.accepted_review, artifacts.approved_plan, artifacts.implementation, "
+        "artifacts.session, and human_decisions for this completed task. Cite the run IDs and "
+        "specific evidence behind each recommendation. Return severity-ordered suggestions "
+        "covering automated checks, navigation, tooling, standards, or agent instructions. "
+        "Describe each proposed follow-up's purpose and expected benefit. Do not edit files, "
+        "execute tests, reopen this task, publish issues, or automatically start follow-up work. "
+        "The workspace may have changed since acceptance; use the recorded artifacts as the "
+        "historical source of truth and do not mistake current files for the accepted snapshot."
     ),
 }
 
@@ -118,30 +134,34 @@ def plan_conversation(run):
 
 def prompt_for(run):
     task = run.task
+    if run.stage not in INSTRUCTIONS:
+        raise RunnerFailure("This stage was retired. Resume the task in Integrate.", "blocked")
     artifacts = {}
-    if run.stage != "plan":
+    if run.stage in {"refine", "plan"}:
+        refinement = task.runs.filter(stage="refine", sequence__lt=run.sequence).first()
+        if refinement:
+            artifacts["refinement"] = {**artifact(refinement), "feedback": refinement.feedback}
+    if run.stage in {"integrate", "code_review", "retro"}:
         plan = approved_run(run, "plan")
         artifacts["approved_plan"] = artifact(plan)
         if run.stage != "integrate":
             implementation = approved_run(run, "integrate", after=plan.sequence)
             artifacts["implementation"] = artifact(implementation)
         if run.stage == "code_review":
-            test = approved_run(run, "test", after=implementation.sequence)
             try:
-                validate_result(test.result, "test")
+                validate_result(implementation.result, "integrate")
             except RunnerFailure as error:
                 raise RunnerFailure(
-                    "Code Review needs passing Test evidence. Rerun Test.", "blocked"
+                    "Code Review needs passing Integrate validation. Return to Integrate.",
+                    "blocked",
                 ) from error
             if not run.input_fingerprint or not (
-                run.input_fingerprint
-                == test.review_fingerprint
-                == implementation.review_fingerprint
+                run.input_fingerprint == implementation.review_fingerprint
             ):
                 raise RunnerFailure(
-                    "Code Review evidence is stale. Return to Integrate and rerun Test.", "blocked"
+                    "Code Review evidence is stale. Return to Integrate and rerun validation.",
+                    "blocked",
                 )
-            artifacts["test"] = artifact(test)
         rework = []
         for stage in ["test", "code_review"]:
             decision = (
@@ -157,6 +177,20 @@ def prompt_for(run):
             if decision:
                 rework.append({**artifact(decision.run), "feedback": decision.feedback})
         artifacts["rework"] = rework
+    if run.stage == "retro":
+        accepted = task.decisions.filter(action="final_approve").select_related("run").last()
+        if not accepted or not accepted.run:
+            raise RunnerFailure("A retrospective needs the accepted review.", "blocked")
+        artifacts["accepted_review"] = artifact(accepted.run)
+        artifacts["session"] = [
+            {
+                **artifact(attempt),
+                "state": attempt.state,
+                "feedback": attempt.feedback,
+                "error": attempt.error,
+            }
+            for attempt in task.runs.filter(sequence__lt=run.sequence).order_by("sequence")
+        ]
     previous = []
     attempts = task.runs.filter(sequence__lt=run.sequence)
     if run.stage == "plan":
@@ -182,11 +216,14 @@ def prompt_for(run):
     context = {
         "stage": run.stage,
         "instructions": INSTRUCTIONS[run.stage],
+        "engineering_practices": practices_for(run.stage),
         "rules": [
             "Work on this stage in the current worktree. Read and follow repository instructions.",
             "Humans control transitions. Never call Torchbearer APIs or edit its database.",
             "Do not change branches, commit, merge, push, open pull requests, or remove worktrees.",
             "Keep commands in the foreground and wait for them. Leave no background work running.",
+            "Apply engineering_practices within this stage's permissions. They are adapted "
+            "instructions, not requests to invoke external skills or their full workflows.",
             "Return only JSON matching result_schema, with the plan or stage report in details.",
             "Report blocked for missing dependencies, auth, permissions, or unclear requirements. "
             "Never claim checks passed unless run.",
@@ -205,7 +242,7 @@ def prompt_for(run):
         "prior_runs": previous,
         "human_decisions": list(
             task.decisions.order_by("-id").values("action", "from_stage", "to_stage", "feedback")[
-                :10
+                : None if run.stage == "retro" else 10
             ]
         ),
         "result_schema": RESULT_SCHEMA,

@@ -173,19 +173,19 @@ for (const policy of [
   {
     mode: 'frontier',
     frontier: 'codex',
-    agents: ['codex', 'codex', 'codex', 'codex'],
+    agents: ['codex', 'codex', 'codex'],
   },
   {
     mode: 'frontier',
     frontier: 'claude',
-    agents: ['claude', 'claude', 'claude', 'claude'],
+    agents: ['claude', 'claude', 'claude'],
   },
   {
     mode: 'hybrid',
     frontier: 'claude',
-    agents: ['claude', 'pi', 'pi', 'claude'],
+    agents: ['claude', 'pi', 'claude'],
   },
-  { mode: 'local_only', frontier: 'codex', agents: ['pi', 'pi', 'pi', 'pi'] },
+  { mode: 'local_only', frontier: 'codex', agents: ['pi', 'pi', 'pi'] },
 ]) {
   test(`runs ${policy.mode} with ${policy.frontier} through Code Review and final approval`, async ({
     page,
@@ -194,11 +194,10 @@ for (const policy of [
     const title = `${policy.mode} ${policy.frontier} workflow ${Date.now()}`
     const card = await backlog(page, title, policy.mode, policy.frontier)
     const review = await start(page, card, title)
-    const stages = ['Plan', 'Integrate', 'Test', 'Code_Review']
+    const stages = ['Plan', 'Integrate', 'Code_Review']
     const buttons = [
       'Approve plan & start Integrate',
-      'Approve changes & start Test',
-      'Approve test & start Code Review',
+      'Approve implementation & start Code Review',
       'Approve code review & continue',
     ]
     for (let index = 0; index < stages.length; index++) {
@@ -211,8 +210,43 @@ for (const policy of [
       await expect(card.getByLabel('Approach')).toHaveCount(0)
       await advance(review, buttons[index])
     }
+    await expect(
+      review.getByRole('region', { name: 'Final approval brief' }),
+    ).toBeVisible()
+    await expect(
+      review.getByRole('region', { name: 'Implementation validation' }),
+    ).toContainText('python -m pytest')
     await advance(review, 'Give final approval')
     await expect(review.getByText(/^Approved/)).toBeVisible()
+    if (policy.mode === 'hybrid') {
+      const tasks = await page.request
+        .get('/api/v1/tasks/')
+        .then((response) => response.json())
+      const task = tasks.find((item: { title: string }) => item.title === title)
+      const before = await page.request
+        .get(`/api/v1/tasks/${task.id}/workspace/`)
+        .then((response) => response.json())
+      await review
+        .getByRole('button', { name: 'Run retrospective', exact: true })
+        .click()
+      await expect(
+        review.getByText('Retro completed by claude', { exact: true }),
+      ).toBeVisible({ timeout: 20000 })
+      await expect(
+        review.getByText(
+          'Suggested follow-up: add an automated regression check.',
+          { exact: true },
+        ),
+      ).toBeVisible()
+      await expect(review.getByText(/^Approved/)).toBeVisible()
+      await expect(
+        review.getByRole('button', { name: 'Give final approval' }),
+      ).toHaveCount(0)
+      const after = await page.request
+        .get(`/api/v1/tasks/${task.id}/workspace/`)
+        .then((response) => response.json())
+      expect(after.fingerprint).toBe(before.fingerprint)
+    }
     await review.getByRole('button', { name: 'Close task review' }).click()
     await page.reload()
     await card
@@ -220,10 +254,61 @@ for (const policy of [
       .click()
     await expect(card).toContainText('Approved')
     await card.getByRole('button', { name: 'View history' }).click()
-    await expect(review.locator('.workflow-run')).toHaveCount(4)
-    await expect(review.getByRole('textbox')).toHaveCount(0)
+    await expect(review.locator('.workflow-run')).toHaveCount(
+      policy.mode === 'hybrid' ? 4 : 3,
+    )
+    await expect(review.getByRole('textbox')).toHaveCount(
+      policy.mode === 'hybrid' ? 1 : 0,
+    )
   })
 }
+
+test('refines a Backlog task through questions and carries the answers into Plan', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const title = `[refine] Add task priorities ${Date.now()}`
+  const card = await backlog(page, title, 'frontier', 'codex')
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
+  await card.getByRole('button', { name: 'Refine task', exact: true }).click()
+  const review = page.getByRole('dialog', { name: title, exact: true })
+  await expect(
+    review.getByText('Clarify task scope', { exact: true }),
+  ).toBeVisible({ timeout: 20000 })
+  await expect(
+    page
+      .getByRole('region', { name: 'Backlog', exact: true })
+      .getByRole('article', { name: title }),
+  ).toBeVisible()
+  await expect(card.getByLabel('Approach', { exact: true })).toHaveCount(0)
+  await expect(card.getByRole('button', { name: /^Delete / })).toHaveCount(0)
+  await review
+    .getByLabel('Refinement answers or instructions')
+    .fill('Display only; do not change sorting.')
+  await review
+    .getByRole('button', { name: 'Send answers', exact: true })
+    .click()
+  await expect(
+    review.getByText('Refine completed by codex', { exact: true }),
+  ).toBeVisible({ timeout: 20000 })
+  await advance(review, 'Start planning')
+  await expect(
+    review.getByText('Plan completed by codex', { exact: true }),
+  ).toBeVisible({ timeout: 20000 })
+  const tasks = await page.request
+    .get('/api/v1/tasks/')
+    .then((response) => response.json())
+  const task = tasks.find((item: { title: string }) => item.title === title)
+  const history = await page.request
+    .get(`/api/v1/tasks/${task.id}/runs/`)
+    .then((response) => response.json())
+  expect(
+    history.runs[0].input_context.artifacts.refinement.result.details,
+  ).toContain('Display only')
+  expect(history.runs).toHaveLength(3)
+})
 
 test('requires one routing choice before continuing an existing started task', async ({
   page,
@@ -263,7 +348,7 @@ test('requires one routing choice before continuing an existing started task', a
   ).toContainText('Reply interrupted.')
 })
 
-for (const failure of ['test', 'review']) {
+for (const failure of ['validation', 'review']) {
   test(`leaves failed ${failure} for human-directed rework`, async ({
     page,
   }) => {
@@ -272,29 +357,34 @@ for (const failure of ['test', 'review']) {
     const card = await backlog(page, title)
     const review = await start(page, card, title)
     await advance(review, 'Approve plan & start Integrate')
-    await advance(review, 'Approve changes & start Test')
     if (failure === 'review')
-      await advance(review, 'Approve test & start Code Review')
+      await advance(review, 'Approve implementation & start Code Review')
     await expect(
       review.getByRole('button', { name: 'Retry step' }),
     ).toBeEnabled({ timeout: 20000 })
     await review
       .getByLabel('Revision or rework instructions')
       .fill('Fix the reported regression.')
-    await review.getByLabel('Message action').selectOption('send_back')
-    await review.getByRole('button', { name: 'Send back to Integrate' }).click()
+    if (failure === 'review')
+      await review.getByLabel('Message action').selectOption('send_back')
+    await review
+      .getByRole('button', {
+        name:
+          failure === 'review' ? 'Send back to Integrate' : 'Request revision',
+        exact: true,
+      })
+      .click()
     await expect(
       review
         .locator('[data-current-run="true"]')
         .getByText('Integrate completed by pi', { exact: true }),
     ).toBeVisible({ timeout: 20000 })
     if (failure === 'review') {
-      await advance(review, 'Approve changes & start Test')
-      await advance(review, 'Approve test & start Code Review')
+      await advance(review, 'Approve implementation & start Code Review')
       await advance(review, 'Approve code review & continue')
       await advance(review, 'Give final approval')
       await expect(review.getByText(/^Approved/)).toBeVisible()
-      await expect(review.locator('.workflow-run')).toHaveCount(7)
+      await expect(review.locator('.workflow-run')).toHaveCount(5)
     }
   })
 }
@@ -352,12 +442,7 @@ test('revises working stages in the conversation and requests changes from final
     {
       id: 'integrate',
       summary: 'Integrate completed by pi',
-      approve: 'Approve changes & start Test',
-    },
-    {
-      id: 'test',
-      summary: 'Test completed by pi',
-      approve: 'Approve test & start Code Review',
+      approve: 'Approve implementation & start Code Review',
     },
     {
       id: 'code_review',
@@ -424,7 +509,7 @@ test('revises working stages in the conversation and requests changes from final
   await review
     .getByRole('button', { name: 'Send back to Integrate', exact: true })
     .click()
-  await expect(review.locator('.workflow-run')).toHaveCount(8, {
+  await expect(review.locator('.workflow-run')).toHaveCount(6, {
     timeout: 20000,
   })
   await expect(review.locator('[data-current-run="true"]')).toContainText(
@@ -436,10 +521,10 @@ test('revises working stages in the conversation and requests changes from final
   await review.getByRole('button', { name: 'Close task review' }).click()
   await page.reload()
   await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
-  await expect(review.locator('.workflow-run')).toHaveCount(8)
+  await expect(review.locator('.workflow-run')).toHaveCount(6)
   await expect(
     review.getByRole('list', { name: 'Task conversation' }),
-  ).toContainText('Refine the test result using the agreed criteria.')
+  ).toContainText('Refine the integrate result using the agreed criteria.')
 })
 
 test('returns to Plan from the Integrate composer with the full conversation preserved', async ({

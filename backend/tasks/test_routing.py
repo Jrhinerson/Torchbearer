@@ -14,7 +14,7 @@ def test_task_policy_resolves_each_stage(mode, frontier):
     for stage in Stage:
         expected = (
             "pi"
-            if mode == "local_only" or (mode == "hybrid" and stage in {"integrate", "test"})
+            if mode == "local_only" or (mode == "hybrid" and stage == "integrate")
             else frontier
         )
         assert agent_for(task, stage) == expected

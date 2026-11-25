@@ -21,7 +21,12 @@ def succeed(task):
     ensure_workspace(task)
     run = task.runs.first()
     run.state = "succeeded"
-    run.result = {"outcome": "complete", "summary": "Done"}
+    run.result = {
+        "outcome": "complete",
+        "summary": "Done",
+        "details": "Validated",
+        "tests": [{"command": "pytest", "outcome": "pass", "details": "Passed"}],
+    }
     run.review_fingerprint = fingerprint(task)
     run.save()
     return run
@@ -48,8 +53,7 @@ def test_each_step_waits_for_human_approval_and_snapshots_agent(task):
         approve(task, run)
     for stage, next_stage in [
         ("plan", "integrate"),
-        ("integrate", "test"),
-        ("test", "code_review"),
+        ("integrate", "code_review"),
         ("code_review", "final_approval"),
     ]:
         run = succeed(task)
@@ -58,7 +62,7 @@ def test_each_step_waits_for_human_approval_and_snapshots_agent(task):
         approve(task, run)
         task.refresh_from_db()
         assert task.status == next_stage
-    assert task.runs.count() == 4
+    assert task.runs.count() == 3
     act(
         task.id,
         action="final_approve",
@@ -68,7 +72,7 @@ def test_each_step_waits_for_human_approval_and_snapshots_agent(task):
     )
     task.refresh_from_db()
     assert task.completed_at is not None
-    assert Decision.objects.filter(task=task).count() == 6
+    assert Decision.objects.filter(task=task).count() == 5
 
 
 def test_duplicate_actions_and_stale_results_cannot_start_another_run(task):
@@ -81,6 +85,22 @@ def test_duplicate_actions_and_stale_results_cannot_start_another_run(task):
         act(task.id, action="approve", revision=task.revision, run_id=run.id, fingerprint="wrong")
     assert task.runs.count() == 1
     assert Decision.objects.count() == 1
+
+
+@pytest.mark.parametrize("outcomes", [[], ["fail"], ["not_run"], ["pass", "fail"]])
+def test_implementation_approval_requires_all_reported_validation_to_pass(task, outcomes):
+    act(task.id, action="start", revision=0)
+    approve(task, succeed(task))
+    run = succeed(task)
+    run.result["tests"] = [
+        {"command": f"check-{index}", "outcome": outcome, "details": "Evidence"}
+        for index, outcome in enumerate(outcomes)
+    ]
+    run.save()
+    with pytest.raises(Conflict, match="passing validation"):
+        approve(task, run)
+    task.refresh_from_db()
+    assert task.status == "integrate" and task.runs.count() == 2
 
 
 def test_planning_messages_require_latest_inactive_plan_and_nonempty_text(task, local_client):
@@ -143,7 +163,7 @@ def test_missing_next_agent_does_not_consume_approval(task, monkeypatch):
     assert task.runs.count() == 1
 
 
-def test_failed_test_is_sent_back_only_by_a_human_action(task):
+def test_failed_review_is_sent_back_only_by_a_human_action(task):
     act(task.id, action="start", revision=0)
     approve(task, succeed(task))
     approve(task, succeed(task))
@@ -151,7 +171,7 @@ def test_failed_test_is_sent_back_only_by_a_human_action(task):
     run.state = "failed"
     run.save()
     task.refresh_from_db()
-    assert task.status == "test"
+    assert task.status == "code_review"
     act(
         task.id,
         action="send_back",

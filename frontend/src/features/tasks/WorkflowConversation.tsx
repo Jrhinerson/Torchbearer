@@ -5,13 +5,14 @@ import type {
   Run,
   RunHistory,
   Stage,
+  SupportStage,
   Task,
   WorkspaceChanges,
 } from './api'
 import { PlanningMessage } from './PlanningMessage'
 import { approvalLabels, stageLabels } from './workflowLabels'
 
-type MessageAction = 'plan_message' | 'revise' | 'send_back'
+type MessageAction = 'plan_message' | 'revise' | 'send_back' | SupportStage
 
 export function WorkflowConversation({
   task,
@@ -29,6 +30,7 @@ export function WorkflowConversation({
   onRetry,
   onStop,
   onApprove,
+  onRetrospective,
 }: {
   task: Task
   history: RunHistory
@@ -45,13 +47,31 @@ export function WorkflowConversation({
   onRetry: () => void
   onStop: () => void
   onApprove: () => void
+  onRetrospective: () => void
 }) {
   const planning = task.status === 'plan'
-  const finalReview = task.status === 'final_approval'
   const completed = Boolean(task.completed_at)
+  const refining = task.status === 'backlog'
+  const retrospective = completed && task.latest_run?.stage === 'retro'
+  const support = refining || retrospective
+  const readOnly = completed && !retrospective
+  const finalReview = task.status === 'final_approval' && !retrospective
+  const currentStage = refining
+    ? 'refine'
+    : retrospective
+      ? 'retro'
+      : task.status
   const [draft, setDraft] = useState('')
   const [action, setAction] = useState<MessageAction>(
-    planning ? 'plan_message' : finalReview ? 'send_back' : 'revise',
+    refining
+      ? 'refine'
+      : retrospective
+        ? 'retro'
+        : planning
+          ? 'plan_message'
+          : finalReview
+            ? 'send_back'
+            : 'revise',
   )
   const submitting = useRef(false)
   const thread = useRef<HTMLOListElement>(null)
@@ -60,7 +80,8 @@ export function WorkflowConversation({
   const [following, setFollowing] = useState(true)
   const attempts = [...history.runs].sort((a, b) => a.sequence - b.sequence)
   const returnStage = task.status === 'integrate' ? 'plan' : 'integrate'
-  const target = (action === 'send_back' ? returnStage : task.status) as Stage
+  const target = (action === 'send_back' ? returnStage : currentStage) as
+    Stage | SupportStage
   const agent = task.stage_agents[target]
   const name = agent ? agentLabel(agent, routing) : 'Agent'
   const unavailable = Boolean(
@@ -74,29 +95,41 @@ export function WorkflowConversation({
     !unavailable &&
     !active &&
     !busy &&
-    !completed,
+    !readOnly,
   )
   const ready = run?.state === 'succeeded'
   const retryable =
     run &&
-    !ready &&
+    (support || !ready) &&
     !finalReview &&
     (!planning ||
       ['failed', 'cancelled', 'interrupted'].includes(run.state) ||
       (run.state === 'blocked' && !run.result.summary && !run.result.details))
-  const sendLabel = planning
-    ? 'Send message'
-    : action === 'send_back'
-      ? 'Send back to ' + stageLabels[returnStage]
-      : 'Request revision'
-  const inputLabel = planning
-    ? 'Message your planning agent'
-    : 'Revision or rework instructions'
-  const consequence = planning
-    ? 'Approve before implementation'
-    : action === 'send_back'
-      ? 'Sending returns the task to ' + stageLabels[returnStage]
-      : 'Sending reruns ' + stageLabels[task.status]
+  const sendLabel = refining
+    ? 'Send answers'
+    : retrospective
+      ? 'Send retrospective feedback'
+      : planning
+        ? 'Send message'
+        : action === 'send_back'
+          ? 'Send back to ' + stageLabels[returnStage]
+          : 'Request revision'
+  const inputLabel = refining
+    ? 'Refinement answers or instructions'
+    : retrospective
+      ? 'Retrospective focus or feedback'
+      : planning
+        ? 'Message your planning agent'
+        : 'Revision or rework instructions'
+  const consequence = support
+    ? refining
+      ? 'Refinement keeps this task in Backlog'
+      : 'Retrospectives preserve final approval'
+    : planning
+      ? 'Approve before implementation'
+      : action === 'send_back'
+        ? 'Sending returns the task to ' + stageLabels[returnStage]
+        : 'Sending reruns ' + stageLabels[task.status]
 
   useEffect(() => {
     if (followReplies.current && thread.current)
@@ -128,7 +161,7 @@ export function WorkflowConversation({
       observer.disconnect()
       cancelAnimationFrame(frame)
     }
-  }, [draft, completed])
+  }, [draft, readOnly])
 
   function jumpToLatest() {
     followReplies.current = true
@@ -152,7 +185,7 @@ export function WorkflowConversation({
   return (
     <section
       className="planning-conversation"
-      aria-label={stageLabels[task.status] + ' conversation'}
+      aria-label={stageLabels[currentStage] + ' conversation'}
     >
       <div className="planning-thread">
         <ol
@@ -206,6 +239,23 @@ export function WorkflowConversation({
           {finalReview && (
             <li className="workflow-stage-marker">
               <span>Final Approval · Human review</span>
+            </li>
+          )}
+          {finalReview && run?.stage === 'code_review' && (
+            <li className="workflow-evidence">
+              <section aria-label="Final approval brief">
+                <h3>{run.result.summary}</h3>
+                {run.input_context?.artifacts?.implementation?.result
+                  .summary && (
+                  <p>
+                    {run.input_context.artifacts.implementation.result.summary}
+                  </p>
+                )}
+                <p className="workflow-hint">
+                  Review the delivered behavior, how to try it, validation
+                  evidence, and remaining risks before approving.
+                </p>
+              </section>
             </li>
           )}
           {!planning && !active && (
@@ -278,7 +328,7 @@ export function WorkflowConversation({
         )}
       </div>
       <div className="planning-footer">
-        {completed ? (
+        {completed && (
           <p className="run-state state-approved workflow-completed">
             Approved · {new Date(task.completed_at!).toLocaleString()}
             <span>
@@ -286,21 +336,33 @@ export function WorkflowConversation({
               preserved.
             </span>
           </p>
+        )}
+        {readOnly ? (
+          <button
+            type="button"
+            className="button button-secondary"
+            disabled={busy || active || !run || !task.routing_mode}
+            onClick={onRetrospective}
+          >
+            Run retrospective
+          </button>
         ) : (
           <>
-            {ready && !active && (
+            {ready && !active && !retrospective && (
               <div className="planning-approval">
                 <div>
                   <p className="planning-message-summary">
                     {finalReview
                       ? 'Ready for final approval'
-                      : stageLabels[task.status] + ' ready for review'}
+                      : stageLabels[currentStage] + ' ready for review'}
                   </p>
                   <p className="workflow-hint">
                     {approvalHint ||
-                      (finalReview
-                        ? 'Review the results and code changes before giving final approval.'
-                        : 'Approve this result when you are ready to move forward.')}
+                      (refining
+                        ? 'Review the settled decisions before starting Plan.'
+                        : finalReview
+                          ? 'Review the results and code changes before giving final approval.'
+                          : 'Approve this result when you are ready to move forward.')}
                   </p>
                 </div>
                 <button
@@ -312,11 +374,6 @@ export function WorkflowConversation({
                   {approvalLabels[task.status]}
                 </button>
               </div>
-            )}
-            {error && (
-              <p role="alert" className="feedback feedback-error form-error">
-                {error}
-              </p>
             )}
             <form
               className="planning-composer"
@@ -338,11 +395,15 @@ export function WorkflowConversation({
                 readOnly={busy}
                 aria-describedby="workflow-message-help"
                 placeholder={
-                  planning
-                    ? 'Ask a question or refine the plan…'
-                    : finalReview
-                      ? 'Describe changes to send back to Integrate…'
-                      : 'Add revision or rework instructions…'
+                  refining
+                    ? 'Answer questions or clarify the task…'
+                    : retrospective
+                      ? 'Focus the retrospective on a specific concern…'
+                      : planning
+                        ? 'Ask a question or refine the plan…'
+                        : finalReview
+                          ? 'Describe changes to send back to Integrate…'
+                          : 'Add revision or rework instructions…'
                 }
                 onChange={(event) => setDraft(event.target.value)}
                 onKeyDown={(event) => {
@@ -358,9 +419,13 @@ export function WorkflowConversation({
               />
               <div className="planning-composer-actions">
                 <div className="planning-composer-context">
-                  {planning || finalReview ? (
+                  {planning || finalReview || support ? (
                     <span className="planning-mode">
-                      {planning ? 'Plan' : 'Request changes'}
+                      {support
+                        ? stageLabels[currentStage]
+                        : planning
+                          ? 'Plan'
+                          : 'Request changes'}
                     </span>
                   ) : (
                     <select
@@ -399,7 +464,13 @@ export function WorkflowConversation({
                     disabled={busy || !task.routing_mode || !run}
                     onClick={onRetry}
                   >
-                    {planning ? 'Retry reply' : 'Retry step'}
+                    {refining
+                      ? 'Refine again'
+                      : retrospective
+                        ? 'Run retrospective again'
+                        : planning
+                          ? 'Retry reply'
+                          : 'Retry step'}
                   </button>
                 )}
                 {active ? (
@@ -439,6 +510,11 @@ export function WorkflowConversation({
                 : 'Enter to send · Shift+Enter for a new line · ' + consequence}
             </p>
           </>
+        )}
+        {error && (
+          <p role="alert" className="feedback feedback-error form-error">
+            {error}
+          </p>
         )}
       </div>
     </section>
@@ -498,23 +574,31 @@ function ConversationTurn({
           )}
           {failure && <p className="planning-reply-error">{failure}</p>}
           {Boolean(run.result.tests?.length) && (
-            <ul className="test-report workflow-test-report">
-              {run.result.tests!.map((test, index) => (
-                <li key={index}>
-                  <strong
-                    className={'test-outcome test-outcome-' + test.outcome}
-                  >
-                    {test.outcome === 'pass'
-                      ? 'Passed'
-                      : test.outcome === 'fail'
-                        ? 'Failed'
-                        : 'Not run'}
-                  </strong>
-                  <code>{test.command}</code>
-                  <p>{test.details}</p>
-                </li>
-              ))}
-            </ul>
+            <section
+              aria-label={
+                run.stage === 'integrate'
+                  ? 'Implementation validation'
+                  : 'Validation evidence'
+              }
+            >
+              <ul className="test-report workflow-test-report">
+                {run.result.tests!.map((test, index) => (
+                  <li key={index}>
+                    <strong
+                      className={'test-outcome test-outcome-' + test.outcome}
+                    >
+                      {test.outcome === 'pass'
+                        ? 'Passed'
+                        : test.outcome === 'fail'
+                          ? 'Failed'
+                          : 'Not run'}
+                    </strong>
+                    <code>{test.command}</code>
+                    <p>{test.details}</p>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
           {run.log && (
             <div className="planning-diagnostics">

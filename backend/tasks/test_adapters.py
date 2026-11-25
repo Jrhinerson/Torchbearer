@@ -71,15 +71,14 @@ def test_verbose_stderr_is_drained_and_logs_are_bounded(fake_cli, tmp_path):
     assert logs and max(map(len, logs)) <= 128000
 
 
-def test_test_stage_requires_reported_passing_commands():
+def test_implementation_requires_reported_passing_commands():
     with pytest.raises(RunnerFailure, match="passing validation"):
         validate_result(
-            {"outcome": "complete", "summary": "Done", "details": "No tests", "tests": []}, "test"
+            {"outcome": "complete", "summary": "Done", "details": "No tests", "tests": []},
+            "integrate",
         )
     assert "workspace-write" in arguments("codex", "integrate", "schema")
     assert "read-only" in arguments("codex", "plan", "schema")
-    assert "workspace-write" in arguments("codex", "test", "schema")
-    assert "edit" not in arguments("pi", "test", "schema")[-1]
     assert "read-only" in arguments("codex", "code_review", "schema")
     assert "edit" not in arguments("pi", "code_review", "schema")[-1]
     assert "Edit" not in arguments("claude", "code_review", "schema")

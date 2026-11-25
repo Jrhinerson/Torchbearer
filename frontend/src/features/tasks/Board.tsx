@@ -18,12 +18,31 @@ import ProjectPicker from '../projects/ProjectPicker'
 import type { Project } from '../projects/api'
 
 const columns = [
-  { id: 'backlog', title: 'Backlog' },
-  { id: 'plan', title: 'Plan' },
-  { id: 'integrate', title: 'Integrate' },
-  { id: 'test', title: 'Test' },
-  { id: 'code_review', title: 'Code Review' },
-  { id: 'final_approval', title: 'Final Approval' },
+  {
+    id: 'backlog',
+    title: 'Backlog',
+    description: 'Capture the problem and desired outcome.',
+  },
+  {
+    id: 'plan',
+    title: 'Plan',
+    description: 'Agree on scope, design, and how to verify success.',
+  },
+  {
+    id: 'integrate',
+    title: 'Integrate',
+    description: 'Implement in small steps and validate the result.',
+  },
+  {
+    id: 'code_review',
+    title: 'Code Review',
+    description: 'Independently check requirements, design, and evidence.',
+  },
+  {
+    id: 'final_approval',
+    title: 'Final Approval',
+    description: 'Review the delivered behavior and decide.',
+  },
 ] as const
 
 const dateFormat = new Intl.DateTimeFormat(undefined, {
@@ -260,6 +279,9 @@ export default function Board() {
                     {columnTasks.length}
                   </span>
                 </div>
+                <p className="workflow-hint column-description">
+                  {column.description}
+                </p>
                 {isBacklog && (
                   <button
                     type="button"
@@ -375,29 +397,30 @@ export default function Board() {
                                   {dateFormat.format(new Date(task.created_at))}
                                 </time>
                               </span>
-                              {task.status === 'backlog' && (
-                                <button
-                                  type="button"
-                                  className="button button-destructive button-icon delete-task-button"
-                                  aria-busy={deletingId === task.id}
-                                  aria-label={`Delete ${task.title}`}
-                                  title={
-                                    deletingId === task.id
-                                      ? 'Deleting task…'
-                                      : 'Delete task'
-                                  }
-                                  disabled={deletingId !== null}
-                                  onClick={() => handleDelete(task)}
-                                >
-                                  <svg
-                                    viewBox="0 0 24 24"
-                                    aria-hidden="true"
-                                    focusable="false"
+                              {task.status === 'backlog' &&
+                                !task.latest_run && (
+                                  <button
+                                    type="button"
+                                    className="button button-destructive button-icon delete-task-button"
+                                    aria-busy={deletingId === task.id}
+                                    aria-label={`Delete ${task.title}`}
+                                    title={
+                                      deletingId === task.id
+                                        ? 'Deleting task…'
+                                        : 'Delete task'
+                                    }
+                                    disabled={deletingId !== null}
+                                    onClick={() => handleDelete(task)}
                                   >
-                                    <path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7" />
-                                  </svg>
-                                </button>
-                              )}
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      aria-hidden="true"
+                                      focusable="false"
+                                    >
+                                      <path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7" />
+                                    </svg>
+                                  </button>
+                                )}
                             </footer>
                             {deleteError?.id === task.id && (
                               <p
@@ -532,7 +555,7 @@ export default function Board() {
           A task captures intent. You decide when it is ready to move forward.
         </p>
       </dialog>
-      {selectedTask?.status === 'backlog' ? (
+      {selectedTask?.status === 'backlog' && !selectedTask.latest_run ? (
         <TaskSettingsDialog
           key={selectedTask.id}
           task={selectedTask}

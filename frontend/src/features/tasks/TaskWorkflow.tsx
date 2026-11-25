@@ -77,11 +77,54 @@ export function CardWorkflow({
           <button
             type="button"
             className="button button-secondary step-button"
-            disabled={busy || !task.repository || !task.routing_mode}
+            disabled={
+              busy ||
+              isActive(task) ||
+              !task.repository ||
+              !task.routing_mode ||
+              Boolean(run && run.state !== 'succeeded')
+            }
             onClick={() => void change(() => performAction(task, 'start'))}
           >
             {busy ? 'Starting…' : 'Start planning'}
           </button>
+          {!run ? (
+            <>
+              <button
+                type="button"
+                className="button button-quiet step-button"
+                disabled={busy || !task.repository || !task.routing_mode}
+                onClick={() =>
+                  void change(async () => {
+                    const updated = await performAction(task, 'refine')
+                    onReview()
+                    return updated
+                  })
+                }
+              >
+                Refine task
+              </button>
+              <p className="workflow-hint">
+                Optional: clarify the goal first. Starting refinement fixes this
+                task's project and agent choices.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className={`run-state state-${run.state}`}>
+                Refinement:{' '}
+                {run.state === 'succeeded'
+                  ? 'Ready to plan'
+                  : states[run.state]}
+              </p>
+              <button
+                className="button button-secondary step-button"
+                onClick={onReview}
+              >
+                View refinement
+              </button>
+            </>
+          )}
           {!task.routing_mode && (
             <p className="workflow-hint">
               Open the task title to choose routing.
@@ -209,7 +252,7 @@ export function TaskSettingsDialog({
         key={`${task.id}:${task.routing_mode}:${task.frontier_agent}`}
         task={task}
         routing={routing}
-        disabled={busy}
+        disabled={busy || Boolean(task.latest_run)}
         onTask={onTask}
       />
       <RepositoryPicker
@@ -217,7 +260,7 @@ export function TaskSettingsDialog({
         value={task.repository ?? ''}
         onChange={(id) => void chooseRepository(id)}
         onAdded={onAdded}
-        disabled={busy || !task.routing_mode}
+        disabled={busy || Boolean(task.latest_run) || !task.routing_mode}
       />
       {error && (
         <p role="alert" className="feedback feedback-error form-error">
@@ -264,7 +307,7 @@ export function WorkflowDialog({
     !active &&
     !task.completed_at,
   )
-  const next = task.next_stage
+  const next = task.status === 'backlog' ? 'plan' : task.next_stage
   const missingAgent =
     next &&
     next !== 'final_approval' &&
@@ -414,7 +457,13 @@ export function WorkflowDialog({
       {!history && !loadError && <p role="status">Loading runs…</p>}
       {history && (
         <WorkflowConversation
-          key={task.id + ':' + task.status}
+          key={
+            task.id +
+            ':' +
+            task.status +
+            ':' +
+            (task.latest_run?.stage === 'retro' ? 'retro' : 'workflow')
+          }
           task={task}
           history={history}
           run={run}
@@ -438,11 +487,22 @@ export function WorkflowDialog({
                 : '')
           }
           onMessage={(action, message) => act(action, message)}
-          onRetry={() => void act('retry')}
+          onRetry={() =>
+            void act(
+              run?.stage === 'refine' || run?.stage === 'retro'
+                ? run.stage
+                : 'retry',
+            )
+          }
           onStop={() => void act('cancel')}
+          onRetrospective={() => void act('retro')}
           onApprove={() =>
             void act(
-              task.status === 'final_approval' ? 'final_approve' : 'approve',
+              task.status === 'backlog'
+                ? 'start'
+                : task.status === 'final_approval'
+                  ? 'final_approve'
+                  : 'approve',
             )
           }
         />
