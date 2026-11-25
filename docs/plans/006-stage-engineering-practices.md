@@ -47,3 +47,13 @@ Exercise migration from existing workflows, validation failures and stale eviden
 routing approaches, review rework, refinement feedback, retrospective isolation, cancellation,
 and read-only enforcement. Run the repository checks and Chromium integration checks against
 isolated databases and deterministic fake agent CLIs.
+
+## Implemented and verified
+
+All three commits are implemented. The portable repository checks passed, including 157 backend
+tests, lint/format checks, Django system and migration checks, and the frontend production build.
+The restart persistence check passed. All 35 Chromium scenarios were verified: the full run passed
+32 scenarios, and the four affected routing scenarios passed on a focused rerun after correcting
+ambiguous assertions. The final worker/support-action rerun passed all 19 tests. Desktop and mobile
+board screenshots were inspected. Agent execution checks use deterministic fake CLIs, not
+authenticated model sessions.

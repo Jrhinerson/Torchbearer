@@ -157,15 +157,88 @@ for (const policy of [
     ).toContainText('python -m pytest')
     await advance(review, 'Give final approval')
     await expect(review.getByText(/^Approved/)).toBeVisible()
+    if (policy.mode === 'hybrid') {
+      const tasks = await page.request
+        .get('/api/v1/tasks/')
+        .then((response) => response.json())
+      const task = tasks.find((item: { title: string }) => item.title === title)
+      const before = await page.request
+        .get(`/api/v1/tasks/${task.id}/workspace/`)
+        .then((response) => response.json())
+      await review
+        .getByRole('button', { name: 'Run retrospective', exact: true })
+        .click()
+      await expect(
+        review.getByText('Retro completed by claude', { exact: true }),
+      ).toBeVisible({ timeout: 20000 })
+      await expect(
+        review.getByText(
+          'Suggested follow-up: add an automated regression check.',
+          { exact: true },
+        ),
+      ).toBeVisible()
+      await expect(review.getByText(/^Approved/)).toBeVisible()
+      await expect(
+        review.getByRole('button', { name: 'Give final approval' }),
+      ).toHaveCount(0)
+      const after = await page.request
+        .get(`/api/v1/tasks/${task.id}/workspace/`)
+        .then((response) => response.json())
+      expect(after.fingerprint).toBe(before.fingerprint)
+    }
     await review.getByRole('button', { name: 'Close task review' }).click()
     await page.reload()
     await expect(card).toContainText('Approved')
     await card.getByRole('button', { name: 'View history' }).click()
     await expect(page.getByLabel('Run history').locator('option')).toHaveCount(
-      3,
+      policy.mode === 'hybrid' ? 4 : 3,
     )
   })
 }
+
+test('refines a Backlog task through questions and carries the answers into Plan', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const title = `[refine] Add task priorities ${Date.now()}`
+  const card = await backlog(page, title, 'frontier', 'codex')
+  await card.getByRole('button', { name: 'Refine task', exact: true }).click()
+  const review = page.getByRole('dialog', { name: title, exact: true })
+  await expect(
+    review.getByRole('heading', { name: 'Clarify task scope', exact: true }),
+  ).toBeVisible({ timeout: 20000 })
+  await expect(
+    page
+      .getByRole('region', { name: 'Backlog', exact: true })
+      .getByRole('article', { name: title }),
+  ).toBeVisible()
+  await expect(card.getByLabel('Approach', { exact: true })).toHaveCount(0)
+  await expect(card.getByRole('button', { name: /^Delete / })).toHaveCount(0)
+  await review
+    .getByLabel('Refinement answers or instructions')
+    .fill('Display only; do not change sorting.')
+  await review
+    .getByRole('button', { name: 'Send answers', exact: true })
+    .click()
+  await expect(
+    review.getByText('Refine completed by codex', { exact: true }),
+  ).toBeVisible({ timeout: 20000 })
+  await advance(review, 'Start planning')
+  await expect(
+    review.getByText('Plan completed by codex', { exact: true }),
+  ).toBeVisible({ timeout: 20000 })
+  const tasks = await page.request
+    .get('/api/v1/tasks/')
+    .then((response) => response.json())
+  const task = tasks.find((item: { title: string }) => item.title === title)
+  const history = await page.request
+    .get(`/api/v1/tasks/${task.id}/runs/`)
+    .then((response) => response.json())
+  expect(
+    history.runs[0].input_context.artifacts.refinement.result.details,
+  ).toContain('Display only')
+  expect(history.runs).toHaveLength(3)
+})
 
 test('requires one routing choice before continuing an existing started task', async ({
   page,
@@ -220,8 +293,15 @@ for (const failure of ['validation', 'review']) {
           failure === 'review' ? 'Send back to Integrate' : 'Request revision',
       })
       .click()
+    await expect(review.locator('.run-review > .run-state')).toContainText(
+      'Awaiting review',
+      { timeout: 20000 },
+    )
     await expect(
-      review.getByText('Integrate completed by pi', { exact: true }),
+      review.getByRole('heading', {
+        name: 'Integrate completed by pi',
+        exact: true,
+      }),
     ).toBeVisible({ timeout: 20000 })
     if (failure === 'review') {
       await advance(review, 'Approve implementation & start Code Review')

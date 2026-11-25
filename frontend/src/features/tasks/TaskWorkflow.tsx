@@ -97,7 +97,7 @@ export function CardWorkflow({
           : ''}
       </p>
       {!task.completed_at &&
-        (task.status === 'backlog' || !task.routing_mode) && (
+        ((task.status === 'backlog' && !run) || !task.routing_mode) && (
           <TaskRoutingEditor
             key={`${task.id}:${task.routing_mode}:${task.frontier_agent}`}
             task={task}
@@ -117,16 +117,61 @@ export function CardWorkflow({
                 void change(() => updateTaskSettings(task, { repository: id }))
             }}
             onAdded={onAdded}
-            disabled={busy || !task.routing_mode}
+            disabled={
+              busy || isActive(task) || Boolean(run) || !task.routing_mode
+            }
           />
           <button
             type="button"
             className="button button-secondary step-button"
-            disabled={busy || !task.repository || !task.routing_mode}
+            disabled={
+              busy ||
+              isActive(task) ||
+              !task.repository ||
+              !task.routing_mode ||
+              Boolean(run && run.state !== 'succeeded')
+            }
             onClick={() => void change(() => performAction(task, 'start'))}
           >
             {busy ? 'Starting…' : 'Start planning'}
           </button>
+          {!run ? (
+            <>
+              <button
+                type="button"
+                className="button button-quiet step-button"
+                disabled={busy || !task.repository || !task.routing_mode}
+                onClick={() =>
+                  void change(async () => {
+                    const updated = await performAction(task, 'refine')
+                    onReview()
+                    return updated
+                  })
+                }
+              >
+                Refine task
+              </button>
+              <p className="workflow-hint">
+                Optional: clarify the goal first. Starting refinement fixes this
+                task's project and agent choices.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className={`run-state state-${run.state}`}>
+                Refinement:{' '}
+                {run.state === 'succeeded'
+                  ? 'Ready to plan'
+                  : states[run.state]}
+              </p>
+              <button
+                className="button button-secondary step-button"
+                onClick={onReview}
+              >
+                View refinement
+              </button>
+            </>
+          )}
           {!task.routing_mode && (
             <p className="workflow-hint">Choose task routing to begin.</p>
           )}
@@ -203,6 +248,7 @@ export function WorkflowDialog({
     (item) => item.id === (selectedRun || task.latest_run?.id),
   )
   const latest = Boolean(run && run.id === task.latest_run?.id)
+  const support = run?.stage === 'refine' || run?.stage === 'retro'
   const implementation = run?.input_context?.artifacts?.implementation
   const active = isActive(task)
   const reviewCurrent = Boolean(
@@ -211,6 +257,7 @@ export function WorkflowDialog({
   )
   const canApprove =
     latest &&
+    !support &&
     Boolean(task.routing_mode) &&
     run?.state === 'succeeded' &&
     reviewCurrent &&
@@ -338,9 +385,21 @@ export function WorkflowDialog({
         </button>
       </div>
       {task.completed_at && (
-        <p className="run-state state-approved">
-          Approved · {new Date(task.completed_at).toLocaleString()}
-        </p>
+        <>
+          <p className="run-state state-approved">
+            Approved · {new Date(task.completed_at).toLocaleString()}
+          </p>
+          {run?.stage !== 'retro' && (
+            <button
+              type="button"
+              className="button button-secondary"
+              disabled={busy || active || !latest || !task.routing_mode}
+              onClick={() => void act('retro')}
+            >
+              Run retrospective
+            </button>
+          )}
+        </>
       )}
       <p className="workflow-hint">
         {task.branch}
@@ -450,7 +509,81 @@ export function WorkflowDialog({
                   )}
                 </details>
               )}
-              {latest && !task.completed_at && (
+              {latest && support && (
+                <div className="review-actions">
+                  {active ? (
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      disabled={
+                        busy || Boolean(task.latest_run?.cancel_requested)
+                      }
+                      onClick={() => void act('cancel')}
+                    >
+                      {task.latest_run?.cancel_requested
+                        ? 'Cancelling…'
+                        : 'Cancel run'}
+                    </button>
+                  ) : (
+                    <>
+                      <label className="field-label" htmlFor="support-feedback">
+                        {run.stage === 'refine'
+                          ? 'Refinement answers or instructions'
+                          : 'Retrospective focus or feedback'}
+                      </label>
+                      <textarea
+                        id="support-feedback"
+                        className="field"
+                        value={feedback}
+                        onChange={(event) => setFeedback(event.target.value)}
+                        maxLength={4000}
+                        rows={3}
+                        disabled={busy}
+                      />
+                      <div className="review-primary-actions">
+                        <button
+                          type="button"
+                          className="button button-secondary"
+                          disabled={busy || !task.routing_mode}
+                          onClick={() =>
+                            void act(
+                              run.stage === 'refine' ? 'refine' : 'retro',
+                            )
+                          }
+                        >
+                          {run.stage === 'refine'
+                            ? feedback.trim()
+                              ? 'Send answers'
+                              : 'Refine again'
+                            : 'Run retrospective again'}
+                        </button>
+                        {run.stage === 'refine' &&
+                          run.state === 'succeeded' && (
+                            <button
+                              type="button"
+                              className="button button-primary"
+                              disabled={
+                                busy || !reviewCurrent || !task.routing_mode
+                              }
+                              onClick={() => void act('start')}
+                            >
+                              Start planning
+                            </button>
+                          )}
+                      </div>
+                      {run.stage === 'refine' &&
+                        run.state === 'succeeded' &&
+                        !reviewCurrent && (
+                          <p className="workflow-hint">
+                            Refresh refinement after workspace changes before
+                            starting Plan.
+                          </p>
+                        )}
+                    </>
+                  )}
+                </div>
+              )}
+              {latest && !task.completed_at && !support && (
                 <div className="review-actions">
                   {active ? (
                     <button

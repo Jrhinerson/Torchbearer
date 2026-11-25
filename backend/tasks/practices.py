@@ -71,7 +71,8 @@ CATALOG = {
         "validation on the final files and report every command, actual outcome, and relevant "
         "output in tests. Missing dependencies are blocked; failing checks mean failed. Do not "
         "declare complete with missing or non-passing validation. Rerun affected checks "
-        "after fixes.",
+        "after fixes. Record expected initial TDD failures in details or logs; tests contains "
+        "the final validation outcomes after implementation, not the intentional red steps.",
     ),
     "diagnosing-bugs": (
         "engineering",

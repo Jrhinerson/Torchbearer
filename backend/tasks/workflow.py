@@ -64,10 +64,10 @@ def update_settings(task_id, *, revision, **settings):
     if task.completed_at or task.runs.filter(state__in=ACTIVE).exists():
         raise Conflict("Cancel or wait for active work before updating task settings.")
     routing = bool({"routing_mode", "frontier_agent"} & settings.keys())
-    if task.status != "backlog" and (
+    if (task.status != "backlog" or task.runs.exists()) and (
         not routing or task.routing_mode is not None or "repository" in settings
     ):
-        raise Conflict("Task routing and repository are locked after planning starts.")
+        raise Conflict("Task routing and repository are locked after agent work starts.")
     if routing:
         mode = settings.get("routing_mode", task.routing_mode)
         frontier = settings.get(
@@ -100,19 +100,43 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
         get_object_or_404(Task, pk=task_id)
         raise Conflict()
     task = Task.objects.select_related("repository").get(pk=task_id)
-    if task.completed_at:
+    if task.completed_at and action != "retro":
         raise Conflict("This task is already approved.")
     if task.routing_mode is None:
         raise Conflict("Choose a routing approach before continuing this task.")
     run = task.runs.first()
     if run and run.state in ACTIVE:
         raise Conflict("Cancel or wait for the active run first.")
-    if action != "start" and (not run or str(run.id) != str(run_id)):
+    if (
+        action != "start"
+        and not (action == "refine" and not run)
+        and (not run or str(run.id) != str(run_id))
+    ):
         raise Conflict("Choose the latest run before continuing.")
     previous = task.status
-    if action == "start":
-        if previous != Task.Status.BACKLOG or run:
+    if action == "refine":
+        if previous != "backlog":
+            raise Conflict("Refinement is available only in Backlog.")
+        target = previous
+    elif action == "retro":
+        if not task.completed_at:
+            raise Conflict("A retrospective is available after final approval.")
+        accepted = task.decisions.filter(action="final_approve").select_related("run").last()
+        if not accepted or not accepted.run or accepted.run.stage != "code_review":
+            raise Conflict("This task needs an accepted Code Review before a retrospective.")
+        if (
+            accepted.run.state != "succeeded"
+            or accepted.run.result.get("outcome") != "complete"
+            or not accepted.review_fingerprint
+            or accepted.review_fingerprint != accepted.run.review_fingerprint
+        ):
+            raise Conflict("The accepted review evidence is unavailable or has changed.")
+        target = previous
+    elif action == "start":
+        if previous != Task.Status.BACKLOG or (run and run.stage != "refine"):
             raise Conflict("Only a backlog task can start planning.")
+        if run:
+            validate_review(task, run, run.review_fingerprint)
         target = "plan"
     elif action in {"retry", "revise"}:
         if previous not in NEXT_STAGE or run.stage != previous:
@@ -140,10 +164,11 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
     else:
         raise Conflict("Unknown workflow action.")
     agent = None
-    if target in NEXT_STAGE and not task.completed_at:
+    execution_stage = action if action in {"refine", "retro"} else target
+    if action in {"refine", "retro"} or (target in NEXT_STAGE and not task.completed_at):
         if not task.repository:
-            raise Conflict("Choose a repository before starting planning.")
-        agent = available_agent(task, target)
+            raise Conflict("Choose a repository before starting agent work.")
+        agent = available_agent(task, execution_stage)
     Decision.objects.create(
         task=task,
         run=run,
@@ -164,7 +189,7 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
         AgentRun.objects.create(
             task=task,
             sequence=(run.sequence + 1 if run else 1),
-            stage=target,
+            stage=execution_stage,
             agent=agent,
             feedback=feedback,
             input_fingerprint=baseline,

@@ -17,7 +17,7 @@ python scripts/setup.py
 python scripts/dev.py
 ```
 
-Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Code Review, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use a backlog card's Delete button and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
+Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Code Review, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use an unstarted backlog card's Delete button and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
 
 Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations, then starts Django, the agent worker, and Vite together. After a schema change, rerun setup or apply migrations explicitly. Use `--backend-port` and `--frontend-port` with the launcher when the default ports are occupied; separate app instances also need separate data directories.
 
@@ -48,19 +48,19 @@ SQLite files, environment files containing secrets, dependency directories, buil
 
 Choose an approach for each task in **New Task**. **Frontier** is the default, with **Codex** selected; **Claude Code** is the other frontier agent. **Hybrid** uses the selected frontier agent for detailed planning and Code Review, while **Pi** implements and tests. **Local Only** routes all three working stages to Pi using its existing model configuration; local inference setup is separate.
 
-Routing can change in Backlog using **Save routing** and is locked when planning starts. Each queued attempt records its own agent. Missing installations or execution failures never substitute another agent. Backlog and Final Approval remain human-controlled.
+Routing can change in Backlog using **Save routing** and is locked when refinement or planning starts. Each queued attempt records its own agent. Missing installations or execution failures never substitute another agent. Backlog and Final Approval remain human-controlled, with optional user-started refinement and post-approval retrospectives.
 
 Install and authenticate each CLI you want to use, and configure its default model in that CLI. Torchbearer uses the CLI's existing authentication and model configuration. The dropdown identifies missing installations; outdated versions, missing authentication, and permission denials appear as run errors. Current adapter version requirements are Codex CLI 0.162.0+, Claude Code 2.1.259+, and Pi 0.74.0+.
 
 1. Create a task, choose its approach and frontier agent when applicable, and select a saved Git project. Use **Add Project** to register a local folder or clone a Git URL; existing Backlog tasks can also select an execution repository on the card.
-2. Click **Start planning**. Torchbearer creates a branch and worktree from the repository's committed HEAD; uncommitted changes and ignored dependencies in the original checkout are not copied.
+2. Click **Start planning**. Torchbearer creates a branch and worktree from the repository's committed HEAD on first refinement or planning; uncommitted changes and ignored dependencies in the original checkout are not copied.
 3. Open **Review step** to read the detailed plan, logs, and changes. Approving Plan queues Integrate; approving its implementation and validation queues Code Review. Required artifacts are passed in full, independently of the bounded recent-run history.
 4. Integrate writes tests and runs validation, reporting actual command outcomes. Code Review inspects the complete task changes against the approved plan and test evidence. Every successful stage waits for human approval before advancing.
 5. Approve Code Review to continue to Final Approval, then choose **Give final approval**. The task remains in the final column with an Approved badge and its history. Merging and worktree cleanup remain manual.
 
-**Request revision** reruns the current stage with your instructions. Integrate can return to Plan; Code Review and Final Approval can return to Integrate. Rework must pass implementation validation and Code Review again. **Cancel run** stops the running process tree or removes a queued attempt from execution. Started tasks retain their history and workspace; only backlog tasks can be deleted.
+**Request revision** reruns the current stage with your instructions. Integrate can return to Plan; Code Review and Final Approval can return to Integrate. Rework must pass implementation validation and Code Review again. **Cancel run** stops the running process tree or removes a queued attempt from execution. Started tasks retain their history and workspace; only backlog tasks without agent history can be deleted.
 
-When upgrading from column routing, stop the launcher before applying migrations and restart afterward. Unfinished existing tasks display **Choose routing before continuing**; choose once after queued or running work finishes or is cancelled. Existing attempt agents and history are retained. Unfinished tasks in Test, Code Review, or Final Approval return to Integrate to produce current validation evidence; old queued attempts are interrupted and all historical reports remain readable. Completed tasks remain unchanged.
+Before upgrading, stop the launcher, apply migrations, and restart afterward. Tasks from the older column-routing workflow display **Choose routing before continuing**; choose once after queued or running work finishes or is cancelled. Existing attempt agents and history are retained. Unfinished tasks in Test, Code Review, or Final Approval return to Integrate to produce current validation evidence; old queued attempts are interrupted and all historical reports remain readable. Completed tasks remain unchanged.
 
 The worker processes one run at a time. Queued runs survive shutdown, while runs interrupted by a worker crash require explicit retry after reviewing the workspace. An offline notice appears when no worker is available; start with `python scripts/dev.py`, or run `.venv/Scripts/python.exe backend/manage.py runagentworker` separately on Windows (`.venv/bin/python` on macOS/Linux). Running Django alone does not start the worker.
 
@@ -72,7 +72,7 @@ Adapters use [Codex non-interactive JSON output](https://learn.chatgpt.com/docs/
 
 ## Engineering practices
 
-Each column applies built-in engineering practices adapted from Matt Pocock's skills. Plan defines acceptance criteria and test boundaries; Integrate implements and validates; Code Review independently checks Standards and Spec and presents the implementation's validation evidence for final approval. No global skill installation is required. See [engineering practices](docs/engineering-practices.md) for the stage mapping and adaptations.
+Each column applies built-in engineering practices adapted from Matt Pocock's skills. Plan defines acceptance criteria and test boundaries; Integrate implements and validates; Code Review independently checks Standards and Spec and presents the implementation's validation evidence for final approval. **Refine task** optionally starts a read-only discovery session in Backlog; answer its questions in the review dialog and start planning once it is ready. Refinement creates the task workspace, fixes the project and agent choices, and retains its history. Completed tasks offer **Run retrospective** in their history dialog; it suggests follow-up work without changing accepted code or starting more tasks. No global skill installation is required. See [engineering practices](docs/engineering-practices.md) for the stage mapping and adaptations.
 
 ## Verify changes
 

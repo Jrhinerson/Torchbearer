@@ -6,6 +6,15 @@ from .adapters import RESULT_SCHEMA, RunnerFailure, validate_result
 from .practices import practices_for
 
 INSTRUCTIONS = {
+    "refine": (
+        "Refine the Backlog task without implementing it or changing its column. Inspect the "
+        "repository and use artifacts.refinement, prior feedback, and the task description. "
+        "Return Problem, Desired outcome, Scope, Settled decisions, and Open questions in details. "
+        "Retain all previously settled decisions in every report so a later Plan has the full "
+        "context. Ask only material unanswered decisions, with recommended answers. Report blocked "
+        "when answers are needed and complete when the intent is clear enough to plan. "
+        "Do not edit files, execute tests, publish issues, or start planning automatically."
+    ),
     "plan": (
         "Inspect the repository and produce a detailed implementation plan in details, following "
         "the repository planning format. Include scope, acceptance criteria, repository findings, "
@@ -36,6 +45,16 @@ INSTRUCTIONS = {
         "Explain remaining risks and test evidence. Report complete only with no unresolved "
         "findings that block acceptance, failed when rework is needed, and blocked when evidence "
         "or access is insufficient. Do not edit any workspace files or fix findings."
+    ),
+    "retro": (
+        "Review artifacts.accepted_review, artifacts.approved_plan, artifacts.implementation, "
+        "artifacts.session, and human_decisions for this completed task. Cite the run IDs and "
+        "specific evidence behind each recommendation. Return severity-ordered suggestions "
+        "covering automated checks, navigation, tooling, standards, or agent instructions. "
+        "Describe each proposed follow-up's purpose and expected benefit. Do not edit files, "
+        "execute tests, reopen this task, publish issues, or automatically start follow-up work. "
+        "The workspace may have changed since acceptance; use the recorded artifacts as the "
+        "historical source of truth and do not mistake current files for the accepted snapshot."
     ),
 }
 
@@ -77,7 +96,11 @@ def prompt_for(run):
     if run.stage not in INSTRUCTIONS:
         raise RunnerFailure("This stage was retired. Resume the task in Integrate.", "blocked")
     artifacts = {}
-    if run.stage != "plan":
+    if run.stage in {"refine", "plan"}:
+        refinement = task.runs.filter(stage="refine", sequence__lt=run.sequence).first()
+        if refinement:
+            artifacts["refinement"] = {**artifact(refinement), "feedback": refinement.feedback}
+    if run.stage in {"integrate", "code_review", "retro"}:
         plan = approved_run(run, "plan")
         artifacts["approved_plan"] = artifact(plan)
         if run.stage != "integrate":
@@ -113,6 +136,20 @@ def prompt_for(run):
             if decision:
                 rework.append({**artifact(decision.run), "feedback": decision.feedback})
         artifacts["rework"] = rework
+    if run.stage == "retro":
+        accepted = task.decisions.filter(action="final_approve").select_related("run").last()
+        if not accepted or not accepted.run:
+            raise RunnerFailure("A retrospective needs the accepted review.", "blocked")
+        artifacts["accepted_review"] = artifact(accepted.run)
+        artifacts["session"] = [
+            {
+                **artifact(attempt),
+                "state": attempt.state,
+                "feedback": attempt.feedback,
+                "error": attempt.error,
+            }
+            for attempt in task.runs.filter(sequence__lt=run.sequence).order_by("sequence")
+        ]
     previous = []
     for attempt in task.runs.filter(sequence__lt=run.sequence).order_by("-sequence")[:6]:
         result = dict(attempt.result)
@@ -160,7 +197,7 @@ def prompt_for(run):
         "prior_runs": previous,
         "human_decisions": list(
             task.decisions.order_by("-id").values("action", "from_stage", "to_stage", "feedback")[
-                :10
+                : None if run.stage == "retro" else 10
             ]
         ),
         "result_schema": RESULT_SCHEMA,

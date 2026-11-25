@@ -21,6 +21,8 @@ if scenario == "browser":
     scenario = (
         "hang"
         if "[cancel]" in title
+        else "questions"
+        if "[refine]" in title and stage == "refine" and not context.get("feedback")
         else "test_fail"
         if "[validation fails]" in title and stage == "integrate" and not context.get("feedback")
         else "review_fail"
@@ -51,7 +53,9 @@ if scenario == "modify":
 if stage == "integrate" and scenario == "implement":
     Path("feature.txt").write_text("Implemented by the fixture\n", encoding="utf-8")
 result = {
-    "outcome": "failed"
+    "outcome": "blocked"
+    if scenario == "questions"
+    else "failed"
     if scenario == "review_fail" or (scenario == "test_fail" and stage == "integrate")
     else "complete",
     "summary": f"{stage.title()} completed by {agent}",
@@ -68,6 +72,17 @@ result = {
     if stage == "integrate"
     else [],
 }
+if scenario == "questions":
+    result["summary"] = "Clarify task scope"
+    result["details"] = "Should priority affect sorting? Recommended: display only."
+elif scenario == "test_fail":
+    result["summary"] = "Validation failed"
+elif scenario == "review_fail":
+    result["summary"] = "Review needs rework"
+elif stage == "refine":
+    result["details"] = "Settled decisions: " + context.get("feedback", "Intent is clear.")
+elif stage == "retro":
+    result["details"] = "Suggested follow-up: add an automated regression check."
 text = json.dumps(result, ensure_ascii=False)
 if scenario == "verbose":
     print("diagnostic output\n" * 10000, file=sys.stderr, flush=True)

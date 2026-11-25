@@ -109,6 +109,8 @@ def main():
                 "plan": "claude",
                 "integrate": "pi",
                 "code_review": "claude",
+                "refine": "claude",
+                "retro": "claude",
             }
             assert tasks[0]["project"]["id"] == project["id"]
             with opener.open(f"{url}/api/v1/projects/", timeout=3) as response:

@@ -73,7 +73,7 @@ def preflight(agent):
 
 def arguments(agent, stage, schema_path):
     if agent == "codex":
-        sandbox = "read-only" if stage in {"plan", "code_review"} else "workspace-write"
+        sandbox = "workspace-write" if stage == "integrate" else "read-only"
         return [
             "-a",
             "never",

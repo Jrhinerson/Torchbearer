@@ -2,6 +2,7 @@ import { requestJson } from '../../lib/api'
 import type { Project } from '../projects/api'
 
 export type Stage = 'plan' | 'integrate' | 'code_review'
+export type SupportStage = 'refine' | 'retro'
 export type Agent = 'codex' | 'claude' | 'pi'
 export type Approach = 'frontier' | 'hybrid' | 'local_only'
 export type FrontierAgent = Exclude<Agent, 'pi'>
@@ -35,7 +36,7 @@ export type RunState =
   | 'interrupted'
 export interface RunSummary {
   id: string
-  stage: Stage | 'test'
+  stage: Stage | SupportStage | 'test'
   agent: Agent
   state: RunState
   sequence: number
@@ -91,7 +92,7 @@ export interface Task {
   repository: string | null
   routing_mode: Approach | null
   frontier_agent: FrontierAgent | null
-  stage_agents: Partial<Record<Stage, Agent>>
+  stage_agents: Partial<Record<Stage | SupportStage, Agent>>
   next_stage: Stage | 'final_approval' | null
   status: 'backlog' | Stage | 'final_approval'
   revision: number
@@ -165,7 +166,14 @@ export const updateTaskSettings = (
   })
 
 export type TaskAction =
-  'start' | 'approve' | 'retry' | 'revise' | 'send_back' | 'final_approve'
+  | 'start'
+  | 'approve'
+  | 'retry'
+  | 'revise'
+  | 'send_back'
+  | 'final_approve'
+  | 'refine'
+  | 'retro'
 export const performAction = (
   task: Task,
   action: TaskAction,

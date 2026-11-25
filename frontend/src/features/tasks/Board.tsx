@@ -344,7 +344,7 @@ export default function Board() {
                                 {dateFormat.format(new Date(task.created_at))}
                               </time>
                             </span>
-                            {task.status === 'backlog' && (
+                            {task.status === 'backlog' && !task.latest_run && (
                               <button
                                 type="button"
                                 className="button button-destructive delete-task-button"

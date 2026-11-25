@@ -30,3 +30,9 @@ The upstream implement skill's automatic commit and internal code-review steps a
 replaced by Torchbearer's separate review column and human-controlled Git workflow. Upstream
 interviews become report-and-feedback rounds because CLI runs are non-interactive. Source links
 in run context provide attribution; they do not grant permissions or trigger external workflows.
+
+## Optional refinement and retrospective actions
+
+Refine task starts a read-only run in Backlog. Because it starts agent work, it creates the isolated workspace and fixes repository/routing choices; the task retains history and is no longer deletable. Questions and recommended answers appear in its report. Send answers for another round; each report retains all settled decisions. A successful, current refinement can start Plan, which receives the full refinement report. Refinement can be cancelled and explicitly rerun.
+
+Run retrospective is available after final approval for tasks with an accepted Code Review. It uses the approved plan, implementation, accepted review, all recorded stage reports, and human decisions. It preserves completion, edits no workspace files, and suggests follow-ups without creating them. Later commits or workspace edits do not invalidate the historical retrospective; the accepted reports remain its source of truth and the current workspace is still protected against edits during the run. Tasks predating Code Review keep their history but cannot run a retrospective without accepted review evidence.
