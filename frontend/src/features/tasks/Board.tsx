@@ -10,6 +10,7 @@ import {
 import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
 import { RoutingFields } from './TaskRouting'
 import { TaskAgent } from './TaskAgent'
+import { taskCardStatus } from './taskCardStatus'
 import {
   CardWorkflow,
   TaskSettingsDialog,
@@ -302,6 +303,7 @@ export default function Board() {
                       <li key={task.id}>
                         <article
                           className="surface surface-raised task-card"
+                          data-activity={taskCardStatus(task).activity}
                           aria-label={task.title}
                         >
                           <div className="task-card-heading">

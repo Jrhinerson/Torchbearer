@@ -148,8 +148,27 @@ main {
   list-style: none;
 }
 .task-card {
+  --task-glow-color: color-mix(
+    in srgb,
+    var(--color-surface-raised),
+    var(--color-focus) 50%
+  );
+  position: relative;
   padding: var(--space-3);
   overflow-wrap: anywhere;
+}
+.task-card[data-activity='awaiting-input']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 1rem color-mix(in srgb, var(--task-glow-color) 40%, transparent),
+    0 0 0 1px var(--task-glow-color),
+    0 0 0.5rem color-mix(in srgb, var(--task-glow-color) 60%, transparent);
+  opacity: 0.55;
+  animation: task-attention-pulse 4s ease-in-out infinite;
 }
 .task-card h3 {
   margin: 0;
@@ -220,6 +239,39 @@ main {
   border-radius: var(--radius-pill);
   color: var(--color-text-muted);
   font-size: var(--text-meta);
+}
+.task-agent-spinner {
+  visibility: hidden;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  border: 2px solid var(--color-border);
+  border-top-color: currentColor;
+  border-radius: var(--radius-pill);
+}
+.task-agent-spinner[data-running='true'] {
+  visibility: visible;
+  animation: task-agent-spin 0.9s linear infinite;
+}
+@keyframes task-agent-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes task-attention-pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .task-agent-spinner[data-running='true'],
+  .task-card[data-activity='awaiting-input']::after {
+    animation: none;
+  }
 }
 .task-title-button {
   display: block;

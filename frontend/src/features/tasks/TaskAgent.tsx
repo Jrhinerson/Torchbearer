@@ -3,19 +3,12 @@ import claudeLogo from '../../assets/agents/claude.svg'
 import piLogo from '../../assets/agents/pi.svg'
 import { agentLabel } from './api'
 import type { Agent, Routing, Task } from './api'
+import { taskCardStatus } from './taskCardStatus'
 
 const logos: Record<Agent, string> = {
   codex: codexLogo,
   claude: claudeLogo,
   pi: piLogo,
-}
-
-function responsibleAgent(task: Task): Agent | null {
-  if (task.status === 'backlog') return task.stage_agents.plan ?? null
-  if (task.status === 'final_approval')
-    return task.latest_run?.agent ?? task.stage_agents.code_review ?? null
-  if (task.latest_run?.stage === task.status) return task.latest_run.agent
-  return task.stage_agents[task.status] ?? null
 }
 
 export function TaskAgent({
@@ -25,11 +18,17 @@ export function TaskAgent({
   task: Task
   routing: Routing | null
 }) {
-  const agent = responsibleAgent(task)
-  const label = agent ? agentLabel(agent, routing) : 'Agent unassigned'
+  const { agent, activity, label: status } = taskCardStatus(task)
+  const name = agent ? agentLabel(agent, routing) : 'Agent unassigned'
+  const label = `${name} · ${status}`
 
   return (
     <span className="task-agent" role="img" aria-label={label} title={label}>
+      <span
+        className="task-agent-spinner"
+        data-running={activity === 'running'}
+        aria-hidden="true"
+      />
       {agent ? (
         <img
           className="task-agent-logo"
