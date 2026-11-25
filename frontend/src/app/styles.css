@@ -83,6 +83,80 @@
   margin: var(--space-4) 0 0;
   color: var(--color-text-muted);
 }
+.settings-page {
+  width: 100%;
+  max-width: 48rem;
+  overflow-wrap: anywhere;
+}
+.settings-page h1 {
+  margin: 0 0 var(--space-8);
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+}
+.settings-section-header {
+  margin-bottom: var(--space-4);
+}
+.settings-section-header h2,
+.connection-heading h3 {
+  margin: 0;
+  font-size: var(--text-brand);
+  font-weight: var(--weight-semibold);
+}
+.settings-section-header p,
+.connection-heading p,
+.connection-account p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+.connection-card {
+  padding: var(--space-5);
+  overflow-wrap: anywhere;
+}
+.connection-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.connection-icon {
+  flex: 0 0 var(--space-6);
+  width: var(--space-6);
+  height: var(--space-6);
+}
+.connection-heading {
+  flex: 1;
+  min-width: min(8rem, 100%);
+}
+.connection-card .button {
+  max-width: 100%;
+}
+.connection-account,
+.connection-actions,
+.github-code-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+.connection-status-dot {
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-success);
+}
+.github-authorization {
+  margin-top: var(--space-4);
+}
+.github-authorization > .button {
+  margin-top: var(--space-3);
+  margin-right: var(--space-2);
+}
+.github-device-code {
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  user-select: all;
+}
 .app-header {
   display: flex;
   justify-content: space-between;

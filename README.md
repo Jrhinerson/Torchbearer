@@ -19,7 +19,7 @@ python scripts/dev.py
 
 Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Code Review, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use an unstarted backlog card's trash icon and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
 
-Use the left sidebar to navigate between **Kanban** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Kanban is the existing board; Workflows and Settings are placeholder pages for future development. The current page is highlighted, and each URL supports refresh and browser Back/Forward navigation.
+Use the left sidebar to navigate between **Kanban** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Settings contains account Connections; Workflows is reserved for future development. The current page is highlighted, and each URL supports refresh and browser Back/Forward navigation.
 
 Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations, then starts Django, the agent worker, and Vite together. After a schema change, rerun setup or apply migrations explicitly. Use `--backend-port` and `--frontend-port` with the launcher when the default ports are occupied; separate app instances also need separate data directories.
 
@@ -31,9 +31,21 @@ Choose **Project** to search saved projects by name or folder, then select one f
 
 Use **Add Project** to open the local folder explorer. Navigate with Home, available common-folder and drive shortcuts, breadcrumbs, or **Parent folder**. Open a folder, then choose **Use this folder** and **Add and select project**. Git repositories and linked worktrees appear first with a **Git repository** marker; ordinary folders are also supported. **Filter folders** searches the current location, and **Enter a path** is an optional shortcut. **Change folder** reopens the selected location, while Cancel or Escape returns to the task draft.
 
-Alternatively, choose **Clone a Git URL**, enter an HTTPS or SSH clone URL and the full path to a new destination folder, then **Clone and select project**. **Browse parent** opens the same explorer to choose an existing parent and suggests a destination using the repository name. The machine running Django supplies the folders, Git installation and Git credentials. Cloning is noninteractive and times out after two minutes; an existing destination is never overwritten. GitHub sign-in and repository search are not included.
+Alternatively, choose **Clone a Git URL**, enter an HTTPS or SSH clone URL and the full path to a new destination folder, then **Clone and select project**. **Browse parent** opens the same explorer to choose an existing parent and suggests a destination using the repository name. The machine running Django supplies the folders, Git installation and Git credentials. Cloning is noninteractive and times out after two minutes; an existing destination is never overwritten. Repository search and using the Settings connection for cloning are future work.
 
 Project names default to the folder name. Adding a project selects it while keeping the task title and description. **Manage projects** provides rename and removal controls. Renaming updates existing task labels; removal hides the project from the picker while keeping its files and task history. Adding the same folder again restores the saved project. A project association does not execute any work.
+
+## GitHub connection
+
+Open **Settings → Connections** and choose **Connect GitHub**. Torchbearer requests a one-time code and opens GitHub in a new browser tab. Copy the code from Settings, enter it in GitHub, and sign in to the account you want to connect before approving access. Settings automatically displays the verified username after authorization. If your browser blocks the new tab, use **Continue on GitHub**. Sign-in codes expire after 15 minutes; **Cancel sign-in** stops the attempt.
+
+Install [GitHub CLI](https://cli.github.com/) (`gh`) on the machine running Django before connecting; no separate OAuth app registration or client secret is needed. This uses [GitHub CLI's browser authorization](https://cli.github.com/manual/gh_auth_login), including its standard `repo`, `read:org`, and `gist` scopes. The authorization screen identifies the application as **GitHub CLI**. Torchbearer verifies the resulting account using GitHub's authenticated user endpoint rather than adopting a pre-existing login or an environment token.
+
+**Change account** starts a fresh browser authorization and replaces the connection only after successful verification. **Disconnect** removes Torchbearer's saved connection and CLI configuration. It does not revoke GitHub CLI's OAuth authorization or sign other applications out of system credential storage. To revoke that grant, use GitHub's authorized OAuth application settings, which can also affect other GitHub CLI sessions.
+
+The account identity persists in SQLite, and isolated CLI configuration lives under `TORCHBEARER_DATA_DIR/github/`. GitHub CLI stores credentials in the system credential store when available, falling back to its local configuration file when secure storage is unavailable. Tokens are never stored in Torchbearer's SQLite tables or returned to the frontend. Include the data directory and credential store in backups if you need to preserve the connection. An unfinished login can survive navigating away or refreshing Settings while Django remains running; restart Django and start a new sign-in if it is interrupted.
+
+The connection currently records and validates the selected GitHub account. Project cloning and agent CLIs retain their existing authentication behavior.
 
 ## Configuration and data
 

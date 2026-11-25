@@ -1,5 +1,7 @@
 # GitHub Connections in Settings
 
+Status: Implemented and verified locally on Windows.
+
 Base: local HEAD. No prerequisite commits outside this change. Commit locally only.
 
 ## Commit 1: `feat: add GitHub browser authorization service`
@@ -25,3 +27,13 @@ Base: local HEAD. No prerequisite commits outside this change. Commit locally on
 - Verify backend API/process behavior with a deterministic fake CLI, frontend static/build checks, and Chromium coverage for authorization handoff, connection persistence, failures, cancellation, and narrow layouts. No live GitHub login or developer credentials are used in tests.
 
 The service targets the existing local single-process Django deployment. Pending login processes end with that backend; a server restart requires starting authorization again. Successfully connected accounts persist.
+
+## Verification
+
+- `python scripts/setup.py` created this worktree's own environment, installed pinned dependencies, and applied migrations. The new connection migration also applies cleanly to fresh databases.
+- `python scripts/check.py` passes: 182 backend tests (including 17 connection cases), Python lint/format, Django system/migration checks, frontend formatting/lint, TypeScript, and the production build.
+- All 71 Chromium integration tests pass, including eight new Connections tests. Coverage includes browser tab navigation and opener isolation, copying the code, verified-account display, reload, cancellation, failure recovery, blocked popups, missing CLI, and an interrupted backend login.
+- Backend tests launch a deterministic CLI process to verify configuration isolation, inherited-token removal, account verification, expiry, cancellation, safe account replacement, and disconnect. Cancellation/disconnect during in-flight identity verification cannot save a late connection.
+- Screenshots were visually inspected for desktop authorization, 320px reflow, and 200% text sizing at desktop width. Existing workflow, project, navigation, and styling checks remain green.
+- `python scripts/check_persistence.py` passes for existing task/project restart persistence. Connection API tests separately verify durable account identity with a fresh service instance.
+- Tests use simulated GitHub responses and a fake CLI; no live OAuth grant or developer credentials were used. Linux/hosted CI has not been run as part of this local verification.

@@ -7,10 +7,12 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 - `frontend/src/app/`: application shell, theme-color synchronization, and layered shared styling. See the [styling system](styling.md) for font, token, and control conventions.
 - `frontend/src/features/tasks/`: five-column board, task-creation popup, and task-specific API operations.
 - `frontend/src/features/projects/`: searchable project selection, local-folder browser, cloning and project management inside task creation.
+- `frontend/src/features/settings/`: account Connections, GitHub browser authorization handoff, and pending-login polling.
 - `frontend/src/lib/api.ts`: same-origin requests and useful HTTP/connection errors.
 - `backend/config/`: local settings, routing, health, and CSRF bootstrap.
 - `backend/tasks/`: task models, serializers, views, migrations, and API tests.
 - `backend/projects/`: stored projects, local directory and Git operations, serializers, views, migrations and API tests.
+- `backend/connections/`: GitHub CLI authorization processes, isolated credential configuration, verified account identity, and connection APIs.
 - `scripts/`: setup, process management, verification, and isolated test services.
 
 During development, Vite serves `http://127.0.0.1:5173` and forwards `/api/` to Django at `127.0.0.1:8000`. Both bind to loopback. Frontend code uses relative API URLs so a later desktop wrapper can reuse the interface and local service boundary.
@@ -42,6 +44,11 @@ Each card has an independent expand/collapse button with `aria-expanded` and `ar
 | GET/PATCH | `/api/v1/projects/<uuid>/` | Read a project or update its display name. |
 | DELETE | `/api/v1/projects/<uuid>/` | Archive the project; keep files and associated tasks. |
 | POST | `/api/v1/projects/folders/` | Browse visible child folders with repository markers, parent, breadcrumbs, and location shortcuts; defaults to the server user's home. |
+| GET | `/api/v1/connections/github/` | Saved GitHub account, CLI availability, and current pending authorization; never tokens. |
+| POST | `/api/v1/connections/github/connect/` | Start or resume a bounded browser device authorization attempt through GitHub CLI. |
+| POST | `/api/v1/connections/github/poll/` | Poll the specified authorization UUID and save identity only after authenticated GitHub verification. |
+| POST | `/api/v1/connections/github/cancel/` | Stop the specified attempt and discard its CLI configuration. |
+| DELETE | `/api/v1/connections/github/` | Stop any pending login and remove Torchbearer's saved connection/configuration. |
 
 A task contains a UUID, title, description, optional nested project, execution repository, routing mode, optional frontier agent, resolved stage agents, next stage, current stage, revision, workspace metadata, completion timestamp, and creation/update timestamps. Titles are limited to 200 characters and descriptions to 10,000. New tasks always begin in `backlog`; creating a task or choosing routing never starts execution. Clients cannot directly set stage, revision, workspace metadata, or completion. Existing tasks can remain without a repository until planning starts.
 
@@ -78,6 +85,16 @@ Approval names the latest run and its fingerprint. That fingerprint covers HEAD,
 Results require `outcome`, `summary`, `details`, and `tests`. Integrate cannot report completion without reported passing validation commands. Protocol failures, nonzero exit codes, malformed results, permission denials, timeouts, and output limits never count as success. Log tails retain 128,000 characters, JSONL records are limited to 2 MiB, and lifetime output to 20 MiB. Code previews are capped at 64,000 characters and indicate truncation.
 
 Planning prompts replay all planning turns in sequence through `plan_conversation`, independently of the six-attempt supplementary history. Earlier planning replies are not truncated. A complete reply must include a self-contained current plan incorporating the conversation's decisions, so the latest explicitly approved result remains the implementation handoff. Clarification questions use a blocked outcome and cannot be approved. The existing 200,000-character context guard blocks oversized conversations without silently losing decisions. Existing run and decision records provide persistence; no new table or migration is needed.
+
+## GitHub authorization
+
+GitHub CLI handles OAuth device authorization and credential storage. Django starts `gh auth login --web --hostname github.com --git-protocol https --skip-ssh-key` without a terminal or shell, reads its one-time code, and exposes only the code and a fixed GitHub verification URL. React reserves a tab during the Connect click and navigates it to GitHub once the code arrives; a manual link supports blocked popups and refreshed pages. No browser callback or custom OAuth app credentials are required.
+
+Each attempt gets a generated UUID and its own `DATA_DIR/github/<uuid>/` CLI configuration. Inherited `GH_*` and `GITHUB_*` variables are removed, so environment tokens and global active accounts cannot silently supply authorization. The newly authenticated configuration runs `gh api --hostname github.com user`; only a successful, valid identity replaces the singleton `GitHubConnection`. The database stores account ID, login, display name, timestamp, and configuration UUID. Tokens remain in CLI-managed system credential storage or its local file fallback and are excluded from API responses and error messages.
+
+A process-local locked service owns one pending attempt. Requests are CSRF-protected, polls name the active attempt UUID, and cancellation/disconnect serialize with completion to prevent late reconnection. A 15-minute timer kills pending process trees and discards configuration; frontend polls do not overlap and recover after backend restarts or another tab's cancellation. Process ownership reuses the existing Windows Job Object/POSIX parent-monitoring implementation. Pending login state ends when the single Django backend stops; connected identity and credential configuration persist. Multiple Django processes against one data directory are unsupported.
+
+Changing accounts retains the previous connection until verification succeeds. Disconnect removes only app metadata/configuration, avoiding `gh auth logout` because system keyring entries may be shared with other CLI clients. Revocation remains available through GitHub's OAuth application settings. The GitHub CLI OAuth grant has the CLI's standard `repo`, `read:org`, and `gist` scopes. This connection does not yet change project-clone credentials or agent authentication.
 
 ## Local persistence
 

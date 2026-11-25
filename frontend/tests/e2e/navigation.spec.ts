@@ -80,7 +80,13 @@ for (const label of ['Workflows', 'Settings']) {
     await expect(
       page.getByRole('heading', { name: label, exact: true }),
     ).toBeVisible()
-    await expect(page.getByText('Coming soon', { exact: true })).toBeVisible()
+    if (label === 'Workflows') {
+      await expect(page.getByText('Coming soon', { exact: true })).toBeVisible()
+    } else {
+      await expect(
+        page.getByRole('heading', { name: 'Connections' }),
+      ).toBeVisible()
+    }
     await expect(
       page
         .getByRole('navigation')
