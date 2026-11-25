@@ -158,9 +158,10 @@ main {
   line-height: var(--leading-body);
 }
 .task-card-heading {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-2);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--space-1);
 }
 .task-card-summary {
   flex: 1;
@@ -176,7 +177,8 @@ main {
 }
 .task-collapse-button {
   margin-top: calc(-1 * var(--space-2));
-  margin-right: calc(-1 * var(--space-2));
+  margin-left: calc(-1 * var(--space-2));
+  margin-bottom: calc(-1 * var(--space-2));
 }
 .task-collapse-button svg {
   width: 1rem;
@@ -189,6 +191,35 @@ main {
 }
 .task-collapse-button[aria-expanded='false'] svg {
   transform: rotate(-90deg);
+}
+.task-agent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 1.5rem;
+  color: var(--color-text);
+}
+.task-agent-logo,
+.task-agent-unassigned {
+  display: block;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex-shrink: 0;
+  object-fit: contain;
+}
+.task-agent-logo[data-agent='codex'] {
+  filter: brightness(0) invert(1);
+}
+:root[data-theme='light'] .task-agent-logo[data-agent='codex'] {
+  filter: brightness(0);
+}
+.task-agent-unassigned {
+  display: grid;
+  place-items: center;
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
 }
 .task-title-button {
   display: block;
