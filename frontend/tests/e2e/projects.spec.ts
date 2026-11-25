@@ -1,6 +1,6 @@
 import { expect, test as base } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
-import { mkdtemp, mkdir, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 
@@ -39,11 +39,217 @@ async function openAdd(dialog: Locator) {
 
 async function addLocal(dialog: Locator, folder: string, name: string) {
   await openAdd(dialog)
-  await dialog.getByLabel('Local folder path').fill(folder)
+  const browser = dialog.getByRole('region', { name: 'Browse local folders' })
+  await browser
+    .getByRole('button', { name: 'Enter a path', exact: true })
+    .click()
+  await browser.getByLabel('Browse folders on this machine').fill(folder)
+  await browser.getByLabel('Browse folders on this machine').press('Enter')
+  await expect(browser.locator('.folder-current')).toContainText(folder)
+  await browser.getByRole('button', { name: 'Use this folder' }).click()
   await dialog.getByLabel('Project name', { exact: false }).fill(name)
   await dialog.getByRole('button', { name: 'Add and select project' }).click()
   await expect(projectTrigger(dialog)).toContainText(name)
 }
+
+async function browseFrom(page: Page, home: string) {
+  await page.route('**/api/v1/projects/folders/', async (route) => {
+    const destination = route.request().postDataJSON().path ?? home
+    const response = await route.fetch({ postData: { path: destination } })
+    await route.fulfill({
+      response,
+      json: {
+        ...(await response.json()),
+        locations: [
+          { name: 'Home', path: home },
+          { name: 'Desktop', path: path.join(home, 'Desktop') },
+        ],
+      },
+    })
+  })
+}
+
+for (const width of [1280, 390]) {
+  test(`selects a repository through the explorer without a path at ${width}px`, async ({
+    page,
+    projectFolder,
+  }, testInfo) => {
+    await page.setViewportSize({ width, height: 844 })
+    const desktop = path.join(projectFolder, 'Desktop')
+    const repository = path.join(desktop, 'Sample repository')
+    const worktree = path.join(desktop, 'Linked worktree')
+    await mkdir(path.join(repository, '.git'), { recursive: true })
+    await mkdir(worktree)
+    await writeFile(
+      path.join(worktree, '.git'),
+      'gitdir: /fixture/worktrees/linked',
+    )
+    await mkdir(path.join(desktop, 'Ordinary folder'))
+    await browseFrom(page, projectFolder)
+    const title = `Explorer task ${width} ${Date.now()}`
+    const dialog = await openTask(page, title)
+    await openAdd(dialog)
+    const browser = dialog.getByRole('region', { name: 'Browse local folders' })
+    await expect(browser).toBeVisible()
+    await expect(dialog.getByLabel('Local folder path')).toHaveCount(0)
+    await expect(
+      browser.getByLabel('Browse folders on this machine'),
+    ).toHaveCount(0)
+    await expect(
+      browser.getByRole('searchbox', { name: 'Filter folders' }),
+    ).toBeFocused()
+    await browser
+      .getByRole('navigation', { name: 'Folder locations' })
+      .getByRole('button', { name: 'Desktop', exact: true })
+      .click()
+    await expect(browser.locator('.folder-row')).toHaveText([
+      '▱Linked worktreeGit repository›',
+      '▱Sample repositoryGit repository›',
+      '▱Ordinary folder›',
+    ])
+    const filter = browser.getByRole('searchbox', { name: 'Filter folders' })
+    await filter.fill('missing-folder')
+    await expect(
+      browser.getByText('No folders match your filter.'),
+    ).toBeVisible()
+    await filter.fill('sample')
+    await expect(browser.locator('.folder-row')).toHaveCount(1)
+    await filter.fill('')
+    await browser.scrollIntoViewIfNeeded()
+    await page.screenshot({
+      path: testInfo.outputPath('local-project-explorer.png'),
+      fullPage: true,
+    })
+    const explorer = page.getByRole('dialog', { name: 'Choose a local folder' })
+    expect(
+      await explorer.evaluate(
+        (element) => element.scrollWidth <= element.clientWidth,
+      ),
+    ).toBe(true)
+    await browser
+      .getByRole('button', { name: 'Open Sample repository', exact: true })
+      .focus()
+    await page.keyboard.press('Enter')
+    await expect(filter).toBeFocused()
+    await expect(browser.locator('.folder-current')).toContainText(repository)
+    await expect(browser.locator('.folder-current')).toContainText(
+      'Git repository',
+    )
+    await browser
+      .getByRole('navigation', { name: 'Folder breadcrumbs' })
+      .getByRole('button', { name: 'Desktop', exact: true })
+      .click()
+    await browser
+      .getByRole('button', { name: 'Parent folder', exact: false })
+      .click()
+    await expect(browser.locator('.folder-current')).toContainText(
+      projectFolder,
+    )
+    await browser
+      .getByRole('navigation', { name: 'Folder locations' })
+      .getByRole('button', { name: 'Desktop', exact: true })
+      .click()
+    await browser
+      .getByRole('button', { name: 'Open Ordinary folder', exact: true })
+      .click()
+    await expect(browser.locator('.folder-current')).toContainText(
+      'Current folder',
+    )
+    await expect(
+      browser.getByRole('button', { name: 'Use this folder' }),
+    ).toBeEnabled()
+    await browser
+      .getByRole('button', { name: 'Parent folder', exact: false })
+      .click()
+    await browser
+      .getByRole('button', { name: 'Open Sample repository', exact: true })
+      .click()
+    await browser.getByRole('button', { name: 'Use this folder' }).click()
+    await expect(dialog.locator('.selected-project-folder')).toContainText(
+      repository,
+    )
+    await expect(
+      dialog.getByRole('button', { name: 'Change folder' }),
+    ).toBeFocused()
+    await dialog.getByRole('button', { name: 'Change folder' }).click()
+    await expect(browser.locator('.folder-current')).toContainText(repository)
+    await browser
+      .getByRole('searchbox', { name: 'Filter folders' })
+      .press('Escape')
+    await expect(browser).toHaveCount(0)
+    await expect(dialog).toBeVisible()
+    await expect(dialog.locator('.selected-project-folder')).toContainText(
+      repository,
+    )
+    const name = `Explorer project ${width} ${Date.now()}`
+    await dialog.getByLabel('Project name', { exact: false }).fill(name)
+    await dialog.getByRole('button', { name: 'Add and select project' }).click()
+    await expect(projectTrigger(dialog)).toContainText(name)
+    await expect(dialog.getByLabel('Title', { exact: false })).toHaveValue(
+      title,
+    )
+  })
+}
+
+test('prevents stale selection while loading and recovers from a folder access error', async ({
+  page,
+  projectFolder,
+}) => {
+  await browseFrom(page, projectFolder)
+  const dialog = await openTask(page, 'Keep the explorer draft')
+  await openAdd(dialog)
+  const browser = dialog.getByRole('region', { name: 'Browse local folders' })
+  await expect(
+    browser.getByRole('button', { name: 'Use this folder' }),
+  ).toBeEnabled()
+  let finish!: () => void
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve
+  })
+  let fail = true
+  await page.route('**/api/v1/projects/folders/', async (route) => {
+    if (
+      route.request().postDataJSON().path !==
+        path.join(projectFolder, 'child') ||
+      !fail
+    )
+      return route.fallback()
+    await pending
+    await route.fulfill({
+      status: 400,
+      json: { path: ['This folder cannot be read. Choose another folder.'] },
+    })
+  })
+  await browser.getByRole('button', { name: 'Open child', exact: true }).click()
+  await expect(browser.getByText('Loading folders…')).toBeVisible()
+  await expect(
+    browser.getByRole('button', { name: 'Use this folder' }),
+  ).toBeDisabled()
+  await expect(
+    dialog.getByRole('button', { name: 'Add and select project' }),
+  ).toBeDisabled()
+  finish()
+  await expect(browser.getByRole('alert')).toContainText('cannot be read')
+  await expect(
+    browser.getByRole('button', { name: 'Use this folder' }),
+  ).toBeDisabled()
+  fail = false
+  await browser.getByRole('button', { name: 'Retry folder' }).click()
+  await expect(browser.locator('.folder-current')).toContainText(
+    path.join(projectFolder, 'child'),
+  )
+  await expect(
+    browser.getByRole('button', { name: 'Use this folder' }),
+  ).toBeEnabled()
+  await browser.getByRole('button', { name: 'Cancel browsing' }).click()
+  await expect(browser).toHaveCount(0)
+  await expect(
+    dialog.getByRole('button', { name: '+ Add Project', exact: true }),
+  ).toBeVisible()
+  await expect(dialog.getByLabel('Title', { exact: false })).toHaveValue(
+    'Keep the explorer draft',
+  )
+})
 
 test('browses and adds a project, retains the draft, and saves a reusable association', async ({
   page,
@@ -56,8 +262,11 @@ test('browses and adds a project, retains the draft, and saves a reusable associ
     .getByLabel('Description', { exact: false })
     .fill('Keep this context while adding a project.')
   await openAdd(dialog)
-  await dialog.getByRole('button', { name: 'Browse', exact: true }).click()
   const browser = dialog.getByRole('region', { name: 'Browse local folders' })
+  await expect(browser).toBeVisible()
+  await browser
+    .getByRole('button', { name: 'Enter a path', exact: true })
+    .click()
   await browser.getByLabel('Browse folders on this machine').fill(projectFolder)
   await browser.getByLabel('Browse folders on this machine').press('Enter')
   await browser.getByRole('button', { name: 'child', exact: false }).click()
@@ -71,7 +280,7 @@ test('browses and adds a project, retains the draft, and saves a reusable associ
     browser.getByLabel('Browse folders on this machine'),
   ).toHaveValue(projectFolder)
   await browser.getByRole('button', { name: 'Use this folder' }).click()
-  await expect(dialog.getByLabel('Local folder path')).toHaveValue(
+  await expect(dialog.locator('.selected-project-folder')).toContainText(
     projectFolder,
   )
   await dialog.getByLabel('Project name', { exact: false }).fill(name)
@@ -174,16 +383,25 @@ test('keeps the draft when folder validation or duplicate registration fails', a
   const dialog = await openTask(page, title)
   await addLocal(dialog, projectFolder, name)
   await openAdd(dialog)
-  await dialog.getByLabel('Local folder path').fill('missing-relative-folder')
-  await dialog.getByRole('button', { name: 'Add and select project' }).click()
+  const browser = dialog.getByRole('region', { name: 'Browse local folders' })
+  await browser
+    .getByRole('button', { name: 'Enter a path', exact: true })
+    .click()
+  await browser
+    .getByLabel('Browse folders on this machine')
+    .fill('missing-relative-folder')
+  await browser.getByLabel('Browse folders on this machine').press('Enter')
   await expect(dialog.getByRole('alert')).toContainText('absolute')
   await expect(dialog.getByLabel('Title', { exact: false })).toHaveValue(title)
-  await dialog.getByLabel('Local folder path').fill(projectFolder)
+  await browser.getByLabel('Browse folders on this machine').fill(projectFolder)
+  await browser.getByLabel('Browse folders on this machine').press('Enter')
+  await expect(browser.locator('.folder-current')).toContainText(projectFolder)
+  await browser.getByRole('button', { name: 'Use this folder' }).click()
   await dialog.getByRole('button', { name: 'Add and select project' }).click()
   await expect(dialog.getByRole('alert')).toContainText(
     'already a saved project',
   )
-  await expect(dialog.getByLabel('Local folder path')).toHaveValue(
+  await expect(dialog.locator('.selected-project-folder')).toContainText(
     projectFolder,
   )
   await expect(projectTrigger(dialog)).toContainText(name)
@@ -275,6 +493,7 @@ test('shows clone failures and pending state, then selects the cloned project', 
   const dialog = await openTask(page, title)
   await openAdd(dialog)
   await dialog
+    .getByRole('region', { name: 'Browse local folders' })
     .getByRole('button', { name: 'Clone a Git URL', exact: true })
     .click()
   await dialog
@@ -339,6 +558,7 @@ test('keeps the folder and clone flows within a narrow viewport', async ({
   const dialog = await openTask(page, 'Choose a mobile project')
   await openAdd(dialog)
   await dialog
+    .getByRole('region', { name: 'Browse local folders' })
     .getByRole('button', { name: 'Clone a Git URL', exact: true })
     .click()
   await dialog
@@ -346,6 +566,9 @@ test('keeps the folder and clone flows within a narrow viewport', async ({
     .fill('https://github.com/example/project.git')
   await dialog.getByRole('button', { name: 'Browse parent' }).click()
   const browser = dialog.getByRole('region', { name: 'Browse local folders' })
+  await browser
+    .getByRole('button', { name: 'Enter a path', exact: true })
+    .click()
   await browser.getByLabel('Browse folders on this machine').fill(projectFolder)
   await browser.getByRole('button', { name: 'Go', exact: true }).click()
   await expect(

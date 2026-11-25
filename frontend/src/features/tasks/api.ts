@@ -167,6 +167,7 @@ export const updateTaskSettings = (
 
 export type TaskAction =
   | 'start'
+  | 'plan_message'
   | 'approve'
   | 'retry'
   | 'revise'

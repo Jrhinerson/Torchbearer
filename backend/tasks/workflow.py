@@ -138,6 +138,13 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
         if run:
             validate_review(task, run, run.review_fingerprint)
         target = "plan"
+    elif action == "plan_message":
+        if previous != "plan" or run.stage != "plan":
+            raise Conflict("Planning messages can only be sent in Plan.")
+        feedback = feedback.strip()
+        if not feedback:
+            raise Conflict("Write a message for your planning agent.")
+        target = "plan"
     elif action in {"retry", "revise"}:
         if previous not in NEXT_STAGE or run.stage != previous:
             raise Conflict("This step cannot be rerun here.")

@@ -61,6 +61,52 @@ def test_mixed_agents_handoff_and_final_approval(queued_task):
     assert task.completed_at
 
 
+def test_planning_conversation_preserves_clarifications_and_hands_off_latest_plan(
+    queued_task, fake_cli
+):
+    task = queued_task
+    fake_cli("codex", "conversation")
+    worker = Worker()
+    assert worker.run_once()
+    question = task.runs.first()
+    assert question.state == "blocked"
+    assert "no matching files" in question.result["details"]
+    original_fingerprint = question.input_fingerprint
+    for message in ["Show an empty state.", "Also offer a clear filter button."]:
+        task.refresh_from_db()
+        prior = task.runs.first()
+        act(
+            task.id,
+            action="plan_message",
+            revision=task.revision,
+            run_id=prior.id,
+            feedback=message,
+        )
+        assert worker.run_once()
+        task.refresh_from_db()
+        assert task.status == "plan"  # Sending messages never starts implementation.
+        reply = task.runs.first()
+        assert reply.state == "succeeded", reply.error
+        assert reply.review_fingerprint == original_fingerprint
+        assert reply.input_context["plan_conversation"][-1]["content"] == message
+        assert message in reply.result["details"]
+    assert task.runs.count() == 3
+    assert task.runs.first().result["details"].count("Show an empty state.") == 1
+    with pytest.raises(Conflict, match="latest"):
+        act(task.id, action="approve", revision=task.revision, run_id=question.id)
+    latest = task.runs.first()
+    approve(task)
+    assert worker.run_once()
+    implementation = task.runs.first()
+    assert implementation.state == "succeeded", implementation.error
+    assert implementation.stage == "integrate"
+    assert implementation.input_context["artifacts"]["approved_plan"]["run_id"] == str(latest.id)
+    assert (
+        "clear filter button"
+        in implementation.input_context["artifacts"]["approved_plan"]["result"]["details"]
+    )
+
+
 def test_report_only_plan_agent_cannot_succeed_after_edits(queued_task, fake_cli):
     worker = Worker()
     fake_cli("codex", "modify")

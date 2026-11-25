@@ -35,8 +35,8 @@ export default function ProjectPicker({
   const [error, setError] = useState('')
   const trigger = useRef<HTMLButtonElement>(null)
   const searchInput = useRef<HTMLInputElement>(null)
-  const pathInput = useRef<HTMLInputElement>(null)
   const urlInput = useRef<HTMLInputElement>(null)
+  const changeFolderButton = useRef<HTMLButtonElement>(null)
   const blocked = disabled || busy
 
   useEffect(() => {
@@ -60,8 +60,9 @@ export default function ProjectPicker({
   useEffect(() => {
     if (view === 'choose') searchInput.current?.focus()
     if (view === 'add') {
-      if (source === 'local') pathInput.current?.focus()
-      else urlInput.current?.focus()
+      if (source === 'local' && !browsing) {
+        changeFolderButton.current?.focus()
+      } else if (source === 'clone' && !browsing) urlInput.current?.focus()
     }
   }, [view, source, browsing])
 
@@ -75,7 +76,7 @@ export default function ProjectPicker({
 
   function changeView(next: View) {
     setError('')
-    setBrowsing(false)
+    setBrowsing(next === 'add' && source === 'local' && !path)
     setEditing(null)
     setView(next)
     if (next === 'closed') trigger.current?.focus()
@@ -85,6 +86,13 @@ export default function ProjectPicker({
     onSelect(project)
     setQuery('')
     changeView('closed')
+  }
+
+  function changeSource(next: 'local' | 'clone') {
+    setSource(next)
+    setPath('')
+    setBrowsing(next === 'local')
+    setError('')
   }
 
   async function run(action: () => Promise<void>) {
@@ -302,12 +310,7 @@ export default function ProjectPicker({
                   className="button button-secondary"
                   aria-pressed={source === 'local'}
                   disabled={blocked}
-                  onClick={() => {
-                    setSource('local')
-                    setPath('')
-                    setBrowsing(false)
-                    setError('')
-                  }}
+                  onClick={() => changeSource('local')}
                 >
                   Local folder
                 </button>
@@ -316,12 +319,7 @@ export default function ProjectPicker({
                   className="button button-secondary"
                   aria-pressed={source === 'clone'}
                   disabled={blocked}
-                  onClick={() => {
-                    setSource('clone')
-                    setPath('')
-                    setBrowsing(false)
-                    setError('')
-                  }}
+                  onClick={() => changeSource('clone')}
                 >
                   Clone a Git URL
                 </button>
@@ -343,36 +341,61 @@ export default function ProjectPicker({
                   />
                 </>
               )}
-              <label className="field-label" htmlFor="project-path">
-                {source === 'local' ? 'Local folder path' : 'Clone destination'}
-              </label>
-              <div className="project-input-row">
-                <input
-                  className="field"
-                  id="project-path"
-                  ref={pathInput}
-                  value={path}
-                  onChange={(event) => setPath(event.target.value)}
-                  placeholder={
-                    source === 'local'
-                      ? 'Paste an absolute folder path'
-                      : 'Full path to a new folder'
-                  }
-                  disabled={blocked}
-                  maxLength={4096}
-                />
-                <button
-                  type="button"
-                  className="button button-secondary"
-                  disabled={blocked}
-                  onClick={() => setBrowsing((current) => !current)}
-                >
-                  {source === 'local' ? 'Browse' : 'Browse parent'}
-                </button>
-              </div>
+              {source === 'clone' && (
+                <>
+                  <label className="field-label" htmlFor="project-path">
+                    Clone destination
+                  </label>
+                  <div className="project-input-row">
+                    <input
+                      className="field"
+                      id="project-path"
+                      value={path}
+                      onChange={(event) => setPath(event.target.value)}
+                      placeholder="Full path to a new folder"
+                      disabled={blocked}
+                      maxLength={4096}
+                    />
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      disabled={blocked}
+                      onClick={() => setBrowsing((current) => !current)}
+                    >
+                      Browse parent
+                    </button>
+                  </div>
+                </>
+              )}
+              {source === 'local' && path && !browsing && (
+                <div className="selected-project-folder">
+                  <span className="project-summary">
+                    <strong>Selected folder</strong>
+                    <span className="folder-current-path">{path}</span>
+                  </span>
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    ref={changeFolderButton}
+                    disabled={blocked}
+                    onClick={() => setBrowsing(true)}
+                  >
+                    Change folder
+                  </button>
+                </div>
+              )}
               {browsing && (
                 <FolderBrowser
-                  onCancel={() => setBrowsing(false)}
+                  onClone={
+                    source === 'local' ? () => changeSource('clone') : undefined
+                  }
+                  initialPath={
+                    source === 'local' ? path || undefined : undefined
+                  }
+                  onCancel={() => {
+                    if (source === 'local' && !path) changeView('choose')
+                    else setBrowsing(false)
+                  }}
                   onChoose={(folder) => {
                     const repoName =
                       url
@@ -414,6 +437,7 @@ export default function ProjectPicker({
                   disabled={
                     blocked ||
                     !path.trim() ||
+                    browsing ||
                     (source === 'clone' && !url.trim())
                   }
                   onClick={handleAdd}

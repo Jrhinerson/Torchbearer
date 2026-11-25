@@ -196,6 +196,10 @@ for (const theme of ['dark', 'light'] as const) {
     await page.evaluate((value) => {
       document.documentElement.dataset.theme = value
     }, theme)
+    await page
+      .getByRole('article', { name: sampleTask.title })
+      .getByRole('button', { name: `Expand ${sampleTask.title}`, exact: true })
+      .click()
     await expect(page.locator('html')).toHaveCSS('color-scheme', theme)
     const canvas = await page.evaluate(() =>
       getComputedStyle(document.documentElement)

@@ -103,6 +103,47 @@ def test_implementation_approval_requires_all_reported_validation_to_pass(task, 
     assert task.status == "integrate" and task.runs.count() == 2
 
 
+def test_planning_messages_require_latest_inactive_plan_and_nonempty_text(task, local_client):
+    act(task.id, action="start", revision=0)
+    task.refresh_from_db()
+    run = task.runs.first()
+    with pytest.raises(Conflict, match="active run"):
+        act(task.id, action="plan_message", revision=task.revision, run_id=run.id, feedback="Hi")
+    run = succeed(task)
+    task.refresh_from_db()
+    url = f"/api/v1/tasks/{task.id}/actions/"
+    payload = {"action": "plan_message", "revision": task.revision, "run_id": str(run.id)}
+    assert local_client.post(url, {**payload, "feedback": "Hi"}, format="json").status_code == 403
+    headers = csrf(local_client)
+    for text in ["", "   ", "x" * 4001]:
+        response = local_client.post(url, {**payload, "feedback": text}, format="json", **headers)
+        assert response.status_code in {400, 409}
+    task.refresh_from_db()
+    assert task.revision == payload["revision"] and task.runs.count() == 1
+    response = local_client.post(
+        url, {**payload, "feedback": "  Keep existing files.  "}, format="json", **headers
+    )
+    assert response.status_code == 200
+    assert response.data["status"] == "plan"
+    reply = task.runs.first()
+    assert reply.feedback == "Keep existing files." and reply.agent == run.agent
+    assert reply.stage == "plan" and reply.state == "queued"
+    # A duplicate submission cannot consume another revision or queue another reply.
+    assert (
+        local_client.post(url, {**payload, "feedback": "Hi"}, format="json", **headers).status_code
+        == 409
+    )
+    succeed(task)
+    task.refresh_from_db()
+    with pytest.raises(Conflict, match="latest run"):
+        act(task.id, action="plan_message", revision=task.revision, run_id=run.id, feedback="Hi")
+    approve(task, task.runs.first())
+    run = succeed(task)
+    task.refresh_from_db()
+    with pytest.raises(Conflict, match="only be sent in Plan"):
+        act(task.id, action="plan_message", revision=task.revision, run_id=run.id, feedback="Hi")
+
+
 def test_missing_repository_or_agent_keeps_task_in_previous_column(task):
     task.repository = None
     task.save()

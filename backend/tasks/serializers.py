@@ -32,6 +32,7 @@ class ActionSerializer(serializers.Serializer):
     action = serializers.ChoiceField(
         choices=[
             "start",
+            "plan_message",
             "approve",
             "retry",
             "revise",
