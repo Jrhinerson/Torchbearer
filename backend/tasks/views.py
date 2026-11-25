@@ -76,9 +76,10 @@ class TaskDeleteView(generics.RetrieveUpdateDestroyAPIView):
     def perform_destroy(self, instance):
         Task.objects.filter(pk=instance.pk).update(revision=F("revision") + 1)
         instance.refresh_from_db()
-        if instance.status != "backlog":
+        if instance.status != "backlog" or instance.runs.exists():
             raise Conflict(
-                "Started tasks retain their workspace and history. Cancel active runs instead."
+                "Tasks with agent history retain their workspace and history. "
+                "Cancel active runs instead."
             )
         instance.delete()
 

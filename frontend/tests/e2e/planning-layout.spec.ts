@@ -57,7 +57,8 @@ const task = {
   stage_agents: {
     plan: 'codex',
     integrate: 'codex',
-    test: 'codex',
+    refine: 'codex',
+    retro: 'codex',
     code_review: 'codex',
   },
   next_stage: 'integrate',
@@ -78,8 +79,8 @@ async function openPlanning(
   status = 'plan',
   completed = false,
 ) {
-  const stages = ['plan', 'integrate', 'test', 'code_review']
-  const count = status === 'final_approval' ? 4 : stages.indexOf(status) + 1
+  const stages = ['plan', 'integrate', 'code_review']
+  const count = status === 'final_approval' ? 3 : stages.indexOf(status) + 1
   const attempts = stages.slice(0, count).map((stage, index) => ({
     ...run,
     id: run.id.slice(0, -1) + String(index + 1),
@@ -92,7 +93,7 @@ async function openPlanning(
       outcome: status === 'plan' ? 'blocked' : 'complete',
       summary: status === 'plan' ? run.result.summary : `${stage} result`,
       tests:
-        stage === 'test'
+        stage === 'integrate'
           ? [
               {
                 command: 'python -m pytest',
@@ -246,14 +247,17 @@ for (const width of [1280, 390, 320]) {
 }
 
 const reviewStages = [
-  { status: 'integrate', count: 2, approve: 'Approve changes & start Test' },
-  { status: 'test', count: 3, approve: 'Approve test & start Code Review' },
+  {
+    status: 'integrate',
+    count: 2,
+    approve: 'Approve implementation & start Code Review',
+  },
   {
     status: 'code_review',
-    count: 4,
+    count: 3,
     approve: 'Approve code review & continue',
   },
-  { status: 'final_approval', count: 4, approve: 'Give final approval' },
+  { status: 'final_approval', count: 3, approve: 'Give final approval' },
 ]
 
 for (const stage of reviewStages) {
@@ -277,7 +281,7 @@ for (const stage of reviewStages) {
         dialog.getByRole('button', { name: stage.approve, exact: true }),
       ).toBeEnabled()
       await expect(composer).toBeInViewport()
-      if (stage.count >= 3) {
+      if (stage.count >= 2) {
         await expect(thread.locator('.workflow-test-report')).toContainText(
           'Passed',
         )
@@ -349,7 +353,7 @@ for (const width of [1280, 320]) {
   }) => {
     await page.setViewportSize({ width, height: 850 })
     const dialog = await openPlanning(page, 'dark', 'final_approval', true)
-    await expect(dialog.locator('.workflow-run')).toHaveCount(4)
+    await expect(dialog.locator('.workflow-run')).toHaveCount(3)
     await expect(dialog.getByText(/^Approved/)).toBeVisible()
     await expect(dialog.getByRole('textbox')).toHaveCount(0)
     await expect(

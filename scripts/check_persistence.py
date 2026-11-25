@@ -108,8 +108,9 @@ def main():
             assert tasks[0]["stage_agents"] == {
                 "plan": "claude",
                 "integrate": "pi",
-                "test": "pi",
                 "code_review": "claude",
+                "refine": "claude",
+                "retro": "claude",
             }
             assert tasks[0]["project"]["id"] == project["id"]
             with opener.open(f"{url}/api/v1/projects/", timeout=3) as response:
