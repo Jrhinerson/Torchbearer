@@ -108,8 +108,8 @@ execution starts or stops.
 
 Running attempts rotate a ring every 0.9 seconds. Results awaiting review, blocked
 attempts, and unfinished Final Approval cards pulse a noninteractive inset and
-outer glow over four seconds; the glow mixes the raised surface and focus colors
-so it follows the palette without fading the text or controls. Completed cards and
+outer glow over four seconds; the glow uses the same primary gold as the selected
+navigation border without fading the text or controls. Completed cards and
 inactive attempts do not animate. `prefers-reduced-motion: reduce` freezes the ring
 and replaces the pulse with a steady glow. Agent/status labels remain available to
 assistive technology and as hover text in every state.

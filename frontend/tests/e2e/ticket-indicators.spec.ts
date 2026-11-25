@@ -360,6 +360,10 @@ for (const theme of ['dark', 'light'] as const) {
       )
       const shadow = (await pulseStyle(cardFor(page, long.title))).shadow
       expect(shadow).not.toBe('none')
+      const navigationGold = await page
+        .getByRole('link', { name: 'Kanban', exact: true })
+        .evaluate((element) => getComputedStyle(element).borderTopColor)
+      expect(shadow).toContain(navigationGold)
       // Preserve a repeatable frame for visual review without fading the text.
       await page.evaluate(() => {
         for (const animation of document.getAnimations()) {

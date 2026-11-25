@@ -211,11 +211,7 @@ main {
   list-style: none;
 }
 .task-card {
-  --task-glow-color: color-mix(
-    in srgb,
-    var(--color-surface-raised),
-    var(--color-focus) 50%
-  );
+  --task-glow-color: var(--color-primary);
   position: relative;
   padding: var(--space-3);
   overflow-wrap: anywhere;
