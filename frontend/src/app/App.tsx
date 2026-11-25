@@ -142,10 +142,7 @@ export default function App() {
             )}
           </main>
           <footer className="app-footer">
-            <span>
-              Thy word is a lamp unto my feet, and a light unto my path. — Psalm
-              119:105
-            </span>
+            <span>Psalm 119:105</span>
           </footer>
         </div>
       </div>
