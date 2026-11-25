@@ -8,6 +8,81 @@
   flex-direction: column;
   min-height: 100dvh;
 }
+.app-layout {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+.app-sidebar {
+  flex: 0 0 12rem;
+  min-width: 0;
+  padding: var(--space-4) var(--space-3);
+  border-right: var(--border-width) solid var(--color-border);
+  background: var(--color-surface);
+}
+.app-nav {
+  position: sticky;
+  top: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: var(--control-size);
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-control);
+  color: var(--color-text-muted);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: border-color var(--duration-feedback) ease;
+}
+.nav-link svg {
+  width: var(--space-5);
+  height: var(--space-5);
+  flex-shrink: 0;
+}
+.nav-link:hover {
+  color: var(--color-text);
+  background: var(--color-surface-hover);
+}
+.nav-link:active {
+  color: var(--color-text);
+  background: var(--color-surface-active);
+}
+.nav-link[aria-current='page'] {
+  border-color: var(--color-primary);
+  color: var(--color-text);
+  background: var(--color-surface-active);
+}
+.nav-link[aria-current='page'] svg {
+  color: var(--color-primary);
+}
+.app-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+.placeholder-page {
+  width: 100%;
+  max-width: 48rem;
+}
+.placeholder-page h1 {
+  margin: 0 0 var(--space-5);
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+}
+.placeholder-card {
+  padding: var(--space-6);
+}
+.placeholder-page p {
+  margin: var(--space-4) 0 0;
+  color: var(--color-text-muted);
+}
 .app-header {
   display: flex;
   justify-content: space-between;
@@ -1264,6 +1339,20 @@ main {
 }
 
 @media (max-width: 47.5rem) {
+  .app-sidebar {
+    flex-basis: 6rem;
+    padding-inline: var(--space-1);
+  }
+  .nav-link {
+    flex-direction: column;
+    gap: var(--space-1);
+    padding-inline: var(--space-1);
+    font-size: var(--text-meta);
+    text-align: center;
+  }
+  .placeholder-card {
+    padding: var(--space-4);
+  }
   .app-header {
     padding-inline: var(--space-4);
   }
