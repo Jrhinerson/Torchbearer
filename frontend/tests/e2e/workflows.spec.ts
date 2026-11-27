@@ -90,17 +90,33 @@ test('recovers from catalogue load errors', async ({ page }) => {
   await expect(page.getByRole('article')).toHaveCount(19)
 })
 
-test('uses two columns when space permits and stays readable at narrow widths', async ({
+test('uses up to three columns and stays readable at narrow widths', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.setViewportSize({ width: 1600, height: 1000 })
   await page.goto('/workflows')
   const cards = page.getByRole('article')
   await expect(cards).toHaveCount(19)
   const firstWide = (await cards.nth(0).boundingBox())!
   const secondWide = (await cards.nth(1).boundingBox())!
+  const thirdWide = (await cards.nth(2).boundingBox())!
+  const fourthWide = (await cards.nth(3).boundingBox())!
   expect(Math.abs(firstWide.y - secondWide.y)).toBeLessThan(1)
+  expect(Math.abs(firstWide.y - thirdWide.y)).toBeLessThan(1)
   expect(secondWide.x).toBeGreaterThanOrEqual(firstWide.x + firstWide.width)
+  expect(thirdWide.x).toBeGreaterThanOrEqual(secondWide.x + secondWide.width)
+  expect(fourthWide.y).toBeGreaterThanOrEqual(firstWide.y + firstWide.height)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  const firstMedium = (await cards.nth(0).boundingBox())!
+  const secondMedium = (await cards.nth(1).boundingBox())!
+  const thirdMedium = (await cards.nth(2).boundingBox())!
+  expect(Math.abs(firstMedium.y - secondMedium.y)).toBeLessThan(1)
+  expect(secondMedium.x).toBeGreaterThanOrEqual(
+    firstMedium.x + firstMedium.width,
+  )
+  expect(thirdMedium.y).toBeGreaterThanOrEqual(
+    firstMedium.y + firstMedium.height,
+  )
   await page.setViewportSize({ width: 320, height: 700 })
   const firstNarrow = (await cards.nth(0).boundingBox())!
   const secondNarrow = (await cards.nth(1).boundingBox())!
@@ -263,6 +279,7 @@ test('resolves conflicting saves across two tabs without losing the selection', 
 test('supports keyboard reassignment and captures the management layout', async ({
   page,
 }, testInfo) => {
+  await page.setViewportSize({ width: 1600, height: 1000 })
   await page.goto('/workflows')
   const maintenance = page.getByRole('article', {
     name: 'Small change / routine maintenance',
