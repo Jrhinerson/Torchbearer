@@ -1,6 +1,6 @@
 import { agentLabel } from './api'
 import type { Routing, Run, Task } from './api'
-import { approvalLabels } from './workflowLabels'
+import { taskApprovalLabel } from './workflowLabels'
 
 export function DecisionInspector({
   task,
@@ -31,6 +31,9 @@ export function DecisionInspector({
     ? run.result.tests
     : (run?.input_context?.artifacts?.implementation?.result.tests ?? [])
   const next = task.operations?.next_agent
+  const decision =
+    run?.result.artifacts?.decision ??
+    run?.input_context?.artifacts?.implementation?.result.artifacts?.decision
   return (
     <aside
       className="decision-inspector"
@@ -52,6 +55,40 @@ export function DecisionInspector({
           : task.operations?.reason}
       </p>
       {run?.result.summary && <p>{run.result.summary}</p>}
+      {!historical && !task.completed_at && (
+        <section>
+          <h4>Next handoff</h4>
+          <p>
+            {run ? agentLabel(run.agent, routing) : 'Agent'} → You
+            {next ? ` → ${agentLabel(next, routing)}` : ''}
+          </p>
+        </section>
+      )}
+      {historical ? (
+        <button className="button button-secondary" onClick={onLatest}>
+          Return to latest attempt
+        </button>
+      ) : (
+        <>
+          {run?.state === 'succeeded' && !task.completed_at && (
+            <button
+              className="button button-primary"
+              disabled={busy || !canApprove}
+              onClick={onApprove}
+            >
+              {taskApprovalLabel(task)}
+            </button>
+          )}
+          {approvalHint && !task.completed_at && (
+            <p className="workflow-hint">{approvalHint}</p>
+          )}
+          <button className="button button-secondary" onClick={onConversation}>
+            {task.completed_at
+              ? 'View conversation'
+              : 'Conversation & revision'}
+          </button>
+        </>
+      )}
       <section aria-label="Validation evidence">
         <h4>Evidence</h4>
         {evidence.length ? (
@@ -85,39 +122,51 @@ export function DecisionInspector({
           </p>
         )}
       </section>
-      {!historical && !task.completed_at && (
-        <section>
-          <h4>Next handoff</h4>
-          <p>
-            {run ? agentLabel(run.agent, routing) : 'Agent'} → You
-            {next ? ` → ${agentLabel(next, routing)}` : ''}
-          </p>
+      {run?.result.workflow_steps && (
+        <section aria-label="Procedure evidence">
+          <h4>Procedure evidence</h4>
+          <ul className="evidence-list">
+            {run.result.workflow_steps.map((step) => (
+              <li key={step.step_id}>
+                <strong>
+                  {task.workflow_snapshot.steps.find(
+                    (entry) => entry.id === step.step_id,
+                  )?.label ?? step.step_id}
+                </strong>
+                <span>{step.outcome.replaceAll('_', ' ')}</span>
+                <p>{step.summary}</p>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
-      {historical ? (
-        <button className="button button-secondary" onClick={onLatest}>
-          Return to latest attempt
-        </button>
-      ) : (
-        <>
-          {run?.state === 'succeeded' && !task.completed_at && (
-            <button
-              className="button button-primary"
-              disabled={busy || !canApprove}
-              onClick={onApprove}
-            >
-              {approvalLabels[task.status]}
-            </button>
-          )}
-          {approvalHint && !task.completed_at && (
-            <p className="workflow-hint">{approvalHint}</p>
-          )}
-          <button className="button button-secondary" onClick={onConversation}>
-            {task.completed_at
-              ? 'View conversation'
-              : 'Conversation & revision'}
-          </button>
-        </>
+      {decision && (
+        <section aria-label="Decision artifact">
+          <h4>Decision artifact</h4>
+          <p>{decision.question}</p>
+          <h4>Findings</h4>
+          <ul>
+            {decision.findings.map((finding, index) => (
+              <li key={index}>
+                {finding.summary}
+                <br />
+                <code>{finding.source}</code>
+              </li>
+            ))}
+          </ul>
+          <h4>Alternatives</h4>
+          <ul>
+            {decision.options.map((option, index) => (
+              <li key={index}>
+                <strong>{option.name}</strong>: {option.tradeoffs}
+              </li>
+            ))}
+          </ul>
+          <h4>Recommendation</h4>
+          <p>{decision.recommendation}</p>
+          <h4>Limitations</h4>
+          <p>{decision.limitations}</p>
+        </section>
       )}
       {error && (
         <p className="feedback feedback-error" role="alert">

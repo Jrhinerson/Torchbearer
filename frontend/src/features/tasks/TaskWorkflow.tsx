@@ -22,6 +22,7 @@ import { WorkflowConversation } from './WorkflowConversation'
 import { stageLabels } from './workflowLabels'
 import { TaskFlow } from './TaskFlow'
 import { DecisionInspector } from './DecisionInspector'
+import { TaskWorkflowEditor } from './WorkflowChoice'
 
 const states: Record<RunState, string> = {
   queued: 'Queued',
@@ -257,6 +258,7 @@ export function TaskSettingsDialog({
         disabled={busy || Boolean(task.latest_run)}
         onTask={onTask}
       />
+      <TaskWorkflowEditor task={task} onTask={onTask} />
       <RepositoryPicker
         repositories={repositories}
         value={task.repository ?? ''}
@@ -452,6 +454,10 @@ export function WorkflowDialog({
             <span>{stageLabels[task.status]}</span>
           </p>
           <h2 id="workflow-heading">{task.title}</h2>
+          <p className="workflow-hint">
+            {task.workflow_snapshot?.name ?? 'Legacy engineering workflow'} ·
+            Workflow fixed when agent work started
+          </p>
         </div>
         <button
           ref={closeButton}

@@ -54,6 +54,23 @@ export function TaskFlow({
           </li>
         ))}
       </ol>
+      <details className="flow-attempts">
+        <summary>Attempt history ({flow.runs.length})</summary>
+        <ol>
+          {[...flow.runs].reverse().map((run) => (
+            <li key={run.id}>
+              <button
+                type="button"
+                className="button button-link"
+                onClick={() => onRun(run.id)}
+              >
+                Attempt {run.sequence} · {run.stage.replaceAll('_', ' ')} ·{' '}
+                {agentLabel(run.agent, routing)} · {run.state}
+              </button>
+            </li>
+          ))}
+        </ol>
+      </details>
       {flow.edges
         .filter((edge) => edge.kind === 'rework')
         .map((edge) => (

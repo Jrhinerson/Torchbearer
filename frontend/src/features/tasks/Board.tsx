@@ -11,6 +11,7 @@ import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
 import type { OperationsOverview } from './api'
 import { OperationsSummaryContext } from './operationsSummary'
 import TaskRoute from './TaskRoute'
+import { WorkflowChoice } from './WorkflowChoice'
 import { RoutingFields } from './TaskRouting'
 import { TaskAgent } from './TaskAgent'
 import { taskCardStatus } from './taskCardStatus'
@@ -74,6 +75,8 @@ export default function Board() {
   const [description, setDescription] = useState('')
   const [project, setProject] = useState<Project | null>(null)
   const [projectBusy, setProjectBusy] = useState(false)
+  const [workType, setWorkType] = useState('maintenance')
+  const [workflowReady, setWorkflowReady] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -182,7 +185,7 @@ export default function Board() {
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (formBusy) return
+    if (formBusy || !workflowReady) return
     setSaving(true)
     setSaveError('')
     setAnnouncement('')
@@ -194,6 +197,7 @@ export default function Board() {
         routingMode,
         frontier,
         project?.id ?? null,
+        workType,
       )
       mutation.current++
       setTasks((current) => [task, ...current])
@@ -275,6 +279,16 @@ export default function Board() {
               </option>
             ))}
           </select>
+          <button
+            type="button"
+            className="button button-secondary new-task-button"
+            aria-busy={loading}
+            ref={newTaskButton}
+            onClick={openComposer}
+            disabled={loading || Boolean(loadError)}
+          >
+            <span aria-hidden="true">+</span> New Task
+          </button>
         </div>
       </header>
       {overview && (
@@ -331,18 +345,6 @@ export default function Board() {
                 <p className="workflow-hint column-description">
                   {column.description}
                 </p>
-                {isBacklog && (
-                  <button
-                    type="button"
-                    className="button button-secondary new-task-button"
-                    aria-busy={loading}
-                    ref={newTaskButton}
-                    onClick={openComposer}
-                    disabled={loading || Boolean(loadError)}
-                  >
-                    <span aria-hidden="true">+</span> New Task
-                  </button>
-                )}
                 {isBacklog && loading ? (
                   <p className="state-message" role="status">
                     Loading your tasks…
@@ -567,6 +569,12 @@ export default function Board() {
             onMode={setRoutingMode}
             onFrontier={setFrontier}
           />
+          <WorkflowChoice
+            value={workType}
+            onChange={setWorkType}
+            disabled={formBusy}
+            onReady={setWorkflowReady}
+          />
           <label className="field-label" htmlFor="task-description">
             Description <span className="optional">optional</span>
           </label>
@@ -614,7 +622,7 @@ export default function Board() {
               type="submit"
               className="button button-primary"
               aria-busy={saving}
-              disabled={formBusy}
+              disabled={formBusy || !workflowReady}
             >
               {saving ? 'Adding task…' : 'Add to backlog'}
               <span aria-hidden="true">↗</span>

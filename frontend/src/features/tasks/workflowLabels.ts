@@ -18,3 +18,26 @@ export const approvalLabels: Partial<Record<Task['status'], string>> = {
   code_review: 'Approve code review & continue',
   final_approval: 'Give final approval',
 }
+
+export function taskStageLabel(task: Task, stage: string): string {
+  return (
+    task.workflow_snapshot?.stage_labels?.[
+      stage as keyof typeof task.workflow_snapshot.stage_labels
+    ] ??
+    stageLabels[stage as keyof typeof stageLabels] ??
+    stage
+  )
+}
+
+export function taskApprovalLabel(task: Task) {
+  if (task.workflow_snapshot?.execution_mode === 'decision') {
+    return {
+      backlog: 'Start planning',
+      plan: 'Approve plan & start investigation',
+      integrate: 'Approve findings & start decision review',
+      code_review: 'Approve decision review & continue',
+      final_approval: 'Accept decision',
+    }[task.status]
+  }
+  return approvalLabels[task.status]
+}

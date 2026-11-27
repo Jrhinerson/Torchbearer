@@ -3,7 +3,7 @@ from projects.models import Project
 from projects.serializers import ProjectSerializer
 from rest_framework import serializers
 from workflows.models import WorkType
-from workflows.profiles import LEGACY_SNAPSHOT, snapshot_for
+from workflows.profiles import LEGACY_SNAPSHOT, snapshot_for, workflow_snapshot
 
 from .git import repository_path
 from .models import AgentRun, Decision, Repository, Task
@@ -72,6 +72,11 @@ class RepositorySerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    workflow_snapshot = serializers.SerializerMethodField()
+
+    def get_workflow_snapshot(self, obj):
+        return workflow_snapshot(obj)
+
     project = ProjectSerializer(read_only=True)
     project_id = serializers.PrimaryKeyRelatedField(
         source="project",

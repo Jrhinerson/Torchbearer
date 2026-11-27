@@ -3,7 +3,7 @@
   justify-content: space-between;
   align-items: center;
   gap: var(--space-4);
-  padding: var(--space-5) var(--space-6) var(--space-3);
+  padding: 0 0 var(--space-3);
   flex-wrap: wrap;
 }
 .operations-heading h1 {
@@ -25,12 +25,43 @@
 }
 .operations-counts {
   margin: 0;
-  padding: 0 var(--space-6) var(--space-3);
+  padding: 0 0 var(--space-3);
   color: var(--color-text-muted);
   font-size: var(--text-compact);
 }
 .kanban-board.operations-board {
   grid-template-columns: repeat(4, minmax(15rem, 1fr));
+  min-height: 20rem;
+  max-height: 30rem;
+}
+.operations-board .workflow-column {
+  overflow-y: auto;
+  min-height: 0;
+}
+.operations-filters .new-task-button {
+  width: auto;
+  margin: 0;
+  white-space: nowrap;
+  background: var(--color-primary);
+  color: var(--color-primary-text);
+}
+.operations-board .task-card[data-activity='awaiting-input']::after {
+  box-shadow: none;
+  animation: none;
+}
+.task-mini-route li > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.task-workflow-settings {
+  margin-block: var(--space-4);
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+.workflow-choice {
+  margin-block: var(--space-3);
 }
 .task-workflow-label {
   color: var(--color-text-muted);
@@ -163,6 +194,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 19rem;
   min-width: 0;
+  align-items: start;
 }
 .selected-task-content {
   min-width: 0;
@@ -183,6 +215,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
+  max-height: 38rem;
+  overflow-y: auto;
 }
 .decision-inspector h3 {
   font-size: var(--text-body);
@@ -291,6 +325,7 @@
   .decision-inspector {
     border-left: 0;
     border-top: 1px solid var(--color-border);
+    max-height: none;
   }
 }
 @media (max-width: 520px) {
@@ -319,6 +354,7 @@
   .kanban-board.operations-board {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     min-width: 0;
+    max-height: none;
   }
   .operations-filters {
     width: 100%;

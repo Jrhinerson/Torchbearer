@@ -10,7 +10,11 @@ import type {
   WorkspaceChanges,
 } from './api'
 import { PlanningMessage } from './PlanningMessage'
-import { approvalLabels, stageLabels } from './workflowLabels'
+import {
+  stageLabels,
+  taskStageLabel,
+  taskApprovalLabel,
+} from './workflowLabels'
 
 type MessageAction = 'plan_message' | 'revise' | 'send_back' | SupportStage
 
@@ -114,7 +118,7 @@ export function WorkflowConversation({
       : planning
         ? 'Send message'
         : action === 'send_back'
-          ? 'Send back to ' + stageLabels[returnStage]
+          ? 'Send back to ' + taskStageLabel(task, returnStage)
           : 'Request revision'
   const inputLabel = refining
     ? 'Refinement answers or instructions'
@@ -130,8 +134,8 @@ export function WorkflowConversation({
     : planning
       ? 'Approve before implementation'
       : action === 'send_back'
-        ? 'Sending returns the task to ' + stageLabels[returnStage]
-        : 'Sending reruns ' + stageLabels[task.status]
+        ? 'Sending returns the task to ' + taskStageLabel(task, returnStage)
+        : 'Sending reruns ' + taskStageLabel(task, task.status)
 
   useEffect(() => {
     if (followReplies.current && thread.current)
@@ -187,7 +191,7 @@ export function WorkflowConversation({
   return (
     <section
       className="planning-conversation"
-      aria-label={stageLabels[currentStage] + ' conversation'}
+      aria-label={taskStageLabel(task, currentStage) + ' conversation'}
     >
       <div className="planning-thread">
         <ol
@@ -216,7 +220,7 @@ export function WorkflowConversation({
             <Fragment key={attempt.id}>
               {index > 0 && attempts[index - 1].stage !== attempt.stage && (
                 <li className="workflow-stage-marker">
-                  <span>{stageLabels[attempt.stage]}</span>
+                  <span>{taskStageLabel(task, attempt.stage)}</span>
                 </li>
               )}
               <ConversationTurn
@@ -356,7 +360,8 @@ export function WorkflowConversation({
                   <p className="planning-message-summary">
                     {finalReview
                       ? 'Ready for final approval'
-                      : stageLabels[currentStage] + ' ready for review'}
+                      : taskStageLabel(task, currentStage) +
+                        ' ready for review'}
                   </p>
                   <p className="workflow-hint">
                     {approvalHint ||
@@ -373,7 +378,7 @@ export function WorkflowConversation({
                   disabled={busy || !canApprove}
                   onClick={onApprove}
                 >
-                  {approvalLabels[task.status]}
+                  {taskApprovalLabel(task)}
                 </button>
               </div>
             )}
@@ -424,7 +429,7 @@ export function WorkflowConversation({
                   {planning || finalReview || support ? (
                     <span className="planning-mode">
                       {support
-                        ? stageLabels[currentStage]
+                        ? taskStageLabel(task, currentStage)
                         : planning
                           ? 'Plan'
                           : 'Request changes'}
@@ -440,17 +445,20 @@ export function WorkflowConversation({
                       }
                     >
                       <option value="revise">
-                        {'Revise ' + stageLabels[task.status]}
+                        {'Revise ' + taskStageLabel(task, task.status)}
                       </option>
                       <option value="send_back">
-                        {'Send back to ' + stageLabels[returnStage]}
+                        {'Send back to ' + taskStageLabel(task, returnStage)}
                       </option>
                     </select>
                   )}
                   <span
                     className="planning-agent"
                     title={
-                      'Messages go to ' + name + ' in ' + stageLabels[target]
+                      'Messages go to ' +
+                      name +
+                      ' in ' +
+                      taskStageLabel(task, target)
                     }
                   >
                     <svg aria-hidden="true" viewBox="0 0 20 20">

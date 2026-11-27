@@ -1,5 +1,67 @@
 import { expect, test } from '@playwright/test'
 
+test('uses a selected discovery workflow through decision acceptance', async ({
+  page,
+}, testInfo) => {
+  test.setTimeout(90000)
+  await page.goto('/')
+  await page.getByRole('button', { name: 'New Task', exact: true }).click()
+  const composer = page.getByRole('dialog', { name: 'New task', exact: true })
+  const title = `Queue discovery ${Date.now()}`
+  await composer.getByLabel('Title', { exact: false }).fill(title)
+  await composer
+    .getByLabel('Work type', { exact: true })
+    .selectOption('research')
+  await expect(composer).toContainText('Discovery and design review')
+  await composer.getByLabel('Approach', { exact: true }).selectOption('hybrid')
+  await composer.getByRole('button', { name: /^Project optional/ }).click()
+  await composer
+    .getByRole('button', {
+      name: 'Select Browser fixture repository',
+      exact: true,
+    })
+    .click()
+  await composer.getByRole('button', { name: 'Add to backlog' }).click()
+  const card = page.getByRole('article', { name: title, exact: true })
+  await expect(card).toContainText('Discovery and design review')
+  await card
+    .getByRole('button', { name: `Expand ${title}`, exact: true })
+    .click()
+  await card
+    .getByRole('button', { name: 'Start planning', exact: true })
+    .click()
+  await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  const workspace = page.getByRole('dialog', { name: title, exact: true })
+  const approve = (name: string) =>
+    workspace.getByRole('button', { name, exact: true })
+  await expect(approve('Approve plan & start investigation')).toBeEnabled({
+    timeout: 20000,
+  })
+  await approve('Approve plan & start investigation').click()
+  await expect(approve('Approve findings & start decision review')).toBeEnabled(
+    { timeout: 20000 },
+  )
+  await expect(
+    workspace.getByRole('region', { name: 'Decision artifact' }),
+  ).toContainText('Local queue')
+  await page.screenshot({
+    path: testInfo.outputPath('operations-discovery-desktop.png'),
+    fullPage: true,
+  })
+  await approve('Approve findings & start decision review').click()
+  await expect(approve('Approve decision review & continue')).toBeEnabled({
+    timeout: 20000,
+  })
+  await approve('Approve decision review & continue').click()
+  await expect(approve('Accept decision')).toBeEnabled({ timeout: 20000 })
+  await approve('Accept decision').click()
+  await expect(
+    page
+      .getByRole('region', { name: 'Done', exact: true })
+      .getByRole('article', { name: title }),
+  ).toBeVisible()
+})
+
 test('selects a flow, inspects evidence, and preserves conversation drafts across tabs', async ({
   page,
 }) => {

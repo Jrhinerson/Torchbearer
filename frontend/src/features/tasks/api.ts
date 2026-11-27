@@ -49,6 +49,13 @@ export interface Run extends RunSummary {
     summary?: string
     details?: string
     tests?: { command: string; outcome: string; details: string }[]
+    workflow_steps?: {
+      step_id: string
+      outcome: string
+      summary: string
+      test_indexes: number[]
+    }[]
+    artifacts?: { decision: DecisionArtifact | null }
   }
   log: string
   feedback: string
@@ -84,10 +91,30 @@ export interface WorkspaceChanges {
   truncated: boolean
 }
 
+export interface DecisionArtifact {
+  question: string
+  findings: { summary: string; source: string }[]
+  options: { name: string; tradeoffs: string }[]
+  recommendation: string
+  limitations: string
+}
+export interface WorkflowSnapshot {
+  schema_version: number
+  key: string
+  name: string
+  definition_version: number
+  execution_mode: 'legacy' | 'code_change' | 'decision'
+  result_contract: number
+  steps: { id: string; label: string; stage: Stage; conditional: boolean }[]
+  stage_labels: Partial<Record<Stage | 'final_approval', string>>
+}
+
 export interface Task {
   id: string
   title: string
   description: string
+  work_type: string | null
+  workflow_snapshot: WorkflowSnapshot
   project: Project | null
   repository: string | null
   routing_mode: Approach | null
@@ -179,6 +206,7 @@ export function createTask(
   routing_mode: Approach = 'frontier',
   frontier_agent: FrontierAgent | null = 'codex',
   projectId: string | null = null,
+  workType?: string,
 ) {
   return writeJson<Task>('tasks/', 'POST', {
     title: title.trim(),
@@ -187,6 +215,7 @@ export function createTask(
     frontier_agent: routing_mode === 'local_only' ? null : frontier_agent,
     project_id: projectId,
     ...(repository ? { repository } : {}),
+    ...(workType ? { work_type: workType } : {}),
   })
 }
 
@@ -208,6 +237,8 @@ export const updateTaskSettings = (
     repository?: string
     routing_mode?: Approach
     frontier_agent?: FrontierAgent | null
+    work_type?: string
+    refresh_workflow?: boolean
   },
 ) =>
   writeJson<Task>(`tasks/${task.id}/`, 'PATCH', {
