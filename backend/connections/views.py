@@ -5,7 +5,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .github import github
+from .device import github
 
 
 class AuthorizationSerializer(serializers.Serializer):
@@ -16,6 +16,14 @@ class AuthorizationSerializer(serializers.Serializer):
 class GitHubView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
+
+    def handle_exception(self, exc):
+        from .credentials import CredentialError
+        from .device import GitHubError
+
+        if isinstance(exc, CredentialError):
+            exc = GitHubError(str(exc))
+        return super().handle_exception(exc)
 
     def get(self, request):
         with github.lock:

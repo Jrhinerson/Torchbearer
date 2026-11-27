@@ -55,7 +55,10 @@ export default function SettingsPage() {
         setConnection(result)
         setError('')
         if (result.authorization?.state === 'pending')
-          timer = window.setTimeout(check, 1500)
+          timer = window.setTimeout(
+            check,
+            Math.max(1000, result.authorization.poll_after * 1000),
+          )
       } catch (cause) {
         if (controller.signal.aborted) return
         setError((cause as Error).message)
@@ -166,7 +169,11 @@ export default function SettingsPage() {
               </p>
             </div>
             <span className="badge">
-              {account ? 'Connected' : 'Not connected'}
+              {account?.reauthorization_required
+                ? 'Sign-in required'
+                : account
+                  ? 'Connected'
+                  : 'Not connected'}
             </span>
           </div>
 
@@ -187,20 +194,14 @@ export default function SettingsPage() {
           )}
 
           {!connection && !error && <p role="status">Loading connections…</p>}
+          {account?.reauthorization_required && (
+            <p className="feedback feedback-info">
+              Authorize this account for Torchbearer to reconnect.
+            </p>
+          )}
           {connection && !connection.available && (
             <div className="feedback feedback-info">
-              <p>
-                Install GitHub CLI on this machine to connect your account, then
-                reload connections.
-              </p>
-              <a
-                className="button button-link"
-                href="https://cli.github.com/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Get GitHub CLI
-              </a>
+              <p>{connection.unavailable_reason}</p>
               <button
                 className="button button-link"
                 onClick={() => setReload((value) => value + 1)}
@@ -241,7 +242,22 @@ export default function SettingsPage() {
                     Continue on GitHub
                   </a>
                   <p>
-                    Waiting for authorization… This code expires in 15 minutes.
+                    Waiting for authorization…
+                    {authorization.expires_at && (
+                      <>
+                        {' '}
+                        Code expires at{' '}
+                        <time dateTime={authorization.expires_at}>
+                          {new Date(
+                            authorization.expires_at,
+                          ).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </time>
+                        .
+                      </>
+                    )}
                   </p>
                 </>
               ) : (
@@ -258,8 +274,11 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {authorization && !pending && (
-            <p className="feedback feedback-error" role="alert">
+          {authorization?.error && (
+            <p
+              className={`feedback ${pending ? 'feedback-warning' : 'feedback-error'}`}
+              role="alert"
+            >
               {authorization.error}
             </p>
           )}
@@ -287,9 +306,11 @@ export default function SettingsPage() {
               >
                 {busy === 'connect'
                   ? 'Starting sign-in…'
-                  : account
-                    ? 'Change account'
-                    : 'Connect GitHub'}
+                  : account?.reauthorization_required
+                    ? 'Reconnect GitHub'
+                    : account
+                      ? 'Change account'
+                      : 'Connect GitHub'}
               </button>
             )}
             {account && (

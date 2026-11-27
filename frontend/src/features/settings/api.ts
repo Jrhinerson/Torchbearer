@@ -4,17 +4,21 @@ export const githubVerificationUrl = 'https://github.com/login/device'
 
 export interface GitHubConnection {
   available: boolean
+  unavailable_reason: string
   account: {
     id: number
     login: string
     name: string
     connected_at: string
+    reauthorization_required: boolean
   } | null
   authorization: {
     id: string
     state: 'pending' | 'failed' | 'expired'
     user_code: string
     verification_url: string
+    expires_at: string | null
+    poll_after: number
     error: string
   } | null
 }

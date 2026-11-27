@@ -8,17 +8,21 @@ const account = {
   login: 'octocat',
   name: 'The Octocat',
   connected_at: '2026-11-24T12:00:00Z',
+  reauthorization_required: false,
 }
 const pendingAuthorization = {
   id: authorizationId,
   state: 'pending' as const,
   user_code: 'ABCD-1234',
   verification_url: githubUrl,
+  expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
+  poll_after: 1,
   error: '',
 }
 
 interface GitHubConnection {
   available: boolean
+  unavailable_reason: string
   account: typeof account | null
   authorization:
     | (Omit<typeof pendingAuthorization, 'state'> & {
@@ -30,6 +34,7 @@ interface GitHubConnection {
 async function mockGitHub(page: Page, initial?: Partial<GitHubConnection>) {
   let state: GitHubConnection = {
     available: true,
+    unavailable_reason: '',
     account: null,
     authorization: null,
     ...initial,
@@ -189,20 +194,18 @@ test('shows denied authorization and retains the existing connection', async ({
   ).toBeEnabled()
 })
 
-test('reports CLI startup errors and closes the temporary tab', async ({
+test('reports authorization startup errors and closes the temporary tab', async ({
   page,
 }) => {
   const github = await mockGitHub(page)
-  github.failStart('Could not start GitHub CLI. Check its installation.')
+  github.failStart('Could not reach GitHub. Please try again.')
   await page.goto('/settings')
   const opened = page.waitForEvent('popup')
   await page
     .getByRole('button', { name: 'Connect GitHub', exact: true })
     .click()
   const popup = await opened
-  await expect(page.getByRole('alert')).toContainText(
-    'Could not start GitHub CLI',
-  )
+  await expect(page.getByRole('alert')).toContainText('Could not reach GitHub')
   await expect.poll(() => popup.isClosed()).toBe(true)
   await expect(
     page.getByRole('button', { name: 'Connect GitHub', exact: true }),
@@ -226,12 +229,20 @@ test('offers a manual browser link when popups are blocked', async ({
   ).toHaveAttribute('href', githubUrl)
 })
 
-test('handles missing GitHub CLI and a failed initial status request', async ({
+test('handles an unconfigured publisher app and a failed initial status request', async ({
   page,
 }) => {
-  await mockGitHub(page, { available: false })
+  await mockGitHub(page, {
+    available: false,
+    unavailable_reason:
+      'GitHub sign-in is not configured in this build. Contact the app publisher.',
+  })
   await page.goto('/settings')
-  await expect(page.getByRole('link', { name: 'Get GitHub CLI' })).toBeVisible()
+  await expect(
+    page.getByText(
+      'GitHub sign-in is not configured in this build. Contact the app publisher.',
+    ),
+  ).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Connect GitHub', exact: true }),
   ).toBeDisabled()
@@ -249,6 +260,31 @@ test('handles missing GitHub CLI and a failed initial status request', async ({
   await page.getByRole('button', { name: 'Try again' }).click()
   await expect(page.getByRole('alert')).toContainText(
     'Local service unavailable',
+  )
+})
+
+test('requires fresh authorization for an earlier connection and displays GitHub expiry', async ({
+  page,
+}) => {
+  await mockGitHub(page, {
+    account: { ...account, reauthorization_required: true },
+  })
+  await page.goto('/settings')
+  await expect(
+    page.getByText('Sign-in required', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Reconnect GitHub', exact: true }),
+  ).toBeEnabled()
+  await expect(page.getByRole('link', { name: '@octocat' })).toBeVisible()
+  await page.addScriptTag({ content: 'window.open = () => null' })
+  await page
+    .getByRole('button', { name: 'Reconnect GitHub', exact: true })
+    .click()
+  await expect(page.getByText('ABCD-1234', { exact: true })).toBeVisible()
+  await expect(page.locator('time')).toHaveAttribute(
+    'datetime',
+    pendingAuthorization.expires_at,
   )
 })
 

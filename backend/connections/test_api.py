@@ -1,34 +1,82 @@
 import json
-import sys
 import threading
-import time
 import uuid
-from pathlib import Path
 
 import pytest
+from django.db import DatabaseError
 from django.urls import reverse
 from rest_framework.test import APIClient
 
-from . import github as service_module
 from . import views
-from .github import GitHubService, StaleAuthorization, config_directory
+from .credentials import CredentialError, CredentialStore
+from .device import GitHubService, StaleAuthorization
 from .models import GitHubConnection
+from .oauth import DeviceCode, GitHubRequestError, PollResult, Tokens
+from .test_credentials import MemoryKeychain
 
 pytestmark = pytest.mark.django_db
+
+
+class Clock:
+    def __init__(self):
+        self.now = 1000
+
+    def __call__(self):
+        return self.now
+
+    def advance(self, seconds=5):
+        self.now += seconds
+
+
+class FakeGitHub:
+    def __init__(self):
+        self.poll_calls = 0
+        self.start_calls = 0
+        self.profile_calls = 0
+        self.result = PollResult(error="authorization_pending")
+        self.account = {"account_id": 42, "login": "chosen-user", "name": "Chosen User"}
+
+    def request_device_code(self):
+        self.start_calls += 1
+        return DeviceCode("private-device-code", "ABCD-1234", 900, 5)
+
+    def poll_tokens(self, code):
+        assert code == "private-device-code"
+        self.poll_calls += 1
+        if isinstance(self.result, Exception):
+            raise self.result
+        return self.result
+
+    def user(self, token):
+        assert token == "ghu_fake-access"
+        self.profile_calls += 1
+        return self.account
+
+    def approve(self):
+        self.result = PollResult(
+            tokens=Tokens("ghu_fake-access", "ghr_fake-refresh", 29800, 15898600)
+        )
 
 
 @pytest.fixture
 def service(settings, tmp_path, monkeypatch):
     settings.DATA_DIR = tmp_path
-    instance = GitHubService()
-    monkeypatch.setattr(views, "github", instance)
-    monkeypatch.setattr(
-        service_module,
-        "command",
-        lambda: [sys.executable, str(Path(__file__).parent / "fixtures" / "fake_gh.py")],
+    settings.TORCHBEARER_GITHUB_CLIENT_ID = "Iv1.torchbearer"
+    clock = Clock()
+    remote = FakeGitHub()
+    store = CredentialStore(backend=MemoryKeychain())
+
+    def client_factory(client_id):
+        assert client_id == "Iv1.torchbearer"
+        return remote
+
+    instance = GitHubService(
+        store=store, client_factory=client_factory, clock=clock, wall_clock=clock
     )
-    yield instance
-    instance.shutdown()
+    instance.test_remote = remote
+    instance.test_clock = clock
+    monkeypatch.setattr(views, "github", instance)
+    return instance
 
 
 @pytest.fixture
@@ -41,206 +89,276 @@ def write(client, method, name, data=None):
     return getattr(client, method)(reverse(name), data or {}, format="json", HTTP_X_CSRFTOKEN=token)
 
 
-def start(client, service):
+def start(client):
     response = write(client, "post", "github-connect")
     assert response.status_code == 200
-    authorization = response.json()["authorization"]
-    deadline = time.monotonic() + 10
-    while not service.authorization.code and time.monotonic() < deadline:
-        time.sleep(0.02)
-    assert service.authorization.code == "ABCD-1234"
-    return authorization["id"]
-
-
-def approve(service, login="octocat", account_id=583231):
-    authorization = service.authorization
-    (config_directory(authorization.id) / "approved.json").write_text(
-        json.dumps({"id": account_id, "login": login, "name": "The Octocat"}), encoding="utf-8"
-    )
-    assert authorization.finished.wait(timeout=10)
+    return response.json()["authorization"]["id"]
 
 
 def poll(client, authorization_id):
     return write(client, "post", "github-poll", {"authorization_id": authorization_id})
 
 
-def test_browser_authorization_verifies_and_persists_selected_account(client, service, monkeypatch):
-    monkeypatch.setenv("GH_TOKEN", "unrelated-shell-token")
-    monkeypatch.setenv("GITHUB_TOKEN", "unrelated-shell-token")
-    monkeypatch.setenv("GH_ENTERPRISE_TOKEN", "unrelated-shell-token")
-    monkeypatch.setenv("GH_CONFIG_DIR", "/do-not-use-shared-config")
-    assert client.get(reverse("github-connection")).json()["account"] is None
-    authorization_id = start(client, service)
+def connect_account(client, service):
+    authorization_id = start(client)
+    service.test_remote.approve()
+    service.test_clock.advance()
+    response = poll(client, authorization_id)
+    assert response.json()["account"]["login"] == "chosen-user"
+    return authorization_id
+
+
+def test_native_authorization_persists_only_verified_identity_without_cli(
+    client, service, monkeypatch
+):
+    monkeypatch.setenv("PATH", "")
+    monkeypatch.setenv("GH_TOKEN", "unrelated-environment-token")
+    assert client.get(reverse("github-connection")).json()["available"] is True
+    authorization_id = start(client)
     waiting = poll(client, authorization_id).json()
     assert waiting["account"] is None
     assert waiting["authorization"]["user_code"] == "ABCD-1234"
     assert waiting["authorization"]["verification_url"] == "https://github.com/login/device"
-    assert GitHubConnection.objects.count() == 0
-
-    approve(service)
+    assert waiting["authorization"]["poll_after"] == 5
+    assert waiting["authorization"]["expires_at"]
+    assert service.test_remote.poll_calls == 0
+    assert not GitHubConnection.objects.exists()
+    service.test_clock.advance()
+    service.test_remote.approve()
     response = poll(client, authorization_id)
-    assert response.status_code == 200
-    assert response.json()["account"]["login"] == "octocat"
-    assert response.json()["account"]["id"] == 583231
+    assert response.json()["account"]["id"] == 42
+    assert response.json()["account"]["reauthorization_required"] is False
     assert response.json()["authorization"] is None
     connection = GitHubConnection.objects.get()
+    assert connection.client_id == "Iv1.torchbearer"
     assert str(connection.config_id) == authorization_id
-    assert config_directory(connection.config_id).exists()
-    assert "token" not in response.content.decode().lower()
-    assert "config" not in response.content.decode().lower()
+    assert service.store.read(connection.config_id).tokens.refresh_token == "ghr_fake-refresh"
+    assert "fake-access" not in response.content.decode()
+    assert "private-device-code" not in response.content.decode()
+    assert "fake-access" not in json.dumps(list(GitHubConnection.objects.values()), default=str)
     assert response.headers["Cache-Control"] == "no-store"
-
-    # A fresh backend service reads the durable connection without adopting another gh account.
-    monkeypatch.setattr(views, "github", GitHubService())
-    assert client.get(reverse("github-connection")).json()["account"] == response.json()["account"]
+    fresh = GitHubService(store=service.store)
+    assert fresh.status()["account"] == response.json()["account"]
 
 
-def test_duplicate_connect_reuses_pending_login(client, service):
-    authorization_id = start(client, service)
-    process = service.authorization.tree.process
-    response = write(client, "post", "github-connect")
-    assert response.json()["authorization"]["id"] == authorization_id
-    assert service.authorization.tree.process is process
+def test_duplicate_connect_and_early_polls_do_not_contact_github_again(client, service):
+    authorization_id = start(client)
+    assert start(client) == authorization_id
+    assert service.test_remote.start_calls == 1
+    for _ in range(3):
+        poll(client, authorization_id)
+    assert service.test_remote.poll_calls == 0
+    service.test_clock.advance()
+    poll(client, authorization_id)
+    poll(client, authorization_id)
+    assert service.test_remote.poll_calls == 1
 
 
-def test_cancel_stops_login_removes_config_and_rejects_late_poll(client, service):
-    authorization_id = start(client, service)
-    process = service.authorization.tree.process
-    response = write(client, "post", "github-cancel", {"authorization_id": authorization_id})
-    assert response.status_code == 200
-    assert response.json()["authorization"] is None
-    assert process.poll() is not None
-    assert not config_directory(authorization_id).exists()
-    assert poll(client, authorization_id).status_code == 409
-    assert not GitHubConnection.objects.exists()
-
-
-def test_expiry_stops_login_and_allows_new_attempt(client, service):
-    authorization_id = start(client, service)
-    process = service.authorization.tree.process
-    service._expire(uuid.UUID(authorization_id))
+def test_slow_down_and_rate_limits_are_enforced_server_side(client, service):
+    authorization_id = start(client)
+    service.test_clock.advance()
+    service.test_remote.result = PollResult(error="slow_down", interval=8)
+    assert poll(client, authorization_id).json()["authorization"]["poll_after"] == 10
+    service.test_clock.advance(9)
+    poll(client, authorization_id)
+    assert service.test_remote.poll_calls == 1
+    service.test_clock.advance(1)
+    service.test_remote.result = GitHubRequestError(
+        "GitHub is busy.", code="rate_limited", retry_after=45
+    )
     response = poll(client, authorization_id)
-    assert response.json()["authorization"]["state"] == "expired"
-    assert process.poll() is not None
-    assert not config_directory(authorization_id).exists()
-    assert start(client, service) != authorization_id
-    # An expired timer cannot cancel a newer attempt.
-    service._expire(uuid.UUID(authorization_id))
-    assert service.authorization.state == "pending"
+    assert response.json()["authorization"]["poll_after"] == 45
+    assert response.json()["authorization"]["state"] == "pending"
+    assert "busy" in response.json()["authorization"]["error"]
+    service.test_clock.advance(44)
+    poll(client, authorization_id)
+    assert service.test_remote.poll_calls == 2
 
 
-@pytest.mark.parametrize("failure", ["denied", "invalid", "bad_identity"])
-def test_failed_account_change_preserves_connection_and_hides_cli_output(client, service, failure):
-    first = start(client, service)
-    approve(service)
-    assert poll(client, first).json()["account"]["login"] == "octocat"
-    second = start(client, service)
-    directory = config_directory(second)
-    if failure == "denied":
-        (directory / "denied").touch()
-        assert service.authorization.finished.wait(timeout=10)
-    else:
-        if failure == "invalid":
-            (directory / "invalid").touch()
-        approve(service, login="new-account", account_id=-1 if failure == "bad_identity" else 42)
-    response = poll(client, second)
-    assert response.json()["account"]["login"] == "octocat"
-    assert response.json()["authorization"]["state"] == "failed"
-    assert "secret-must-not-leak" not in response.content.decode()
-    assert not directory.exists()
-    assert config_directory(first).exists()
-
-
-def test_successful_account_change_and_disconnect_remove_only_app_configuration(client, service):
-    first = start(client, service)
-    approve(service)
-    poll(client, first)
-    second = start(client, service)
-    approve(service, login="chosen-account", account_id=42)
-    assert poll(client, second).json()["account"]["login"] == "chosen-account"
-    assert not config_directory(first).exists()
-    # Disconnect must also stop a pending replacement, even if gh just succeeded.
-    third = start(client, service)
-    approve(service, login="too-late", account_id=43)
-    response = write(client, "delete", "github-connection")
-    assert response.json()["account"] is None
-    assert response.json()["authorization"] is None
+@pytest.mark.parametrize("error,state", [("access_denied", "failed"), ("expired_token", "expired")])
+def test_rejected_or_expired_authorization_does_not_connect(client, service, error, state):
+    authorization_id = start(client)
+    service.test_remote.result = PollResult(error=error)
+    service.test_clock.advance()
+    assert poll(client, authorization_id).json()["authorization"]["state"] == state
     assert not GitHubConnection.objects.exists()
-    assert not config_directory(second).exists()
-    assert not config_directory(third).exists()
-    assert poll(client, third).status_code == 409
+    assert service.authorization.device_code == ""
+    assert service.authorization.tokens is None
 
 
-def test_missing_cli_has_actionable_error(client, service, monkeypatch):
-    monkeypatch.setattr(service_module, "command", lambda: None)
-    assert client.get(reverse("github-connection")).json()["available"] is False
-    response = write(client, "post", "github-connect")
-    assert response.status_code == 503
-    assert "Install GitHub CLI" in response.json()["detail"]
-    assert service.authorization is None
+def test_expiry_prevents_further_requests_and_a_new_attempt_can_start(client, service):
+    authorization_id = start(client)
+    service.test_clock.advance(900)
+    assert poll(client, authorization_id).json()["authorization"]["state"] == "expired"
+    assert service.test_remote.poll_calls == 0
+    assert start(client) != authorization_id
+    assert poll(client, authorization_id).status_code == 409
 
 
-@pytest.mark.parametrize("action", ["cancel", "disconnect"])
-def test_cancellation_during_identity_verification_prevents_late_connection(
-    client, service, monkeypatch, action
+def test_cancellation_and_disconnect_remove_only_torchbearer_credentials(client, service):
+    first = connect_account(client, service)
+    second = start(client)
+    assert write(client, "post", "github-cancel", {"authorization_id": second}).status_code == 200
+    assert poll(client, second).status_code == 409
+    assert GitHubConnection.objects.get().login == "chosen-user"
+    assert service.store.read(first) is not None
+    assert write(client, "delete", "github-connection").json()["account"] is None
+    assert service.store.read(first) is None
+
+
+def test_account_replacement_retires_old_credentials_only_after_verification(client, service):
+    first = connect_account(client, service)
+    second = start(client)
+    service.test_remote.account = {"account_id": 99, "login": "replacement", "name": ""}
+    service.test_clock.advance()
+    response = poll(client, second)
+    assert response.json()["account"]["login"] == "replacement"
+    assert service.store.read(first) is None
+    assert service.store.read(second).account_id == 99
+
+
+def test_failed_secure_storage_preserves_the_previous_account(client, service, monkeypatch):
+    first = connect_account(client, service)
+    second = start(client)
+
+    def locked(*args):
+        raise CredentialError("Unlock your keychain and try again.")
+
+    monkeypatch.setattr(service.store, "write", locked)
+    service.test_clock.advance()
+    response = poll(client, second)
+    assert response.json()["authorization"]["state"] == "failed"
+    assert response.json()["account"]["login"] == "chosen-user"
+    assert service.store.read(first) is not None
+
+
+def test_failed_database_save_discards_new_credentials_and_preserves_old_account(
+    client, service, monkeypatch
 ):
-    first = start(client, service)
-    approve(service)
-    poll(client, first)
-    second = start(client, service)
-    approve(service, login="too-late", account_id=42)
-    verifying = threading.Event()
-    release = threading.Event()
+    first = connect_account(client, service)
+    second = start(client)
+
+    def unavailable(*args, **kwargs):
+        raise DatabaseError("private database details")
+
+    monkeypatch.setattr(GitHubConnection.objects, "update_or_create", unavailable)
+    service.test_clock.advance()
+    response = poll(client, second)
+    assert response.json()["authorization"]["state"] == "failed"
+    assert "private database" not in response.content.decode()
+    assert str(GitHubConnection.objects.get().config_id) == first
+    assert service.store.read(first) is not None
+    assert service.store.read(second) is None
+
+
+def test_profile_retry_keeps_issued_tokens_in_memory_without_exchanging_device_code_again(
+    client, service, monkeypatch
+):
+    authorization_id = start(client)
+    service.test_remote.approve()
+    service.test_clock.advance()
+    original = service.test_remote.user
+
+    def offline(token):
+        raise GitHubRequestError("GitHub is temporarily unavailable.", code="unavailable")
+
+    monkeypatch.setattr(service.test_remote, "user", offline)
+    assert poll(client, authorization_id).json()["authorization"]["state"] == "pending"
+    monkeypatch.setattr(service.test_remote, "user", original)
+    service.test_clock.advance()
+    assert poll(client, authorization_id).json()["account"]["login"] == "chosen-user"
+    assert service.test_remote.poll_calls == 1
+
+
+@pytest.mark.parametrize("during", ["profile", "storage"])
+def test_cancel_during_external_io_cannot_save_a_late_connection(
+    client, service, monkeypatch, during
+):
+    authorization_id = start(client)
+    service.test_remote.approve()
+    service.test_clock.advance()
+    entered, release = threading.Event(), threading.Event()
     errors = []
 
-    def delayed_profile(config_id):
-        verifying.set()
-        assert release.wait(timeout=10)
-        return {"login": "too-late", "account_id": 42, "name": ""}
+    def delayed_profile(token):
+        entered.set()
+        assert release.wait(10)
+        return service.test_remote.account
 
-    def background_poll():
+    original_write = service.store.write
+
+    def delayed_write(*args):
+        entered.set()
+        assert release.wait(10)
+        original_write(*args)
+
+    if during == "profile":
+        monkeypatch.setattr(service.test_remote, "user", delayed_profile)
+    else:
+        monkeypatch.setattr(service.store, "write", delayed_write)
+
+    def background():
         try:
-            service.poll(second)
+            service.poll(authorization_id)
         except StaleAuthorization as error:
             errors.append(error)
 
-    monkeypatch.setattr(service_module, "profile", delayed_profile)
-    thread = threading.Thread(target=background_poll)
+    thread = threading.Thread(target=background)
     thread.start()
     try:
-        assert verifying.wait(timeout=10)
-        # Duplicate polls leave the same verification in progress.
-        assert poll(client, second).json()["authorization"]["state"] == "pending"
-        if action == "cancel":
-            response = write(client, "post", "github-cancel", {"authorization_id": second})
-        else:
-            response = write(client, "delete", "github-connection")
-        assert response.status_code == 200
+        assert entered.wait(10)
+        assert (
+            write(
+                client, "post", "github-cancel", {"authorization_id": authorization_id}
+            ).status_code
+            == 200
+        )
     finally:
         release.set()
-        thread.join(timeout=10)
+        thread.join(10)
     assert not thread.is_alive()
     assert len(errors) == 1
-    if action == "cancel":
-        assert GitHubConnection.objects.get().login == "octocat"
-    else:
-        assert not GitHubConnection.objects.exists()
-    assert not config_directory(second).exists()
+    assert not GitHubConnection.objects.exists()
+    assert service.store.read(authorization_id) is None
 
 
-def test_cli_launch_failure_is_recoverable(client, service, monkeypatch):
-    def fail_to_start(*args, **kwargs):
-        raise OSError("Could not start the process")
+def test_old_cli_connections_and_changed_app_identity_require_new_consent(
+    client, service, settings
+):
+    GitHubConnection.objects.create(account_id=1, login="previous-user")
+    assert (
+        client.get(reverse("github-connection")).json()["account"]["reauthorization_required"]
+        is True
+    )
+    connect_account(client, service)
+    settings.TORCHBEARER_GITHUB_CLIENT_ID = "Iv1.other-app"
+    assert (
+        client.get(reverse("github-connection")).json()["account"]["reauthorization_required"]
+        is True
+    )
 
-    monkeypatch.setattr(service_module, "ProcessTree", fail_to_start)
-    response = write(client, "post", "github-connect")
-    assert response.status_code == 503
-    assert service.authorization is None
-    assert not list((service_module.settings.DATA_DIR / "github").iterdir())
+
+def test_missing_publisher_id_and_unavailable_keychain_are_actionable(
+    client, service, settings, monkeypatch
+):
+    settings.TORCHBEARER_GITHUB_CLIENT_ID = ""
+    response = client.get(reverse("github-connection"))
+    assert response.json()["available"] is False
+    assert "publisher" in response.json()["unavailable_reason"]
+    assert write(client, "post", "github-connect").status_code == 503
+    settings.TORCHBEARER_GITHUB_CLIENT_ID = "Iv1.torchbearer"
+
+    def locked():
+        raise CredentialError("Unlock your system keychain.")
+
+    monkeypatch.setattr(service.store, "ready", locked)
+    assert "keychain" in client.get(reverse("github-connection")).json()["unavailable_reason"]
+    assert write(client, "post", "github-connect").status_code == 503
+    assert service.test_remote.start_calls == 0
 
 
 @pytest.mark.parametrize(
-    ("method", "name"),
+    "method,name",
     [
         ("post", "github-connect"),
         ("post", "github-poll"),
@@ -249,12 +367,11 @@ def test_cli_launch_failure_is_recoverable(client, service, monkeypatch):
     ],
 )
 def test_connection_mutations_require_csrf(client, service, method, name):
-    response = getattr(client, method)(reverse(name), {}, format="json")
-    assert response.status_code == 403
+    assert getattr(client, method)(reverse(name), {}, format="json").status_code == 403
     assert service.authorization is None
 
 
-def test_rejects_malformed_or_stale_attempts_and_get_cannot_start_login(client, service):
+def test_bad_attempt_ids_and_safe_methods_cannot_start_authorization(client, service):
     assert write(client, "post", "github-poll", {"authorization_id": "../path"}).status_code == 400
     assert poll(client, str(uuid.uuid4())).status_code == 409
     assert client.get(reverse("github-connect")).status_code == 405
