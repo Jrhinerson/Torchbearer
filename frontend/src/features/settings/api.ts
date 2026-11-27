@@ -1,4 +1,4 @@
-import { requestJson } from '../../lib/api'
+import { ApiError, requestJson } from '../../lib/api'
 
 export const githubVerificationUrl = 'https://github.com/login/device'
 
@@ -55,3 +55,12 @@ export const cancelGitHub = (id: string) =>
   connectionRequest('cancel/', 'POST', id)
 export const pollGitHub = (id: string, signal?: AbortSignal) =>
   connectionRequest('poll/', 'POST', id, signal)
+export async function verifyGitHubConnection(signal?: AbortSignal) {
+  try {
+    return await connectionRequest('verify/', 'POST', undefined, signal)
+  } catch (cause) {
+    if (cause instanceof ApiError && cause.status === 409)
+      return getGitHubConnection(signal)
+    throw cause
+  }
+}

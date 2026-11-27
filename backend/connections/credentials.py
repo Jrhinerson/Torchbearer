@@ -17,6 +17,10 @@ class CredentialError(Exception):
     pass
 
 
+class InvalidCredentials(CredentialError):
+    pass
+
+
 def secure_backend():
     try:
         if sys.platform == "win32":
@@ -61,8 +65,13 @@ class CredentialStore:
     def read(self, credential_id):
         try:
             raw = self.backend().get_password(self._service(credential_id), "oauth")
-            if raw is None:
-                return None
+        except Exception:
+            raise CredentialError(
+                "Could not read GitHub credentials. Unlock your system keychain and try again."
+            ) from None
+        if raw is None:
+            return None
+        try:
             data = json.loads(raw)
             tokens = Tokens(**data["tokens"])
             secret_string(tokens.access_token)
@@ -85,8 +94,8 @@ class CredentialStore:
                 raise ValueError
             return StoredCredentials(data["client_id"], data["account_id"], tokens)
         except Exception:
-            raise CredentialError(
-                "Could not read saved GitHub credentials. Unlock your keychain or connect again."
+            raise InvalidCredentials(
+                "Saved GitHub credentials are invalid. Connect again."
             ) from None
 
     def write(self, credential_id, credentials):

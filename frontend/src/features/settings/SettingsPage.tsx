@@ -7,10 +7,11 @@ import {
   getGitHubConnection,
   githubVerificationUrl,
   pollGitHub,
+  verifyGitHubConnection,
 } from './api'
 import type { GitHubConnection } from './api'
 
-type Action = 'connect' | 'cancel' | 'disconnect'
+type Action = 'connect' | 'cancel' | 'disconnect' | 'verify'
 
 export default function SettingsPage() {
   const [connection, setConnection] = useState<GitHubConnection | null>(null)
@@ -27,9 +28,24 @@ export default function SettingsPage() {
   useEffect(() => {
     const controller = new AbortController()
     getGitHubConnection(controller.signal)
-      .then((result) => {
+      .then(async (result) => {
+        if (controller.signal.aborted) return
         setConnection(result)
         setError('')
+        if (
+          result.available &&
+          result.account &&
+          !result.account.reauthorization_required &&
+          result.authorization?.state !== 'pending'
+        ) {
+          setBusy('verify')
+          try {
+            const verified = await verifyGitHubConnection(controller.signal)
+            if (!controller.signal.aborted) setConnection(verified)
+          } finally {
+            if (!controller.signal.aborted) setBusy(null)
+          }
+        }
       })
       .catch((cause: Error) => {
         if (!controller.signal.aborted) setError(cause.message)
@@ -118,7 +134,9 @@ export default function SettingsPage() {
           ? await connectGitHub()
           : action === 'cancel'
             ? await cancelGitHub(authorization!.id)
-            : await disconnectGitHub()
+            : action === 'verify'
+              ? await verifyGitHubConnection()
+              : await disconnectGitHub()
       setConnection(result)
     } catch (cause) {
       setError((cause as Error).message)
@@ -297,6 +315,18 @@ export default function SettingsPage() {
           )}
 
           <div className="connection-actions">
+            {account && !account.reauthorization_required && !pending && (
+              <button
+                className="button button-quiet"
+                disabled={busy !== null || !connection?.available}
+                aria-busy={busy === 'verify'}
+                onClick={() => act('verify')}
+              >
+                {busy === 'verify'
+                  ? 'Checking connection…'
+                  : 'Check connection'}
+              </button>
+            )}
             {!pending && (
               <button
                 className="button button-primary"

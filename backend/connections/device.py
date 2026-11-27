@@ -12,7 +12,7 @@ from django.conf import settings
 from django.db import DatabaseError, transaction
 from rest_framework.exceptions import APIException
 
-from .credentials import CredentialError, CredentialStore, StoredCredentials
+from .credentials import CredentialError, CredentialStore, InvalidCredentials, StoredCredentials
 from .models import GitHubConnection
 from .oauth import VERIFICATION_URL, GitHubOAuthClient, GitHubRequestError, Tokens
 
@@ -66,11 +66,13 @@ class GitHubService:
         wall_clock=time.time,
     ):
         self.lock = threading.RLock()
+        self.verification_lock = threading.Lock()
         self.store = store if store is not None else CredentialStore()
         self.client_factory = client_factory
         self.clock = clock
         self.wall_clock = wall_clock
         self.authorization = None
+        self.invalid_credentials = set()
 
     def _availability(self):
         if not re.fullmatch(r"[A-Za-z0-9_.-]{1,255}", settings.TORCHBEARER_GITHUB_CLIENT_ID):
@@ -94,6 +96,22 @@ class GitHubService:
             self._expire()
             reason = self._availability()
             connection = GitHubConnection.objects.filter(pk=1).first()
+            reauthorize = bool(
+                connection
+                and (
+                    not connection.client_id
+                    or connection.client_id != settings.TORCHBEARER_GITHUB_CLIENT_ID
+                    or connection.config_id in self.invalid_credentials
+                )
+            )
+            if connection and not reauthorize and not reason:
+                try:
+                    credentials = self.store.read(connection.config_id)
+                    reauthorize = not self._credentials_match(connection, credentials)
+                except InvalidCredentials:
+                    reauthorize = True
+                except CredentialError as error:
+                    reason = str(error)
             return {
                 "available": not reason,
                 "unavailable_reason": reason,
@@ -102,8 +120,7 @@ class GitHubService:
                     "login": connection.login,
                     "name": connection.name,
                     "connected_at": connection.connected_at.isoformat(),
-                    "reauthorization_required": not connection.client_id
-                    or connection.client_id != settings.TORCHBEARER_GITHUB_CLIENT_ID,
+                    "reauthorization_required": reauthorize,
                 }
                 if connection
                 else None,
@@ -215,6 +232,8 @@ class GitHubService:
                     self.store.delete(authorization.id)
                     raise
                 self.authorization = None
+                if previous:
+                    self.invalid_credentials.discard(previous.config_id)
                 return self.status()
         except StaleAuthorization:
             self.store.delete(authorization.id)
@@ -261,7 +280,120 @@ class GitHubService:
                 except CredentialError as error:
                     raise GitHubError(str(error)) from None
                 connection.delete()
+                self.invalid_credentials.discard(connection.config_id)
             return self.status()
+
+    @staticmethod
+    def _credentials_match(connection, credentials):
+        return bool(
+            credentials
+            and credentials.client_id == connection.client_id
+            and credentials.account_id == connection.account_id
+        )
+
+    def _connection_current(self, snapshot):
+        current = GitHubConnection.objects.filter(pk=1).first()
+        if not current or (current.config_id, current.account_id, current.client_id) != (
+            snapshot.config_id,
+            snapshot.account_id,
+            snapshot.client_id,
+        ):
+            raise StaleAuthorization(
+                "The GitHub connection changed. Reload connections to continue."
+            )
+        return current
+
+    def _invalidate(self, snapshot):
+        with self.lock:
+            self._connection_current(snapshot)
+            self.invalid_credentials.add(snapshot.config_id)
+            self.store.delete(snapshot.config_id)
+            return self.status()
+
+    def _save_rotated(self, snapshot, tokens):
+        with self.lock:
+            self._connection_current(snapshot)
+        try:
+            self.store.write(
+                snapshot.config_id,
+                StoredCredentials(snapshot.client_id, snapshot.account_id, tokens),
+            )
+        except CredentialError:
+            with self.lock:
+                self.invalid_credentials.add(snapshot.config_id)
+            raise
+        with self.lock:
+            try:
+                self._connection_current(snapshot)
+            except StaleAuthorization:
+                self.store.delete(snapshot.config_id)
+                raise
+
+    def verify(self):
+        # Refresh tokens are single-use: concurrent tabs must not rotate the same token twice.
+        # Keep cancellation/disconnect free to take the separate service lock during HTTPS.
+        with self.verification_lock:
+            with self.lock:
+                snapshot = GitHubConnection.objects.filter(pk=1).first()
+                if (
+                    not snapshot
+                    or not snapshot.client_id
+                    or snapshot.client_id != settings.TORCHBEARER_GITHUB_CLIENT_ID
+                    or snapshot.config_id in self.invalid_credentials
+                ):
+                    return self.status()
+                if reason := self._availability():
+                    raise GitHubError(reason)
+            try:
+                try:
+                    credentials = self.store.read(snapshot.config_id)
+                except InvalidCredentials:
+                    return self._invalidate(snapshot)
+                if not self._credentials_match(snapshot, credentials):
+                    return self._invalidate(snapshot)
+                client = self.client_factory(snapshot.client_id)
+                tokens = credentials.tokens
+
+                def refresh():
+                    if not tokens.refresh_token or (
+                        tokens.refresh_expires_at is not None
+                        and tokens.refresh_expires_at <= self.wall_clock()
+                    ):
+                        raise GitHubRequestError(
+                            "GitHub authorization has expired. Connect again.",
+                            code="reauthorization_required",
+                        )
+                    rotated = client.refresh_tokens(tokens.refresh_token)
+                    # Persist rotation before another HTTPS call; a temporary profile outage
+                    # must not lose the only usable refresh token.
+                    self._save_rotated(snapshot, rotated)
+                    return rotated
+
+                refreshed = False
+                if tokens.expires_at is not None and tokens.expires_at <= self.wall_clock() + 60:
+                    tokens = refresh()
+                    refreshed = True
+                try:
+                    account = client.user(tokens.access_token)
+                except GitHubRequestError as error:
+                    if error.code != "unauthorized" or refreshed:
+                        raise
+                    tokens = refresh()
+                    account = client.user(tokens.access_token)
+                if account["account_id"] != snapshot.account_id:
+                    return self._invalidate(snapshot)
+                with self.lock:
+                    self._connection_current(snapshot)
+                    GitHubConnection.objects.filter(pk=1).update(
+                        login=account["login"], name=account["name"]
+                    )
+                    return self.status()
+            except GitHubRequestError as error:
+                if error.code in {"unauthorized", "reauthorization_required"}:
+                    return self._invalidate(snapshot)
+                raise GitHubError(str(error)) from None
+            except CredentialError as error:
+                raise GitHubError(str(error)) from None
 
     def _current(self, authorization_id):
         if not self.authorization or str(self.authorization.id) != str(authorization_id):

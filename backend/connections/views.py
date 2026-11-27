@@ -59,3 +59,10 @@ class GitHubCancelView(GitHubView):
         serializer = AuthorizationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response(github.cancel(serializer.validated_data["authorization_id"]))
+
+
+class GitHubVerifyView(GitHubView):
+    http_method_names = ["post", "options"]
+
+    def post(self, request):
+        return Response(github.verify(), headers={"Cache-Control": "no-store"})

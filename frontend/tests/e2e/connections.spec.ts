@@ -42,6 +42,8 @@ async function mockGitHub(page: Page, initial?: Partial<GitHubConnection>) {
   let failure = ''
   let approved = false
   let startError = ''
+  let verificationError = ''
+  let revoked = false
   const calls: string[] = []
   await page.context().route(githubUrl, (route) =>
     route.fulfill({
@@ -80,6 +82,19 @@ async function mockGitHub(page: Page, initial?: Partial<GitHubConnection>) {
           },
         }
       else state = { ...state, authorization: pendingAuthorization }
+    } else if (path.endsWith('/verify/')) {
+      if (verificationError) {
+        await route.fulfill({
+          status: 503,
+          json: { detail: verificationError },
+        })
+        return
+      }
+      if (revoked && state.account)
+        state = {
+          ...state,
+          account: { ...state.account, reauthorization_required: true },
+        }
     } else if (path.endsWith('/cancel/')) {
       expect(request.postDataJSON()).toEqual({
         authorization_id: authorizationId,
@@ -100,6 +115,12 @@ async function mockGitHub(page: Page, initial?: Partial<GitHubConnection>) {
     },
     failStart: (message: string) => {
       startError = message
+    },
+    failVerification: (message: string) => {
+      verificationError = message
+    },
+    revoke: () => {
+      revoked = true
     },
   }
 }
@@ -347,4 +368,47 @@ test('recovers from an interrupted authorization after a backend restart', async
   await expect(page.getByRole('link', { name: '@octocat' })).toBeVisible()
   await expect(page.getByText('ABCD-1234', { exact: true })).toHaveCount(0)
   await expect(page.getByRole('alert')).toHaveCount(0)
+})
+
+test('automatically checks saved authorization and offers reconnect when revoked', async ({
+  page,
+}) => {
+  const github = await mockGitHub(page, { account })
+  github.revoke()
+  await page.goto('/settings')
+  await expect(
+    page.getByText('Sign-in required', { exact: true }),
+  ).toBeVisible()
+  await expect(page.getByRole('link', { name: '@octocat' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Reconnect GitHub', exact: true }),
+  ).toBeEnabled()
+  expect(github.calls.filter((call) => call.endsWith('/verify/'))).toHaveLength(
+    1,
+  )
+})
+
+test('keeps account context during a verification outage and can retry', async ({
+  page,
+}) => {
+  const github = await mockGitHub(page, { account })
+  github.failVerification(
+    'GitHub is temporarily unavailable. Please try again.',
+  )
+  await page.goto('/settings')
+  await expect(page.getByRole('alert')).toContainText(
+    'GitHub is temporarily unavailable',
+  )
+  await expect(page.getByRole('link', { name: '@octocat' })).toBeVisible()
+  github.failVerification('')
+  await page
+    .getByRole('button', { name: 'Check connection', exact: true })
+    .click()
+  await expect(
+    page.getByRole('button', { name: 'Check connection', exact: true }),
+  ).toBeEnabled()
+  await expect(page.getByRole('alert')).toHaveCount(0)
+  expect(github.calls.filter((call) => call.endsWith('/verify/'))).toHaveLength(
+    2,
+  )
 })

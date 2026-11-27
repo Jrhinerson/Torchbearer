@@ -3,12 +3,12 @@ import threading
 import uuid
 
 import pytest
-from django.db import DatabaseError
+from django.db import DatabaseError, close_old_connections
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from . import views
-from .credentials import CredentialError, CredentialStore
+from .credentials import CredentialError, CredentialStore, StoredCredentials
 from .device import GitHubService, StaleAuthorization
 from .models import GitHubConnection
 from .oauth import DeviceCode, GitHubRequestError, PollResult, Tokens
@@ -363,6 +363,7 @@ def test_missing_publisher_id_and_unavailable_keychain_are_actionable(
         ("post", "github-connect"),
         ("post", "github-poll"),
         ("post", "github-cancel"),
+        ("post", "github-verify"),
         ("delete", "github-connection"),
     ],
 )
@@ -376,3 +377,329 @@ def test_bad_attempt_ids_and_safe_methods_cannot_start_authorization(client, ser
     assert poll(client, str(uuid.uuid4())).status_code == 409
     assert client.get(reverse("github-connect")).status_code == 405
     assert service.authorization is None
+
+
+def verify(client):
+    return write(client, "post", "github-verify")
+
+
+def expire_saved_access(service):
+    saved = GitHubConnection.objects.get()
+    service.store.write(
+        saved.config_id,
+        StoredCredentials(
+            saved.client_id,
+            saved.account_id,
+            Tokens(
+                "ghu_fake-access",
+                "ghr_fake-refresh",
+                service.wall_clock() - 1,
+                service.wall_clock() + 10000,
+            ),
+        ),
+    )
+    return saved
+
+
+def install_refresh(service, monkeypatch):
+    calls = []
+    rotated = Tokens(
+        "ghu_rotated", "ghr_rotated", service.wall_clock() + 28800, service.wall_clock() + 15897600
+    )
+
+    def refresh(token):
+        assert token == "ghr_fake-refresh"
+        calls.append(token)
+        return rotated
+
+    monkeypatch.setattr(service.test_remote, "refresh_tokens", refresh, raising=False)
+    monkeypatch.setattr(service.test_remote, "user", lambda token: service.test_remote.account)
+    return calls, rotated
+
+
+def test_verify_updates_a_renamed_profile_without_changing_account_or_connection_date(
+    client, service
+):
+    connect_account(client, service)
+    saved = GitHubConnection.objects.get()
+    service.test_remote.account = {"account_id": 42, "login": "renamed-user", "name": "New Name"}
+    response = verify(client)
+    assert response.status_code == 200
+    assert response.json()["account"]["login"] == "renamed-user"
+    saved.refresh_from_db()
+    assert saved.account_id == 42
+    assert saved.connected_at.isoformat() == response.json()["account"]["connected_at"]
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_expired_access_rotates_credentials_once_and_a_new_service_uses_them(
+    client, service, monkeypatch
+):
+    connect_account(client, service)
+    saved = expire_saved_access(service)
+    calls, rotated = install_refresh(service, monkeypatch)
+    assert verify(client).json()["account"]["reauthorization_required"] is False
+    assert calls == ["ghr_fake-refresh"]
+    assert service.store.read(saved.config_id).tokens == rotated
+    assert verify(client).status_code == 200
+    assert len(calls) == 1
+    fresh = GitHubService(
+        store=service.store,
+        client_factory=service.client_factory,
+        clock=service.clock,
+        wall_clock=service.wall_clock,
+    )
+    assert fresh.verify()["account"]["id"] == 42
+    assert len(calls) == 1
+
+
+def test_unauthorized_access_can_refresh_even_before_local_expiry(client, service, monkeypatch):
+    connect_account(client, service)
+    calls, _ = install_refresh(service, monkeypatch)
+
+    def user(token):
+        if token == "ghu_fake-access":
+            raise GitHubRequestError("Access is no longer valid.", code="unauthorized")
+        assert token == "ghu_rotated"
+        return service.test_remote.account
+
+    monkeypatch.setattr(service.test_remote, "user", user)
+    assert verify(client).json()["account"]["reauthorization_required"] is False
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("issue", ["missing", "corrupt", "wrong-app", "wrong-account"])
+def test_missing_or_mismatched_saved_credentials_require_reauthorization_without_api_use(
+    client, service, issue
+):
+    connect_account(client, service)
+    saved = GitHubConnection.objects.get()
+    if issue == "missing":
+        service.store.delete(saved.config_id)
+    elif issue == "corrupt":
+        backend = service.store.backend()
+        backend.set_password(
+            service.store._service(saved.config_id), "oauth", "invalid-secret-content"
+        )
+    else:
+        service.store.write(
+            saved.config_id,
+            StoredCredentials(
+                "other-app" if issue == "wrong-app" else saved.client_id,
+                99 if issue == "wrong-account" else saved.account_id,
+                Tokens("other-account-token"),
+            ),
+        )
+    prior_calls = service.test_remote.profile_calls
+    assert (
+        client.get(reverse("github-connection")).json()["account"]["reauthorization_required"]
+        is True
+    )
+    response = verify(client)
+    assert response.json()["account"]["reauthorization_required"] is True
+    assert response.json()["account"]["id"] == 42
+    assert service.test_remote.profile_calls == prior_calls
+    assert service.store.read(saved.config_id) is None
+    assert "secret-content" not in response.content.decode()
+
+
+def test_remote_account_mismatch_cannot_switch_the_saved_identity(client, service):
+    connect_account(client, service)
+    saved = GitHubConnection.objects.get()
+    service.test_remote.account = {"account_id": 99, "login": "other-user", "name": "Other"}
+    response = verify(client)
+    assert response.json()["account"]["id"] == 42
+    assert response.json()["account"]["login"] == "chosen-user"
+    assert response.json()["account"]["reauthorization_required"] is True
+    assert service.store.read(saved.config_id) is None
+
+
+def test_revoked_refresh_clears_credentials_but_retains_account_context(
+    client, service, monkeypatch
+):
+    connect_account(client, service)
+    saved = expire_saved_access(service)
+
+    def revoked(token):
+        raise GitHubRequestError(
+            "GitHub authorization has expired. Connect again.", code="reauthorization_required"
+        )
+
+    monkeypatch.setattr(service.test_remote, "refresh_tokens", revoked, raising=False)
+    response = verify(client)
+    assert response.json()["account"]["reauthorization_required"] is True
+    assert service.store.read(saved.config_id) is None
+    assert GitHubConnection.objects.get().account_id == 42
+
+
+def test_temporary_profile_outage_after_rotation_keeps_the_new_refresh_token(
+    client, service, monkeypatch
+):
+    connect_account(client, service)
+    saved = expire_saved_access(service)
+    calls, rotated = install_refresh(service, monkeypatch)
+
+    def offline(token):
+        raise GitHubRequestError("GitHub is temporarily unavailable.", code="unavailable")
+
+    monkeypatch.setattr(service.test_remote, "user", offline)
+    assert verify(client).status_code == 503
+    assert service.store.read(saved.config_id).tokens == rotated
+    monkeypatch.setattr(service.test_remote, "user", lambda token: service.test_remote.account)
+    assert verify(client).status_code == 200
+    assert len(calls) == 1
+
+
+def test_locked_keychain_is_reported_without_erasing_account_or_leaking_backend_details(
+    client, service, monkeypatch
+):
+    connect_account(client, service)
+
+    def locked(credential_id):
+        raise CredentialError("Unlock your system keychain.")
+
+    monkeypatch.setattr(service.store, "read", locked)
+    response = client.get(reverse("github-connection"))
+    assert response.json()["available"] is False
+    assert "keychain" in response.json()["unavailable_reason"]
+    assert response.json()["account"]["reauthorization_required"] is False
+    assert verify(client).status_code == 503
+    assert GitHubConnection.objects.exists()
+
+
+def test_expired_refresh_requires_sign_in_without_sending_a_refresh_request(client, service):
+    connect_account(client, service)
+    saved = GitHubConnection.objects.get()
+    service.store.write(
+        saved.config_id,
+        StoredCredentials(
+            saved.client_id,
+            saved.account_id,
+            Tokens(
+                "ghu_fake-access",
+                "ghr_expired",
+                service.wall_clock() - 1,
+                service.wall_clock() - 1,
+            ),
+        ),
+    )
+    response = verify(client)
+    assert response.json()["account"]["reauthorization_required"] is True
+    assert service.store.read(saved.config_id) is None
+
+
+def test_rotation_storage_failure_requires_reauthorization(client, service, monkeypatch):
+    connect_account(client, service)
+    expire_saved_access(service)
+    calls, _ = install_refresh(service, monkeypatch)
+
+    def locked(*args):
+        raise CredentialError("Could not save credentials. Unlock your keychain and reconnect.")
+
+    monkeypatch.setattr(service.store, "write", locked)
+    assert verify(client).status_code == 503
+    assert len(calls) == 1
+    assert (
+        client.get(reverse("github-connection")).json()["account"]["reauthorization_required"]
+        is True
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_concurrent_saved_checks_rotate_the_refresh_token_only_once(client, service, monkeypatch):
+    connect_account(client, service)
+    expire_saved_access(service)
+    calls, rotated = install_refresh(service, monkeypatch)
+    entered, release = threading.Event(), threading.Event()
+    outcomes = []
+    errors = []
+
+    def delayed_refresh(token):
+        calls.append(token)
+        entered.set()
+        assert release.wait(10)
+        return rotated
+
+    monkeypatch.setattr(service.test_remote, "refresh_tokens", delayed_refresh)
+
+    def background():
+        try:
+            outcomes.append(service.verify())
+        except Exception as error:
+            errors.append(error)
+        finally:
+            close_old_connections()
+
+    first = threading.Thread(target=background)
+    second = threading.Thread(target=background)
+    first.start()
+    try:
+        assert entered.wait(10)
+        second.start()
+    finally:
+        release.set()
+        first.join(10)
+        if second.ident is not None:
+            second.join(10)
+    assert not first.is_alive() and not second.is_alive()
+    assert not errors
+    assert len(outcomes) == 2
+    assert len(calls) == 1
+    assert all(not outcome["account"]["reauthorization_required"] for outcome in outcomes)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("during", ["refresh", "storage", "profile"])
+def test_disconnect_during_saved_verification_cannot_restore_credentials(
+    client, service, monkeypatch, during
+):
+    connect_account(client, service)
+    saved = expire_saved_access(service)
+    _, rotated = install_refresh(service, monkeypatch)
+    entered, release = threading.Event(), threading.Event()
+    errors = []
+    original_write = service.store.write
+
+    def wait():
+        entered.set()
+        assert release.wait(10)
+
+    def delayed_refresh(token):
+        wait()
+        return rotated
+
+    def delayed_write(*args):
+        wait()
+        original_write(*args)
+
+    def delayed_profile(token):
+        wait()
+        return service.test_remote.account
+
+    if during == "refresh":
+        monkeypatch.setattr(service.test_remote, "refresh_tokens", delayed_refresh)
+    elif during == "storage":
+        monkeypatch.setattr(service.store, "write", delayed_write)
+    else:
+        monkeypatch.setattr(service.test_remote, "user", delayed_profile)
+
+    def background():
+        try:
+            service.verify()
+        except StaleAuthorization as error:
+            errors.append(error)
+        finally:
+            close_old_connections()
+
+    thread = threading.Thread(target=background)
+    thread.start()
+    try:
+        assert entered.wait(10)
+        assert write(client, "delete", "github-connection").json()["account"] is None
+    finally:
+        release.set()
+        thread.join(10)
+    assert not thread.is_alive()
+    assert len(errors) == 1
+    assert not GitHubConnection.objects.exists()
+    assert service.store.read(saved.config_id) is None

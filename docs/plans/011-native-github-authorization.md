@@ -41,3 +41,4 @@ Base: `2c0700f`. Builds on the two GitHub Connections commits already on this br
 
 - Commit 1 (`4ac31fb`): all 46 connection tests pass, including 29 new OAuth/credential cases. Python lint/format, Django system checks, dependency consistency, and this worktree's required setup script pass.
 - Commit 2: all 49 connection tests and nine Chromium Connections tests pass. Django system/migration checks, Python lint/format, frontend lint, TypeScript, production build, and whitespace checks pass. Tests use mocked GitHub and an in-memory vault, with no CLI or real credential access.
+- Commit 3: all 67 connection tests and 11 Chromium Connections tests pass. Coverage includes refresh rotation, restored service state, expired/revoked/missing/corrupt credentials, numeric account identity, concurrent refresh, temporary outages after rotation, and disconnect during network/storage operations. Static, migration, frontend lint/type/build, and whitespace checks pass.
