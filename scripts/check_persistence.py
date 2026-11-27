@@ -93,6 +93,19 @@ def main():
             with opener.open(request, timeout=3) as response:
                 assert response.status == 201
                 saved = json.load(response)
+            with opener.open(f"{url}/api/v1/work-types/bug/", timeout=3) as response:
+                assignment = json.load(response)
+            assignment_request = urllib.request.Request(
+                f"{url}/api/v1/work-types/bug/",
+                data=json.dumps(
+                    {"assigned_workflow": "test-driven", "revision": assignment["revision"]}
+                ).encode(),
+                headers={"Content-Type": "application/json", "X-CSRFToken": token},
+                method="PATCH",
+            )
+            with opener.open(assignment_request, timeout=3) as response:
+                assert response.status == 200
+                saved_assignment = json.load(response)
         finally:
             stop_process(process)
 
@@ -115,9 +128,14 @@ def main():
             assert tasks[0]["project"]["id"] == project["id"]
             with opener.open(f"{url}/api/v1/projects/", timeout=3) as response:
                 assert json.load(response)[0]["id"] == project["id"]
+            with opener.open(f"{url}/api/v1/work-types/bug/", timeout=3) as response:
+                assignment = json.load(response)
+            assert assignment["assigned_workflow"] == "test-driven"
+            assert assignment["recommended_workflow"] == "diagnose-regression"
+            assert assignment["revision"] == saved_assignment["revision"]
         finally:
             stop_process(process)
-    print("PASS: SQLite retained the task, project and association across a backend restart.")
+    print("PASS: SQLite retained task, project, and workflow assignments across a backend restart.")
 
 
 if __name__ == "__main__":

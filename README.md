@@ -19,7 +19,7 @@ python scripts/dev.py
 
 Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Code Review, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use an unstarted backlog card's trash icon and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
 
-Use the left sidebar to navigate between **Kanban** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Settings contains account Connections; Workflows is reserved for future development. The current page is highlighted, and each URL supports refresh and browser Back/Forward navigation.
+Use the left sidebar to navigate between **Kanban** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Kanban is the task board, Workflows manages default engineering workflow assignments, and Settings contains account Connections. The current page is highlighted, and each URL supports refresh and browser Back/Forward navigation.
 
 Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations, then starts Django, the agent worker, and Vite together. After a schema change, rerun setup or apply migrations explicitly. Use `--backend-port` and `--frontend-port` with the launcher when the default ports are occupied; separate app instances also need separate data directories.
 
@@ -61,11 +61,23 @@ The backend listens at `127.0.0.1:8000`. Vite forwards `/api/` requests to it; i
 
 SQLite files, environment files containing secrets, dependency directories, builds, and test artifacts are ignored by Git. Data persists on disk rather than in browser state. To back up backlog records and routing configuration, stop the application and copy `.local/torchbearer.sqlite3`. Started tasks also need their worktrees and the original repositories' Git metadata; back up those together with the database to preserve executable workspaces.
 
+## Workflow assignments
+
+Open **Workflows** to manage application-wide defaults for 19 work types and 15 built-in engineering workflows. Work types appear alphabetically in up to three columns, reducing to two or one as available width narrows. Search by work-type name, description, or assigned workflow. Each card shows its saved assignment and recommended workflow.
+
+Choose any workflow for any work type, then **Save**. **Cancel** restores the saved selection. **Use recommended workflow** prepares the original recommendation; choose **Save** to apply it. Assignments persist in SQLite across refreshes and backend restarts. Failed saves retain the selection for retry. If another tab changed an assignment, **Reload assignment** retrieves the latest saved value while keeping the chosen selection for review before saving again.
+
+Overlapping practices share a workflow: documentation uses **Plan and execute** with documentation checks, API integration uses **Spec-driven development** with contract testing, and architecture and research use **Discovery and design review** with a reviewed decision. Distinct implementation practices retain their own workflows. See [engineering practices](docs/engineering-practices.md#workflow-catalogue) for the consolidation rationale.
+
+This page manages catalogue assignments. Task creation and agent execution do not use these defaults yet; the existing task stages, routing, and history continue to operate independently. Workflow definitions are built-ins; their steps are not editable through this page. Catalogue migrations add missing entries and map retired choices to their consolidated equivalents while preserving other saved assignments.
+
 ## Agent routing
 
 Choose an approach for each task in **New Task**. **Frontier** is the default, with **Codex** selected; **Claude Code** is the other frontier agent. **Hybrid** uses the selected frontier agent for detailed planning and Code Review, while **Pi** implements and tests. **Local Only** routes all three working stages to Pi using its existing model configuration; local inference setup is separate.
 
 Click an unstarted Backlog task's title to open its settings and change routing with **Save routing**, or select/add an execution repository. Cards start collapsed to their title and project on page load or reload; use each card's chevron to expand its description, routing, workflow actions, and footer. New cards also start collapsed. Unassigned tasks show **No project**. Manual expansion stays in place during automatic board updates; reloading the page collapses all cards again. The title opens settings or review in either state. Routing is locked when refinement or planning starts. Each queued attempt records its own agent. Missing installations or execution failures never substitute another agent. Backlog and Final Approval remain human-controlled, with optional refinement and post-approval retrospectives.
+
+Each card shows its responsible agent's logo at the far right of the title row, including while collapsed. Backlog cards show the planning agent; started cards show the recorded agent for their current stage, and Final Approval retains the reviewing agent's logo. A circular spinner appears directly left of the logo only while a run is executing. When a result awaits review, a task reaches Final Approval, or a run is blocked and needs human input, the spinner gives way to a slow gold glow around the whole card matching the selected navigation border. Queued, failed, cancelled, interrupted, and approved tasks remain still. Hovering the indicator or reading its accessible label identifies the agent and status; reduced-motion preferences replace rotation and pulsing with a steady ring or glow.
 
 Install and authenticate each CLI you want to use, and configure its default model in that CLI. Torchbearer uses the CLI's existing authentication and model configuration. The dropdown identifies missing installations; outdated versions, missing authentication, and permission denials appear as run errors. Current adapter version requirements are Codex CLI 0.162.0+, Claude Code 2.1.259+, and Pi 0.74.0+.
 

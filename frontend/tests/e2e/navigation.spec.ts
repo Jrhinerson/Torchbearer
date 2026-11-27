@@ -79,7 +79,7 @@ for (const label of ['Workflows', 'Settings']) {
       page.getByRole('heading', { name: label, exact: true }),
     ).toBeVisible()
     if (label === 'Workflows') {
-      await expect(page.getByText('Coming soon', { exact: true })).toBeVisible()
+      await expect(page.getByRole('article')).toHaveCount(19)
     } else {
       await expect(
         page.getByRole('heading', { name: 'Connections' }),

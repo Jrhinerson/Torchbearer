@@ -31,6 +31,33 @@ replaced by Torchbearer's separate review column and human-controlled Git workfl
 interviews become report-and-feedback rounds because CLI runs are non-interactive. Source links
 in run context provide attribution; they do not grant permissions or trigger external workflows.
 
+## Workflow catalogue
+
+The Workflows page defines 15 reusable workflows for 19 work types. Each type keeps one
+assignment. Overlapping procedures share a definition, with applicable checks and outputs
+retained in that definition:
+
+- **Plan and execute** includes documentation work: identify the audience, review accuracy
+  and clarity, verify examples, commands, links, and documentation builds, and use repository review.
+- **Spec-driven development** includes API contracts: specify interface behavior,
+  authentication, errors, and compatibility; define contract tests and verify integrations
+  in a representative environment when relevant.
+- **Discovery and design review** covers technical spikes and architecture proposals:
+  bound the investigation, compare alternatives, record evidence and trade-offs, and review
+  the decision. Architectural work includes compatibility, operational effects, reversibility,
+  an architectural decision record when appropriate, and implementation slices if proceeding.
+
+Other workflows retain distinct procedures or evidence: test-first cycles, bug reproduction
+and regression tests, a behavior-preserving refactoring baseline, interaction design review,
+standards-based accessibility evaluation, staged data migration and recovery, measured
+performance improvement, threat and abuse-case analysis, upgrade compatibility assessment,
+controlled operational rollout, risk-based test coverage, and incident stabilization and
+prevention. These differences are useful instructions within shared Kanban stages.
+
+These catalogue definitions are not yet consumed by task execution. The embedded stage
+practices above remain the execution behavior; this consolidation adds no task-level modifiers,
+new board columns, or changes to approval rules.
+
 ## Optional refinement and retrospective actions
 
 Refine task starts a read-only run in Backlog. Because it starts agent work, it creates the isolated workspace and fixes repository/routing choices; the task retains history and is no longer deletable. Questions and recommended answers appear in its report. Send answers for another round; each report retains all settled decisions. A successful, current refinement can start Plan, which receives the full refinement report. Refinement can be cancelled and explicitly rerun.
