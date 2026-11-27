@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import {
   agentLabel,
   cancelRun,
-  getRuns,
+  getTaskFlow,
   getWorkspace,
   performAction,
   updateTaskSettings,
@@ -10,7 +10,7 @@ import {
 import type {
   Repository,
   Routing,
-  RunHistory,
+  TaskFlowData,
   RunState,
   Task,
   TaskAction,
@@ -20,6 +20,8 @@ import { RepositoryPicker } from './RepositoryPicker'
 import { TaskRoutingEditor } from './TaskRouting'
 import { WorkflowConversation } from './WorkflowConversation'
 import { stageLabels } from './workflowLabels'
+import { TaskFlow } from './TaskFlow'
+import { DecisionInspector } from './DecisionInspector'
 
 const states: Record<RunState, string> = {
   queued: 'Queued',
@@ -276,21 +278,30 @@ export function WorkflowDialog({
   onTask,
   onClose,
   routing,
+  embedded = false,
+  refreshToken,
 }: {
   task: Task
   onTask: (task: Task) => void
   onClose: () => void
   routing: Routing | null
+  embedded?: boolean
+  refreshToken?: string
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
-  const [history, setHistory] = useState<RunHistory | null>(null)
+  const [history, setHistory] = useState<TaskFlowData | null>(null)
   const [workspace, setWorkspace] = useState<WorkspaceChanges | null>(null)
   const [workspaceError, setWorkspaceError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [reload, setReload] = useState(0)
+  const [tab, setTab] = useState<'flow' | 'conversation' | 'changes'>(
+    embedded ? 'flow' : 'conversation',
+  )
+  const [focused, setFocused] = useState(false)
+  const [inspectedRunId, setInspectedRunId] = useState<string | null>(null)
   const acting = useRef(false)
   const run = history?.runs.find((item) => item.id === task.latest_run?.id)
   const active = isActive(task)
@@ -305,7 +316,10 @@ export function WorkflowDialog({
     run.result.outcome === 'complete' &&
     reviewCurrent &&
     !active &&
-    !task.completed_at,
+    !task.completed_at &&
+    !loadError &&
+    history?.revision === task.revision &&
+    history?.latest_run_id === task.latest_run?.id,
   )
   const next = task.status === 'backlog' ? 'plan' : task.next_stage
   const missingAgent =
@@ -320,19 +334,27 @@ export function WorkflowDialog({
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null
-    dialog.current?.showModal()
-    closeButton.current?.focus()
     return () => {
       previous?.focus()
     }
   }, [])
 
   useEffect(() => {
+    const element = dialog.current
+    if (!element) return
+    element.open = false
+    if (!embedded || focused) {
+      element.showModal()
+      closeButton.current?.focus()
+    } else element.open = true
+  }, [embedded, focused])
+
+  useEffect(() => {
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout>
     async function load() {
       try {
-        const result = await getRuns(task.id, controller.signal)
+        const result = await getTaskFlow(task.id, controller.signal)
         if (controller.signal.aborted) return
         setHistory(result)
         setLoadError('')
@@ -363,7 +385,7 @@ export function WorkflowDialog({
           )
       } finally {
         if (!controller.signal.aborted)
-          timer = setTimeout(() => void load(), 2000)
+          if (!embedded) timer = setTimeout(() => void load(), 2000)
       }
     }
     void load()
@@ -373,6 +395,9 @@ export function WorkflowDialog({
     }
   }, [
     task.id,
+    task.revision,
+    refreshToken,
+    embedded,
     task.latest_run?.id,
     task.latest_run?.state,
     task.workspace_path,
@@ -408,12 +433,16 @@ export function WorkflowDialog({
   return (
     <dialog
       ref={dialog}
-      className="surface surface-overlay task-dialog workflow-dialog planning-dialog"
+      className={`surface surface-overlay task-dialog workflow-dialog planning-dialog ${embedded && !focused ? 'embedded-workspace' : ''}`}
       aria-labelledby="workflow-heading"
       onCancel={(event) => {
-        if (busy) event.preventDefault()
+        if (busy || (embedded && focused)) event.preventDefault()
+        if (embedded && focused && !busy) setFocused(false)
       }}
-      onClose={onClose}
+      onClose={() => {
+        if (embedded && focused) setFocused(false)
+        else onClose()
+      }}
     >
       <div className="dialog-heading">
         <div>
@@ -430,7 +459,9 @@ export function WorkflowDialog({
           className="button button-quiet button-icon close-dialog-button"
           aria-label="Close task review"
           disabled={busy}
-          onClick={() => dialog.current?.close()}
+          onClick={() =>
+            embedded && focused ? setFocused(false) : dialog.current?.close()
+          }
         >
           ×
         </button>
@@ -455,58 +486,164 @@ export function WorkflowDialog({
         </p>
       )}
       {!history && !loadError && <p role="status">Loading runs…</p>}
-      {history && (
-        <WorkflowConversation
-          key={
-            task.id +
-            ':' +
-            task.status +
-            ':' +
-            (task.latest_run?.stage === 'retro' ? 'retro' : 'workflow')
-          }
-          task={task}
-          history={history}
-          run={run}
-          routing={routing}
-          active={active}
-          busy={busy}
-          error={error}
-          workspace={workspace}
-          workspaceError={workspaceError}
-          canApprove={canApprove && !missingAgent}
-          approvalHint={
-            workspaceError ||
-            (!reviewCurrent
-              ? workspace
-                ? 'Workspace changes have made this result stale. Request a new reply before approving.'
-                : 'Checking the workspace before approval…'
-              : missingAgent
-                ? 'The agent for ' +
-                  stageLabels[next!] +
-                  ' must be configured and installed before continuing.'
-                : '')
-          }
-          onMessage={(action, message) => act(action, message)}
-          onRetry={() =>
-            void act(
-              run?.stage === 'refine' || run?.stage === 'retro'
-                ? run.stage
-                : 'retry',
-            )
-          }
-          onStop={() => void act('cancel')}
-          onRetrospective={() => void act('retro')}
-          onApprove={() =>
-            void act(
-              task.status === 'backlog'
-                ? 'start'
-                : task.status === 'final_approval'
-                  ? 'final_approve'
-                  : 'approve',
-            )
-          }
-        />
+      {embedded && (
+        <div className="workspace-tabs" role="tablist" aria-label="Task views">
+          {(['flow', 'conversation', 'changes'] as const).map((view) => (
+            <button
+              className="button button-quiet"
+              type="button"
+              role="tab"
+              aria-selected={tab === view}
+              key={view}
+              onClick={() => setTab(view)}
+            >
+              {view[0].toUpperCase() + view.slice(1)}
+            </button>
+          ))}
+          <button
+            className="button button-secondary workspace-focus"
+            type="button"
+            onClick={() => setFocused(!focused)}
+          >
+            {focused ? 'Return to board' : 'Focus workspace'}
+          </button>
+        </div>
       )}
+      <div className={embedded ? 'selected-task-layout' : undefined}>
+        <div className="selected-task-content">
+          {history && embedded && (
+            <div hidden={tab !== 'flow'} role="tabpanel" aria-label="Flow">
+              <TaskFlow
+                flow={history}
+                routing={routing}
+                onRun={setInspectedRunId}
+              />
+            </div>
+          )}
+          {embedded && (
+            <div
+              hidden={tab !== 'changes'}
+              role="tabpanel"
+              aria-label="Changes"
+            >
+              <h3>Current workspace changes</h3>
+              {workspaceError ? (
+                <p role="alert">{workspaceError}</p>
+              ) : workspace ? (
+                <>
+                  <pre className="run-log">
+                    {workspace.diff || 'No code changes.'}
+                  </pre>
+                  {workspace.truncated && (
+                    <p>
+                      Preview truncated. Review the full diff in the task
+                      worktree.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p>
+                  {active
+                    ? 'Changes are available after the current attempt finishes.'
+                    : 'Loading code changes?'}
+                </p>
+              )}
+            </div>
+          )}
+          <div
+            hidden={embedded && tab !== 'conversation'}
+            role={embedded ? 'tabpanel' : undefined}
+            aria-label={embedded ? 'Conversation' : undefined}
+          >
+            {history && (
+              <WorkflowConversation
+                key={
+                  task.id +
+                  ':' +
+                  task.status +
+                  ':' +
+                  (task.latest_run?.stage === 'retro' ? 'retro' : 'workflow')
+                }
+                showApproval={!embedded}
+                task={task}
+                history={history}
+                run={run}
+                routing={routing}
+                active={active}
+                busy={busy}
+                error={error}
+                workspace={workspace}
+                workspaceError={workspaceError}
+                canApprove={canApprove && !missingAgent}
+                approvalHint={
+                  workspaceError ||
+                  (!reviewCurrent
+                    ? workspace
+                      ? 'Workspace changes have made this result stale. Request a new reply before approving.'
+                      : 'Checking the workspace before approval…'
+                    : missingAgent
+                      ? 'The agent for ' +
+                        stageLabels[next!] +
+                        ' must be configured and installed before continuing.'
+                      : '')
+                }
+                onMessage={(action, message) => act(action, message)}
+                onRetry={() =>
+                  void act(
+                    run?.stage === 'refine' || run?.stage === 'retro'
+                      ? run.stage
+                      : 'retry',
+                  )
+                }
+                onStop={() => void act('cancel')}
+                onRetrospective={() => void act('retro')}
+                onApprove={() =>
+                  void act(
+                    task.status === 'backlog'
+                      ? 'start'
+                      : task.status === 'final_approval'
+                        ? 'final_approve'
+                        : 'approve',
+                  )
+                }
+              />
+            )}
+          </div>
+        </div>
+        {embedded && history && (
+          <DecisionInspector
+            task={task}
+            run={
+              history.runs.find((attempt) => attempt.id === inspectedRunId) ??
+              run
+            }
+            routing={routing}
+            historical={Boolean(inspectedRunId && inspectedRunId !== run?.id)}
+            onLatest={() => setInspectedRunId(null)}
+            canApprove={canApprove && !missingAgent}
+            approvalHint={
+              workspaceError ||
+              (!reviewCurrent
+                ? 'Review is unavailable until the current workspace matches this result.'
+                : missingAgent
+                  ? 'Install the next agent before continuing.'
+                  : '')
+            }
+            busy={busy}
+            error={error}
+            onConversation={() => setTab('conversation')}
+            onApprove={() =>
+              void act(
+                task.status === 'backlog'
+                  ? 'start'
+                  : task.status === 'final_approval'
+                    ? 'final_approve'
+                    : 'approve',
+              )
+            }
+          />
+        )}
+      </div>
     </dialog>
   )
 }

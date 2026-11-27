@@ -380,6 +380,7 @@ export default function Board() {
                                 : 'idle'
                           }
                           aria-label={task.title}
+                          data-selected={selectedId === task.id}
                         >
                           <div className="task-card-heading">
                             <button
@@ -636,6 +637,8 @@ export default function Board() {
         />
       ) : selectedTask ? (
         <WorkflowDialog
+          embedded
+          refreshToken={overview?.observed_at}
           key={selectedTask.id}
           task={selectedTask}
           routing={routing}

@@ -124,6 +124,193 @@
 .activity-dot.queued {
   background: var(--color-warning);
 }
+.task-card[data-selected='true'] {
+  border-color: var(--color-primary);
+}
+.workflow-dialog.embedded-workspace {
+  position: relative;
+  inset: auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  box-shadow: none;
+  overflow: visible;
+}
+.embedded-workspace > .dialog-heading {
+  padding: var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.workspace-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+.workspace-tabs [aria-selected='true'] {
+  color: var(--color-primary);
+  background: var(--color-surface-active);
+}
+.workspace-focus {
+  margin-left: auto;
+}
+.selected-task-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  min-width: 0;
+}
+.selected-task-content {
+  min-width: 0;
+  padding: var(--space-4);
+}
+.selected-task-content [hidden] {
+  display: none;
+}
+.selected-task-content .planning-conversation {
+  height: 36rem;
+  min-height: 26rem;
+}
+.decision-inspector {
+  border-left: 1px solid var(--color-border);
+  padding: var(--space-4);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.decision-inspector h3 {
+  font-size: var(--text-body);
+  color: var(--color-warning);
+  margin: 0;
+}
+.decision-inspector h4 {
+  font-size: var(--text-body);
+  margin: 0 0 var(--space-2);
+}
+.decision-inspector p {
+  margin: 0;
+}
+.decision-inspector section {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+.inspector-title {
+  font-weight: var(--weight-semibold);
+}
+.evidence-list {
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--space-3);
+}
+.evidence-list li {
+  display: grid;
+  gap: var(--space-1);
+}
+.evidence-list [data-outcome='pass'] > span {
+  color: var(--color-success);
+}
+.evidence-list [data-outcome='fail'] > span {
+  color: var(--color-error);
+}
+.evidence-list code {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.flow-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  padding: 0;
+  margin: var(--space-3) 0 var(--space-5);
+  list-style: none;
+}
+.flow-node {
+  flex: 1 1 6rem;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  background: var(--color-surface);
+  position: relative;
+}
+.flow-node + .flow-node::before {
+  content: '→';
+  color: var(--color-text-muted);
+  position: absolute;
+  left: calc(-1 * var(--space-3));
+  top: 40%;
+}
+.flow-node > button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+  width: 100%;
+  height: 100%;
+  font-size: var(--text-meta);
+  text-align: left;
+}
+.flow-node-title {
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  font-size: var(--text-compact);
+}
+.flow-node-state {
+  color: var(--color-text-muted);
+}
+.flow-node[data-state='waiting'] {
+  border-color: var(--color-warning);
+  background: var(--color-warning-surface);
+}
+.flow-node[data-state='accepted'],
+.flow-node[data-state='succeeded'] {
+  border-color: var(--color-success);
+}
+.flow-node[data-state='running'] {
+  border-color: var(--color-info);
+}
+.flow-node[data-kind='gate'] {
+  border-style: dashed;
+}
+.flow-rework {
+  border-bottom: 1px dashed var(--color-border);
+  padding-bottom: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: var(--text-compact);
+}
+@media (max-width: 1200px) {
+  .selected-task-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .decision-inspector {
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+}
+@media (max-width: 520px) {
+  .flow-nodes {
+    flex-direction: column;
+  }
+  .flow-node {
+    flex-basis: auto;
+  }
+  .flow-node + .flow-node::before {
+    content: none;
+  }
+  .flow-node > button {
+    display: grid;
+    grid-template-columns: 1fr auto;
+  }
+  .flow-node-state {
+    grid-column: 1 / -1;
+  }
+}
 @media (max-width: 800px) {
   .operations-heading,
   .operations-counts {

@@ -31,8 +31,10 @@ export function WorkflowConversation({
   onStop,
   onApprove,
   onRetrospective,
+  showApproval = true,
 }: {
   task: Task
+  showApproval?: boolean
   history: RunHistory
   run: Run | undefined
   routing: Routing | null
@@ -348,7 +350,7 @@ export function WorkflowConversation({
           </button>
         ) : (
           <>
-            {ready && !active && !retrospective && (
+            {showApproval && ready && !active && !retrospective && (
               <div className="planning-approval">
                 <div>
                   <p className="planning-message-summary">

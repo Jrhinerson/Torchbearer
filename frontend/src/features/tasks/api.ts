@@ -130,6 +130,31 @@ export const getOperations = (signal?: AbortSignal, query = '', project = '') =>
     { signal },
   )
 
+export interface FlowNode {
+  id: string
+  label: string
+  kind: 'stage' | 'gate' | 'procedure'
+  agent: Agent | 'human' | null
+  state: string
+  accepted?: boolean
+  run_id: string | null
+}
+export interface TaskFlowData extends RunHistory {
+  task_id: string
+  revision: number
+  latest_run_id: string | null
+  nodes: FlowNode[]
+  edges: {
+    source: string
+    target: string
+    kind: string
+    decision_id?: number
+  }[]
+  operations: NonNullable<Task['operations']>
+}
+export const getTaskFlow = (id: string, signal?: AbortSignal) =>
+  requestJson<TaskFlowData>(`tasks/${id}/flow/`, { signal })
+
 export function listTasks(signal?: AbortSignal) {
   return requestJson<Task[]>('tasks/', { signal })
 }
