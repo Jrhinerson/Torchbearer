@@ -7,7 +7,7 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 - `frontend/src/app/`: application shell, theme-color synchronization, and layered shared styling. See the [styling system](styling.md) for font, token, and control conventions.
 - `frontend/src/features/tasks/`: five-column board, task-creation popup, and task-specific API operations.
 - `frontend/src/features/projects/`: searchable project selection, local-folder browser, cloning and project management inside task creation.
-- `frontend/src/features/workflows/`: searchable work-type catalogue, workflow details, and saved assignment management.
+- `frontend/src/features/workflows/`: alphabetical, searchable work-type catalogue with responsive columns and saved assignment management.
 - `frontend/src/lib/api.ts`: same-origin requests and useful HTTP/connection errors.
 - `backend/config/`: local settings, routing, health, and CSRF bootstrap.
 - `backend/tasks/`: task models, serializers, views, migrations, and API tests.

@@ -50,11 +50,11 @@ SQLite files, environment files containing secrets, dependency directories, buil
 
 ## Workflow assignments
 
-Open **Workflows** to manage application-wide defaults for 19 work types and 18 built-in engineering workflows. Search by work-type name, description, or assigned workflow. Each card shows its saved assignment and recommended workflow; expand **Workflow details** to inspect the selected workflow's steps, expected outputs, validation requirements, and approval points.
+Open **Workflows** to manage application-wide defaults for 19 work types and 18 built-in engineering workflows. Work types appear alphabetically in two columns when space permits and one column on narrower screens. Search by work-type name, description, or assigned workflow. Each card shows its saved assignment and recommended workflow.
 
-Choose any workflow for any work type, inspect the preview, then **Save**. **Cancel** restores the saved selection. **Use recommended workflow** prepares the original recommendation; choose **Save** to apply it. Assignments persist in SQLite across refreshes and backend restarts. Failed saves retain the selection for retry. If another tab changed an assignment, **Reload assignment** retrieves the latest saved value while keeping the chosen selection for review before saving again.
+Choose any workflow for any work type, then **Save**. **Cancel** restores the saved selection. **Use recommended workflow** prepares the original recommendation; choose **Save** to apply it. Assignments persist in SQLite across refreshes and backend restarts. Failed saves retain the selection for retry. If another tab changed an assignment, **Reload assignment** retrieves the latest saved value while keeping the chosen selection for review before saving again.
 
-This page manages catalogue assignments. Task creation and agent execution do not use these defaults yet; the existing task stages, routing, and history continue to operate independently. Workflow definitions are inspectable built-ins; their steps are not editable through this page. Catalogue migrations add missing entries without overwriting saved assignments.
+This page manages catalogue assignments. Task creation and agent execution do not use these defaults yet; the existing task stages, routing, and history continue to operate independently. Workflow definitions are built-ins; their steps are not editable through this page. Catalogue migrations add missing entries without overwriting saved assignments.
 
 ## Agent routing
 

@@ -6,6 +6,7 @@
   max-width: 80rem;
   min-width: 0;
   overflow-wrap: anywhere;
+  container-type: inline-size;
 }
 .workflows-header,
 .workflows-toolbar {
@@ -57,12 +58,13 @@
 .work-type-card {
   padding: var(--space-5);
   min-width: 0;
+  height: 100%;
   overflow-wrap: anywhere;
 }
 .work-type-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-6);
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
 }
 .work-type-number {
   color: var(--color-primary);
@@ -107,47 +109,9 @@
 .work-type-assignment .feedback {
   margin-top: var(--space-3);
 }
-.workflow-definition {
-  margin-top: var(--space-4);
-  border-top: var(--border-width) solid var(--color-border);
-}
-.workflow-definition summary {
-  min-height: var(--control-size);
-  align-content: center;
-  padding-block: var(--space-2);
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-.workflow-definition summary:hover {
-  color: var(--color-text);
-}
-.workflow-definition-content > p {
-  color: var(--color-text-muted);
-}
-.workflow-definition-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: var(--space-6);
-  font-size: var(--text-compact);
-}
-.workflow-definition h3 {
-  margin: var(--space-4) 0 var(--space-2);
-  font-size: var(--text-compact);
-}
-.workflow-definition ul,
-.workflow-definition ol {
-  padding-left: var(--space-5);
-  margin: 0;
-  color: var(--color-text-muted);
-}
-.workflow-definition li + li {
-  margin-top: var(--space-2);
-}
-@media (max-width: 60rem) {
-  .work-type-main,
-  .workflow-definition-grid {
-    grid-template-columns: minmax(0, 1fr);
-    gap: var(--space-4);
+@container (min-width: 56rem) {
+  .work-types-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 30rem) {

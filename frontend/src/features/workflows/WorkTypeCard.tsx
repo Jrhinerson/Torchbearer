@@ -3,7 +3,6 @@ import type { FormEvent } from 'react'
 import { ApiError } from '../../lib/api'
 import { getWorkType, saveAssignment } from './api'
 import type { WorkflowDefinition, WorkType } from './api'
-import { WorkflowDetails } from './WorkflowDetails'
 
 export function WorkTypeCard({
   workType,
@@ -23,7 +22,9 @@ export function WorkTypeCard({
   const [conflict, setConflict] = useState(false)
   const changed = selected !== workType.assigned_workflow
   const busy = pending !== null
-  const preview = workflows.find((workflow) => workflow.key === selected)
+  const selectedWorkflow = workflows.find(
+    (workflow) => workflow.key === selected,
+  )
   const assigned = workflows.find(
     (workflow) => workflow.key === workType.assigned_workflow,
   )
@@ -39,7 +40,7 @@ export function WorkTypeCard({
 
   async function save(event: FormEvent) {
     event.preventDefault()
-    if (busy || !changed || conflict || !preview) return
+    if (busy || !changed || conflict || !selectedWorkflow) return
     setPending('save')
     setError('')
     setNotice('')
@@ -133,7 +134,7 @@ export function WorkTypeCard({
             <button
               type="submit"
               className="button button-primary"
-              disabled={busy || !changed || conflict || !preview}
+              disabled={busy || !changed || conflict || !selectedWorkflow}
               aria-busy={pending === 'save'}
             >
               {pending === 'save' ? 'Saving…' : 'Save'}
@@ -177,10 +178,9 @@ export function WorkTypeCard({
       </div>
       {changed && (
         <p className="work-type-preview">
-          Previewing {preview?.name}. Save to apply this assignment.
+          Save to assign {selectedWorkflow?.name} to this work type.
         </p>
       )}
-      {preview && <WorkflowDetails workflow={preview} />}
     </article>
   )
 }

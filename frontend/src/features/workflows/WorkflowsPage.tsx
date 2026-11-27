@@ -37,6 +37,9 @@ export default function WorkflowsPage() {
   const workflows = new Map(
     catalogue?.workflows.map((workflow) => [workflow.key, workflow]),
   )
+  const workTypes = [...(catalogue?.workTypes ?? [])].sort((left, right) =>
+    left.name.localeCompare(right.name, 'en', { sensitivity: 'base' }),
+  )
   const search = query.trim().toLocaleLowerCase()
   const matches = (workType: WorkType) =>
     [
@@ -47,7 +50,7 @@ export default function WorkflowsPage() {
       .join(' ')
       .toLocaleLowerCase()
       .includes(search)
-  const visibleCount = catalogue?.workTypes.filter(matches).length ?? 0
+  const visibleCount = workTypes.filter(matches).length
 
   return (
     <section className="workflows-page" aria-labelledby="workflows-heading">
@@ -111,7 +114,7 @@ export default function WorkflowsPage() {
             </p>
           )}
           <ul className="work-types-list" aria-label="Work types">
-            {catalogue.workTypes.map((workType, index) => (
+            {workTypes.map((workType, index) => (
               <li key={workType.key} hidden={!matches(workType)}>
                 <WorkTypeCard
                   workType={workType}

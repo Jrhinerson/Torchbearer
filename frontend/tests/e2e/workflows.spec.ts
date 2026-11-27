@@ -18,12 +18,36 @@ test.afterEach(async ({ request }) => {
   }
 })
 
-test('lists all work types, searches assignments, and explains workflows', async ({
+test('lists work types alphabetically and searches assignments', async ({
   page,
 }) => {
   await page.goto('/workflows')
   await expect(page.getByRole('article')).toHaveCount(19)
   await expect(page.getByText('18 workflows', { exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 2 })).toHaveText([
+    'Accessibility improvement',
+    'API / external integration',
+    'Architecture / system design',
+    'Bug / regression',
+    'Build / CI / developer tooling',
+    'Business rules / complex application logic',
+    'Database schema / data migration',
+    'Dependency / framework / runtime upgrade',
+    'Documentation',
+    'Feature / enhancement',
+    'Infrastructure / configuration / release',
+    'Performance / scalability',
+    'Production incident / emergency fix',
+    'Refactoring / code health',
+    'Research / technical spike / prototype',
+    'Security vulnerability / hardening',
+    'Small change / routine maintenance',
+    'Testing / QA improvement',
+    'UI / UX change',
+  ])
+  await expect(page.getByText('Workflow details', { exact: true })).toHaveCount(
+    0,
+  )
   const bug = page.getByRole('article', {
     name: 'Bug / regression',
     exact: true,
@@ -32,16 +56,6 @@ test('lists all work types, searches assignments, and explains workflows', async
     bug.getByText('Assigned: Diagnosis and regression testing', {
       exact: true,
     }),
-  ).toBeVisible()
-  await bug.getByText('Workflow details', { exact: true }).click()
-  await expect(
-    bug.getByRole('heading', { name: 'Expected outputs' }),
-  ).toBeVisible()
-  await expect(
-    bug.getByText('Capture the failure in a regression test', { exact: true }),
-  ).toBeVisible()
-  await expect(
-    bug.getByRole('heading', { name: 'Approval points' }),
   ).toBeVisible()
   const search = page.getByRole('searchbox')
   await search.fill('regression')
@@ -76,20 +90,24 @@ test('recovers from catalogue load errors', async ({ page }) => {
   await expect(page.getByRole('article')).toHaveCount(19)
 })
 
-test('keeps catalogue and details readable at narrow widths and enlarged text', async ({
+test('uses two columns when space permits and stays readable at narrow widths', async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 320, height: 700 })
+  await page.setViewportSize({ width: 1440, height: 900 })
   await page.goto('/workflows')
-  await expect(page.getByRole('article')).toHaveCount(19)
-  const article = page.getByRole('article', {
-    name: 'Dependency / framework / runtime upgrade',
-    exact: true,
-  })
-  await article.getByText('Workflow details', { exact: true }).click()
-  await expect(
-    article.getByRole('heading', { name: 'Steps', exact: true }),
-  ).toBeVisible()
+  const cards = page.getByRole('article')
+  await expect(cards).toHaveCount(19)
+  const firstWide = (await cards.nth(0).boundingBox())!
+  const secondWide = (await cards.nth(1).boundingBox())!
+  expect(Math.abs(firstWide.y - secondWide.y)).toBeLessThan(1)
+  expect(secondWide.x).toBeGreaterThanOrEqual(firstWide.x + firstWide.width)
+  await page.setViewportSize({ width: 320, height: 700 })
+  const firstNarrow = (await cards.nth(0).boundingBox())!
+  const secondNarrow = (await cards.nth(1).boundingBox())!
+  expect(Math.abs(firstNarrow.x - secondNarrow.x)).toBeLessThan(1)
+  expect(secondNarrow.y).toBeGreaterThanOrEqual(
+    firstNarrow.y + firstNarrow.height,
+  )
   for (const fontSize of ['100%', '200%']) {
     await page.evaluate((value) => {
       document.documentElement.style.fontSize = value
@@ -126,9 +144,10 @@ test('reassigns, cancels, restores recommendations, and persists after refresh',
   await page.getByRole('searchbox').fill('no-such-type')
   await page.getByRole('searchbox').fill('')
   await expect(select).toHaveValue('test-driven')
-  await bug.getByText('Workflow details', { exact: true }).click()
   await expect(
-    bug.getByText('Refactor with tests passing', { exact: true }),
+    bug.getByText('Save to assign Test-driven development to this work type.', {
+      exact: true,
+    }),
   ).toBeVisible()
   await save.click()
   await expect(bug.getByRole('status')).toHaveText('Assignment saved.')
@@ -261,8 +280,9 @@ test('supports keyboard reassignment and captures the management layout', async 
   ).toBeFocused()
   await page.keyboard.press('Enter')
   await expect(maintenance.getByRole('status')).toHaveText('Assignment saved.')
-  await maintenance.getByText('Workflow details', { exact: true }).click()
+  await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: testInfo.outputPath('workflows-desktop.png') })
   await page.setViewportSize({ width: 390, height: 844 })
+  await page.evaluate(() => window.scrollTo(0, 0))
   await page.screenshot({ path: testInfo.outputPath('workflows-mobile.png') })
 })
