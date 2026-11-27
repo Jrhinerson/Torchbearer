@@ -6,7 +6,17 @@ from .models import WorkflowDefinition, WorkType
 class WorkflowDefinitionSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkflowDefinition
-        fields = ["key", "name", "description", "steps", "outputs", "validation", "approval_points"]
+        fields = [
+            "key",
+            "name",
+            "description",
+            "steps",
+            "outputs",
+            "validation",
+            "approval_points",
+            "definition_version",
+            "execution_profile",
+        ]
 
 
 class WorkTypeSerializer(serializers.ModelSerializer):

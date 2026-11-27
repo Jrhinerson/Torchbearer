@@ -1,6 +1,9 @@
+from django.db import transaction
 from projects.models import Project
 from projects.serializers import ProjectSerializer
 from rest_framework import serializers
+from workflows.models import WorkType
+from workflows.profiles import LEGACY_SNAPSHOT, snapshot_for
 
 from .git import repository_path
 from .models import AgentRun, Decision, Repository, Task
@@ -118,6 +121,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
+            "work_type",
+            "workflow_snapshot",
             "project",
             "project_id",
             "repository",
@@ -136,6 +141,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "base_commit",
         ]
         read_only_fields = [
+            "workflow_snapshot",
             "id",
             "status",
             "revision",
@@ -146,7 +152,22 @@ class TaskSerializer(serializers.ModelSerializer):
             "branch",
             "base_commit",
         ]
-        extra_kwargs = {"frontier_agent": {"required": False}}
+        extra_kwargs = {
+            "frontier_agent": {"required": False},
+            "work_type": {"required": False, "allow_null": False},
+        }
+
+    @transaction.atomic
+    def create(self, validated_data):
+        from copy import deepcopy
+
+        work_type = validated_data.get("work_type")
+        validated_data["workflow_snapshot"] = deepcopy(LEGACY_SNAPSHOT)
+        task = super().create(validated_data)
+        if work_type:
+            task.workflow_snapshot = snapshot_for(work_type)
+            task.save(update_fields=["workflow_snapshot"])
+        return task
 
     def validate(self, data):
         mode = data.get("routing_mode", Approach.FRONTIER)
@@ -195,6 +216,7 @@ class TaskSerializer(serializers.ModelSerializer):
                 "base_commit",
                 "stage_agents",
                 "next_stage",
+                "workflow_snapshot",
             }
             & data.keys()
         ):
@@ -206,6 +228,10 @@ class TaskSerializer(serializers.ModelSerializer):
 
 class TaskSettingsSerializer(serializers.Serializer):
     revision = serializers.IntegerField(min_value=0)
+    work_type = serializers.PrimaryKeyRelatedField(
+        queryset=WorkType.objects.select_related("assigned_workflow"), required=False
+    )
+    refresh_workflow = serializers.BooleanField(required=False)
     repository = serializers.PrimaryKeyRelatedField(
         queryset=Repository.objects.all(), required=False, allow_null=True
     )
