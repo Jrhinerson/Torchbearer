@@ -31,18 +31,24 @@ def test_merge_preserves_saved_graphs_profiles_and_snapshots(branch):
         ]
     )
     try:
-        executor.migrate(before)
-        old_apps = executor.loader.project_state(before).apps
+        # Targeting one branch alone doesn't unapply its sibling. Rebuild from
+        # their common ancestor so the schema really matches the old app state.
+        common = [node for node in latest if node[0] not in {"workflows", "tasks"}]
+        common.extend(
+            [("tasks", "0011_support_actions"), ("workflows", "0003_consolidate_workflows")]
+        )
+        executor.migrate(common)
+        common_apps = executor.loader.project_state(common).apps
         for name, function in [
             ("0002_seed_catalogue", "seed_catalogue"),
             ("0003_consolidate_workflows", "consolidate_catalogue"),
-            ("0005_plan_execute_graph", "seed_graph")
-            if branch == "graph"
-            else ("0004_workflowdefinition_definition_version_and_more", "seed_profiles"),
         ]:
             getattr(import_module(f"workflows.migrations.{name}"), function)(
-                old_apps, connection.schema_editor()
+                common_apps, connection.schema_editor()
             )
+        executor = MigrationExecutor(connection)
+        executor.migrate(before)
+        old_apps = executor.loader.project_state(before).apps
         definitions = old_apps.get_model("workflows", "WorkflowDefinition")
         types = old_apps.get_model("workflows", "WorkType")
         tasks = old_apps.get_model("tasks", "Task")
