@@ -1,9 +1,10 @@
-﻿"""Read-only views of task ownership, attention, and recorded execution."""
+"""Read-only views of task ownership, attention, and recorded execution."""
 
 from collections import Counter
 
 from django.db.models import Prefetch, Q
 from django.utils import timezone
+from workflows.profiles import workflow_snapshot
 
 from .cli import agent_catalog
 from .models import AgentRun, Task
@@ -68,6 +69,7 @@ def owner_for(task, stage):
 
 
 def projection(task, worker):
+    snapshot = workflow_snapshot(task)
     run = latest_run(task)
     agent = run.agent if run else owner_for(task, "plan")
     state = run.state if run else "ready"
@@ -110,8 +112,10 @@ def projection(task, worker):
         "state": "approved" if task.completed_at else state,
         "agent": agent,
         "next_agent": next_agent,
-        "stage_label": STAGE_LABELS.get(task.status, "Backlog"),
-        "workflow_name": "Legacy engineering workflow",
+        "stage_label": snapshot.get("stage_labels", {}).get(
+            task.status, STAGE_LABELS.get(task.status, "Backlog")
+        ),
+        "workflow_name": snapshot["name"],
         "running": bool(
             run
             and state == "running"
@@ -207,6 +211,7 @@ def overview(params):
 
 
 def flow(task):
+    snapshot = workflow_snapshot(task)
     runs = list(task.runs.all())
     decisions = list(task.decisions.all())
     nodes, edges = [], []
@@ -221,17 +226,44 @@ def flow(task):
                 decision.action == "approve" and decision.run_id == run.id for decision in decisions
             )
         )
-        nodes.append(
-            {
-                "id": stage,
-                "label": STAGE_LABELS[stage],
-                "kind": "stage",
-                "agent": run.agent if run else owner_for(task, stage),
-                "state": run.state if run else "planned",
-                "accepted": accepted,
-                "run_id": str(run.id) if run else None,
-            }
+        procedures = [step for step in snapshot.get("steps", []) if step["stage"] == stage]
+        reports = (
+            {report["step_id"]: report for report in run.result.get("workflow_steps", [])}
+            if run
+            else {}
         )
+        if procedures:
+            for step in procedures:
+                report = reports.get(step["id"])
+                nodes.append(
+                    {
+                        "id": step["id"],
+                        "label": step["label"],
+                        "kind": "procedure",
+                        "stage": stage,
+                        "agent": run.agent if run else owner_for(task, stage),
+                        "state": (
+                            "succeeded" if report["outcome"] == "complete" else report["outcome"]
+                        )
+                        if report
+                        else ("not_reported" if run else "planned"),
+                        "accepted": accepted,
+                        "run_id": str(run.id) if run else None,
+                        "evidence": report,
+                    }
+                )
+        else:
+            nodes.append(
+                {
+                    "id": stage,
+                    "label": STAGE_LABELS[stage],
+                    "kind": "stage",
+                    "agent": run.agent if run else owner_for(task, stage),
+                    "state": run.state if run else "planned",
+                    "accepted": accepted,
+                    "run_id": str(run.id) if run else None,
+                }
+            )
         nodes.append(
             {
                 "id": f"approve_{stage}",
@@ -285,6 +317,6 @@ def flow(task):
         "runs": RunSerializer(runs, many=True).data,
         "decisions": DecisionSerializer(decisions, many=True).data,
         "operations": projection(task, worker_status()),
+        "workflow": snapshot,
         "actions": action_descriptors(task, runs[0] if runs else None),
     }
-

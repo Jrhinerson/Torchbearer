@@ -8,9 +8,11 @@ from rest_framework.exceptions import ValidationError
 from workflows.models import WorkflowDefinition, WorkType
 from workflows.profiles import LEGACY_SNAPSHOT, snapshot_for
 
+from .adapters import RunnerFailure, validate_result
 from .conftest import csrf
 from .models import AgentRun, Task
-from .workflow import Conflict, update_settings
+from .worker import Worker
+from .workflow import Conflict, act, update_settings
 
 pytestmark = pytest.mark.django_db
 
@@ -89,3 +91,83 @@ def test_unknown_contract_and_duplicate_steps_fail_closed(profiles, local_client
         )
         assert response.status_code == 400
         assert not Task.objects.filter(title="Rejected").exists()
+
+
+@pytest.mark.parametrize("agent", ["codex", "claude", "pi"])
+def test_profiled_execution_and_evidence_across_adapters(
+    profiles, repository, fake_cli, settings, tmp_path, agent
+):
+    settings.DATA_DIR = tmp_path / "data"
+    fake_cli(agent, "implement")
+    work_type = WorkType.objects.get(pk="bug")
+    task = Task.objects.create(
+        title="Profiled regression",
+        repository=repository,
+        routing_mode="local_only" if agent == "pi" else "frontier",
+        frontier_agent=None if agent == "pi" else agent,
+        work_type=work_type,
+        workflow_snapshot=snapshot_for(work_type),
+    )
+    act(task.id, action="start", revision=0)
+    for stage in ["plan", "integrate", "code_review"]:
+        assert Worker().run_once()
+        task.refresh_from_db()
+        run = task.runs.first()
+        assert run.state == "succeeded", run.error
+        assert run.input_context["workflow"] == task.workflow_snapshot
+        assert {report["step_id"] for report in run.result["workflow_steps"]} == {
+            step["id"] for step in task.workflow_snapshot["steps"] if step["stage"] == stage
+        }
+        act(
+            task.id,
+            action="approve",
+            revision=task.revision,
+            run_id=run.id,
+            fingerprint=run.review_fingerprint,
+        )
+    task.refresh_from_db()
+    run = task.runs.first()
+    act(
+        task.id,
+        action="final_approve",
+        revision=task.revision,
+        run_id=run.id,
+        fingerprint=run.review_fingerprint,
+    )
+    task.refresh_from_db()
+    assert task.completed_at
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["missing", "duplicate", "wrong_stage", "invalid_index", "skip_required", "failed_step"],
+)
+def test_invalid_step_evidence_cannot_complete(profiles, mutation):
+    snapshot = snapshot_for(WorkType.objects.get(pk="bug"))
+    reports = [
+        {"step_id": step["id"], "outcome": "complete", "summary": "Recorded", "test_indexes": [0]}
+        for step in snapshot["steps"]
+        if step["stage"] == "integrate"
+    ]
+    value = {
+        "outcome": "complete",
+        "summary": "Done",
+        "details": "Evidence",
+        "tests": [{"command": "pytest", "outcome": "pass", "details": "Passed"}],
+        "workflow_steps": reports,
+        "artifacts": {"decision": None},
+    }
+    if mutation == "missing":
+        reports.pop()
+    elif mutation == "duplicate":
+        reports.append(deepcopy(reports[0]))
+    elif mutation == "wrong_stage":
+        reports[0]["step_id"] = "review"
+    elif mutation == "invalid_index":
+        reports[0]["test_indexes"] = [True]
+    elif mutation == "skip_required":
+        reports[0]["outcome"] = "not_applicable"
+    else:
+        reports[0]["outcome"] = "failed"
+    with pytest.raises(RunnerFailure):
+        validate_result(value, "integrate", snapshot)

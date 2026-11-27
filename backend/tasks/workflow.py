@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from projects.models import Project
 from rest_framework.exceptions import APIException, ValidationError
-from workflows.profiles import snapshot_for
+from workflows.profiles import snapshot_for, workflow_snapshot
 
 from .adapters import RunnerFailure, validate_result
 from .cli import resolve_command
@@ -32,7 +32,7 @@ def validate_review(task, run, fingerprint):
         raise Conflict("Review the latest successful result before approving.")
     if run.stage == "integrate":
         try:
-            validate_result(run.result, "integrate")
+            validate_result(run.result, "integrate", workflow_snapshot(task))
         except RunnerFailure as error:
             raise Conflict(str(error)) from error
     try:
@@ -206,6 +206,10 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
             task=task,
             sequence=(run.sequence + 1 if run else 1),
             stage=execution_stage,
+            input_context={
+                "workflow": workflow_snapshot(task),
+                "result_contract": workflow_snapshot(task).get("result_contract", 1),
+            },
             agent=agent,
             feedback=feedback,
             input_fingerprint=baseline,

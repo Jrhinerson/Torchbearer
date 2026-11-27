@@ -164,6 +164,7 @@ class Worker:
                     cli_version=version
                 ),
                 timeout=settings.TORCHBEARER_RUN_TIMEOUT,
+                workflow=run.input_context.get("workflow"),
             )
             snapshot = fingerprint(run.task)
             if run.stage in REPORT_ONLY_STAGES and snapshot != before:

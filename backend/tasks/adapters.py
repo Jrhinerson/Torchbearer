@@ -10,6 +10,7 @@ import time
 
 from .cli import LABELS, resolve_command
 from .processes import ProcessTree
+from .results import profiled, result_schema, validate_workflow_report
 
 RESULT_SCHEMA = {
     "type": "object",
@@ -71,7 +72,7 @@ def preflight(agent):
         raise RunnerFailure(str(error), "blocked") from error
 
 
-def arguments(agent, stage, schema_path):
+def arguments(agent, stage, schema_path, workflow=None):
     if agent == "codex":
         sandbox = "workspace-write" if stage == "integrate" else "read-only"
         return [
@@ -104,7 +105,7 @@ def arguments(agent, stage, schema_path):
             "--allowedTools",
             tools,
             "--json-schema",
-            json.dumps(RESULT_SCHEMA),
+            json.dumps(result_schema(RESULT_SCHEMA, workflow)),
         ]
     tools = "read,grep,find,ls"
     if stage == "integrate":
@@ -114,7 +115,7 @@ def arguments(agent, stage, schema_path):
     return ["--mode", "json", "--no-session", "--tools", tools]
 
 
-def validate_result(value, stage):
+def validate_result(value, stage, workflow=None):
     if isinstance(value, str):
         text = value.strip()
         if text.startswith("```json\n") and text.endswith("```"):
@@ -125,7 +126,10 @@ def validate_result(value, stage):
             raise RunnerFailure(
                 "The agent did not return the required JSON result. Review its log and retry."
             ) from error
-    if not isinstance(value, dict) or set(value) != {"outcome", "summary", "details", "tests"}:
+    fields = {"outcome", "summary", "details", "tests"}
+    if profiled(workflow):
+        fields |= {"workflow_steps", "artifacts"}
+    if not isinstance(value, dict) or set(value) != fields:
         raise RunnerFailure("The agent result is missing required fields.")
     if value["outcome"] not in {"complete", "blocked", "failed"}:
         raise RunnerFailure("The agent returned an invalid outcome.")
@@ -157,6 +161,11 @@ def validate_result(value, stage):
         and (not tests or any(test["outcome"] != "pass" for test in tests))
     ):
         raise RunnerFailure("Integrate cannot complete without passing validation commands.")
+    if profiled(workflow):
+        try:
+            validate_workflow_report(value, stage, workflow)
+        except ValueError as error:
+            raise RunnerFailure(str(error)) from error
     return value
 
 
@@ -226,10 +235,11 @@ def execute(
     should_stop,
     on_started=lambda version: None,
     timeout=1800,
+    workflow=None,
 ):
     command, version = preflight(agent)
     schema_path.parent.mkdir(parents=True, exist_ok=True)
-    schema_path.write_text(json.dumps(RESULT_SCHEMA), encoding="utf-8")
+    schema_path.write_text(json.dumps(result_schema(RESULT_SCHEMA, workflow)), encoding="utf-8")
     parser = Events(agent)
     events = queue.Queue(maxsize=200)
     log = ""
@@ -238,7 +248,7 @@ def execute(
     last_update = started
     # Do not inherit Git variables that could redirect operations into another repository.
     env = {key: value for key, value in os.environ.items() if not key.startswith("GIT_")}
-    tree = ProcessTree([*command, *arguments(agent, stage, schema_path)], cwd, env)
+    tree = ProcessTree([*command, *arguments(agent, stage, schema_path, workflow)], cwd, env)
 
     def read(stream, source):
         try:
@@ -315,7 +325,7 @@ def execute(
             )
         if not parser.complete or parser.result is None:
             raise RunnerFailure("The CLI exited without a completed agent result.")
-        return validate_result(parser.result, stage), version
+        return validate_result(parser.result, stage, workflow), version
     finally:
         tree.stop()
         writer.join(timeout=2)

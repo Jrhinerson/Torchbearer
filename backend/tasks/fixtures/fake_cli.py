@@ -96,6 +96,19 @@ if scenario == "conversation" and stage == "plan":
         if len(messages) == 1
         else "Implement the agreed behavior:\n" + "\n\n".join(messages),
     )
+workflow = context.get("workflow", {})
+if workflow.get("result_contract") == 2:
+    result["workflow_steps"] = [
+        {
+            "step_id": step["id"],
+            "outcome": "complete" if result["outcome"] == "complete" else "blocked",
+            "summary": "Fixture recorded step evidence",
+            "test_indexes": [0] if result["tests"] else [],
+        }
+        for step in workflow.get("steps", [])
+        if step["stage"] == stage
+    ]
+    result["artifacts"] = {"decision": None}
 text = json.dumps(result, ensure_ascii=False)
 if scenario == "verbose":
     print("diagnostic output\n" * 10000, file=sys.stderr, flush=True)

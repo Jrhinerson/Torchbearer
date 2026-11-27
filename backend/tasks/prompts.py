@@ -2,8 +2,12 @@
 
 import json
 
+from rest_framework.exceptions import ValidationError
+from workflows.profiles import validate_profile, workflow_snapshot
+
 from .adapters import RESULT_SCHEMA, RunnerFailure, validate_result
 from .practices import practices_for
+from .results import profiled, result_schema
 
 INSTRUCTIONS = {
     "refine": (
@@ -134,6 +138,12 @@ def plan_conversation(run):
 
 def prompt_for(run):
     task = run.task
+    workflow = run.input_context.get("workflow") or workflow_snapshot(task)
+    if profiled(workflow):
+        try:
+            validate_profile(workflow)
+        except ValidationError as error:
+            raise RunnerFailure(str(error), "blocked") from error
     if run.stage not in INSTRUCTIONS:
         raise RunnerFailure("This stage was retired. Resume the task in Integrate.", "blocked")
     artifacts = {}
@@ -149,7 +159,7 @@ def prompt_for(run):
             artifacts["implementation"] = artifact(implementation)
         if run.stage == "code_review":
             try:
-                validate_result(implementation.result, "integrate")
+                validate_result(implementation.result, "integrate", workflow)
             except RunnerFailure as error:
                 raise RunnerFailure(
                     "Code Review needs passing Integrate validation. Return to Integrate.",
@@ -245,10 +255,23 @@ def prompt_for(run):
                 : None if run.stage == "retro" else 10
             ]
         ),
-        "result_schema": RESULT_SCHEMA,
+        "workflow": workflow,
+        "result_contract": workflow.get("result_contract", 1),
+        "result_schema": result_schema(RESULT_SCHEMA, workflow),
     }
     if run.stage == "plan":
         context["plan_conversation"] = plan_conversation(run)
+    if profiled(workflow):
+        context["instructions"] += (
+            " Follow the frozen workflow's instructions, expected outputs, and validation within "
+            "this stage's existing permissions. Report every procedure step belonging to this "
+            "stage in workflow_steps using its exact stable ID. Reference reported command "
+            "evidence by zero-based test_indexes. A conditional check may be not_applicable only "
+            "with a concrete explanation. Leave future-stage steps out of this report. "
+            "Never claim internal progress that has not been observed. Use artifacts.decision "
+            "null for code changes. Humans still approve every stage; workflow instructions "
+            "do not authorize production actions or bypass repository permissions."
+        )
     if len(json.dumps(context, ensure_ascii=False)) > 200000:
         raise RunnerFailure(
             "Required handoff context exceeds the supported limit. Revise the plan or reports "
