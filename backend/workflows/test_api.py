@@ -20,7 +20,7 @@ def write(client, key, data, **headers):
 def test_lists_catalogue_and_assignment_details(client):
     workflows = client.get(reverse("workflow-list")).json()
     work_types = client.get(reverse("work-type-list")).json()
-    assert len(workflows) == 18 and len(work_types) == 19
+    assert len(workflows) == 15 and len(work_types) == 19
     assert workflows[0]["key"] == "plan-execute"
     assert workflows[0]["steps"] and workflows[0]["approval_points"]
     assert [item["key"] for item in work_types[:4]] == [
@@ -32,6 +32,13 @@ def test_lists_catalogue_and_assignment_details(client):
     bug = next(item for item in work_types if item["key"] == "bug")
     assert bug["assigned_workflow"] == bug["recommended_workflow"] == "diagnose-regression"
     assert client.get(reverse("work-type-detail", kwargs={"key": "bug"})).json() == bug
+    for key, workflow in [
+        ("documentation", "plan-execute"),
+        ("api-integration", "spec-driven"),
+        ("architecture", "timeboxed-discovery"),
+    ]:
+        work_type = next(item for item in work_types if item["key"] == key)
+        assert work_type["assigned_workflow"] == work_type["recommended_workflow"] == workflow
 
 
 def test_reassigns_and_restores_without_changing_other_types(client):
@@ -48,7 +55,11 @@ def test_reassigns_and_restores_without_changing_other_types(client):
 
 def test_every_type_and_workflow_can_be_reassigned(client):
     for work_type in WorkType.objects.all():
-        response = write(client, work_type.key, {"assigned_workflow": "test-driven", "revision": 0})
+        response = write(
+            client,
+            work_type.key,
+            {"assigned_workflow": "test-driven", "revision": work_type.revision},
+        )
         assert response.status_code == 200
     for workflow in client.get(reverse("workflow-list")).json():
         work_type = WorkType.objects.get(key="maintenance")
@@ -70,11 +81,26 @@ def test_stale_save_does_not_overwrite_another_assignment(client):
     assert saved.assigned_workflow_id == "spec-driven" and saved.revision == 1
 
 
+def test_consolidated_assignments_reject_a_save_from_before_migration(client):
+    saved = WorkType.objects.get(key="documentation")
+    response = write(
+        client,
+        saved.key,
+        {"assigned_workflow": "test-driven", "revision": saved.revision - 1},
+    )
+    assert response.status_code == 409
+    saved.refresh_from_db()
+    assert saved.assigned_workflow_id == "plan-execute"
+
+
 @pytest.mark.parametrize(
     "data",
     [
         {},
         {"assigned_workflow": "missing", "revision": 0},
+        {"assigned_workflow": "docs-as-code", "revision": 0},
+        {"assigned_workflow": "contract-testing", "revision": 0},
+        {"assigned_workflow": "design-proposal", "revision": 0},
         {"assigned_workflow": None, "revision": 0},
         {"assigned_workflow": "test-driven", "revision": -1},
         {"assigned_workflow": "test-driven"},

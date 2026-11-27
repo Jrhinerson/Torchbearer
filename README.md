@@ -50,11 +50,13 @@ SQLite files, environment files containing secrets, dependency directories, buil
 
 ## Workflow assignments
 
-Open **Workflows** to manage application-wide defaults for 19 work types and 18 built-in engineering workflows. Work types appear alphabetically in up to three columns, reducing to two or one as available width narrows. Search by work-type name, description, or assigned workflow. Each card shows its saved assignment and recommended workflow.
+Open **Workflows** to manage application-wide defaults for 19 work types and 15 built-in engineering workflows. Work types appear alphabetically in up to three columns, reducing to two or one as available width narrows. Search by work-type name, description, or assigned workflow. Each card shows its saved assignment and recommended workflow.
 
 Choose any workflow for any work type, then **Save**. **Cancel** restores the saved selection. **Use recommended workflow** prepares the original recommendation; choose **Save** to apply it. Assignments persist in SQLite across refreshes and backend restarts. Failed saves retain the selection for retry. If another tab changed an assignment, **Reload assignment** retrieves the latest saved value while keeping the chosen selection for review before saving again.
 
-This page manages catalogue assignments. Task creation and agent execution do not use these defaults yet; the existing task stages, routing, and history continue to operate independently. Workflow definitions are built-ins; their steps are not editable through this page. Catalogue migrations add missing entries without overwriting saved assignments.
+Overlapping practices share a workflow: documentation uses **Plan and execute** with documentation checks, API integration uses **Spec-driven development** with contract testing, and architecture and research use **Discovery and design review** with a reviewed decision. Distinct implementation practices retain their own workflows. See [engineering practices](docs/engineering-practices.md#workflow-catalogue) for the consolidation rationale.
+
+This page manages catalogue assignments. Task creation and agent execution do not use these defaults yet; the existing task stages, routing, and history continue to operate independently. Workflow definitions are built-ins; their steps are not editable through this page. Catalogue migrations add missing entries and map retired choices to their consolidated equivalents while preserving other saved assignments.
 
 ## Agent routing
 

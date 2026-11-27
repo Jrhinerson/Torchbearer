@@ -23,7 +23,7 @@ test('lists work types alphabetically and searches assignments', async ({
 }) => {
   await page.goto('/workflows')
   await expect(page.getByRole('article')).toHaveCount(19)
-  await expect(page.getByText('18 workflows', { exact: true })).toBeVisible()
+  await expect(page.getByText('15 workflows', { exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { level: 2 })).toHaveText([
     'Accessibility improvement',
     'API / external integration',
@@ -48,6 +48,18 @@ test('lists work types alphabetically and searches assignments', async ({
   await expect(page.getByText('Workflow details', { exact: true })).toHaveCount(
     0,
   )
+  for (const [workType, workflow] of [
+    ['Documentation', 'plan-execute'],
+    ['API / external integration', 'spec-driven'],
+    ['Architecture / system design', 'timeboxed-discovery'],
+    ['Research / technical spike / prototype', 'timeboxed-discovery'],
+  ]) {
+    await expect(
+      page
+        .getByRole('article', { name: workType, exact: true })
+        .getByRole('combobox'),
+    ).toHaveValue(workflow)
+  }
   const bug = page.getByRole('article', {
     name: 'Bug / regression',
     exact: true,
@@ -63,11 +75,25 @@ test('lists work types alphabetically and searches assignments', async ({
   await expect(
     page.getByRole('article', { name: 'Documentation', exact: true }),
   ).not.toBeVisible()
-  await search.fill('docs as code')
+  await search.fill('documentation')
   await expect(
     page.getByRole('article', { name: 'Documentation', exact: true }),
   ).toBeVisible()
   await expect(bug).not.toBeVisible()
+  await search.fill('discovery and design review')
+  await expect(page.getByRole('article')).toHaveCount(2)
+  await expect(
+    page.getByRole('article', {
+      name: 'Architecture / system design',
+      exact: true,
+    }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('article', {
+      name: 'Research / technical spike / prototype',
+      exact: true,
+    }),
+  ).toBeVisible()
   await search.fill('no-such-work-type')
   await expect(page.getByText('No work types match your search.')).toBeVisible()
   await search.fill('')
@@ -150,7 +176,7 @@ test('reassigns, cancels, restores recommendations, and persists after refresh',
   })
   const select = bug.getByRole('combobox')
   const save = bug.getByRole('button', { name: 'Save', exact: true })
-  await expect(select.getByRole('option')).toHaveCount(18)
+  await expect(select.getByRole('option')).toHaveCount(15)
   await expect(save).toBeDisabled()
   await select.selectOption('test-driven')
   await expect(bug.getByText('Unsaved change', { exact: true })).toBeVisible()

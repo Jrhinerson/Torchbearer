@@ -11,6 +11,8 @@ def catalogue(db):
     # Transactional tests elsewhere flush seed rows, so restore missing catalogue entries.
     migration = import_module("workflows.migrations.0002_seed_catalogue")
     migration.seed_catalogue(apps, connection.schema_editor())
+    migration = import_module("workflows.migrations.0003_consolidate_workflows")
+    migration.consolidate_catalogue(apps, connection.schema_editor())
 
 
 @pytest.fixture
