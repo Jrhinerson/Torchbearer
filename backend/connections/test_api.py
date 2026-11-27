@@ -10,9 +10,9 @@ from rest_framework.test import APIClient
 from . import views
 from .credentials import CredentialError, CredentialStore, StoredCredentials
 from .device import GitHubService, StaleAuthorization
+from .fixtures.keychain import MemoryKeychain
 from .models import GitHubConnection
 from .oauth import DeviceCode, GitHubRequestError, PollResult, Tokens
-from .test_credentials import MemoryKeychain
 
 pytestmark = pytest.mark.django_db
 
@@ -131,8 +131,8 @@ def test_native_authorization_persists_only_verified_identity_without_cli(
     assert response.json()["authorization"] is None
     connection = GitHubConnection.objects.get()
     assert connection.client_id == "Iv1.torchbearer"
-    assert str(connection.config_id) == authorization_id
-    assert service.store.read(connection.config_id).tokens.refresh_token == "ghr_fake-refresh"
+    assert str(connection.credential_id) == authorization_id
+    assert service.store.read(connection.credential_id).tokens.refresh_token == "ghr_fake-refresh"
     assert "fake-access" not in response.content.decode()
     assert "private-device-code" not in response.content.decode()
     assert "fake-access" not in json.dumps(list(GitHubConnection.objects.values()), default=str)
@@ -246,7 +246,7 @@ def test_failed_database_save_discards_new_credentials_and_preserves_old_account
     response = poll(client, second)
     assert response.json()["authorization"]["state"] == "failed"
     assert "private database" not in response.content.decode()
-    assert str(GitHubConnection.objects.get().config_id) == first
+    assert str(GitHubConnection.objects.get().credential_id) == first
     assert service.store.read(first) is not None
     assert service.store.read(second) is None
 
@@ -386,7 +386,7 @@ def verify(client):
 def expire_saved_access(service):
     saved = GitHubConnection.objects.get()
     service.store.write(
-        saved.config_id,
+        saved.credential_id,
         StoredCredentials(
             saved.client_id,
             saved.account_id,
@@ -440,7 +440,7 @@ def test_expired_access_rotates_credentials_once_and_a_new_service_uses_them(
     calls, rotated = install_refresh(service, monkeypatch)
     assert verify(client).json()["account"]["reauthorization_required"] is False
     assert calls == ["ghr_fake-refresh"]
-    assert service.store.read(saved.config_id).tokens == rotated
+    assert service.store.read(saved.credential_id).tokens == rotated
     assert verify(client).status_code == 200
     assert len(calls) == 1
     fresh = GitHubService(
@@ -475,15 +475,15 @@ def test_missing_or_mismatched_saved_credentials_require_reauthorization_without
     connect_account(client, service)
     saved = GitHubConnection.objects.get()
     if issue == "missing":
-        service.store.delete(saved.config_id)
+        service.store.delete(saved.credential_id)
     elif issue == "corrupt":
         backend = service.store.backend()
         backend.set_password(
-            service.store._service(saved.config_id), "oauth", "invalid-secret-content"
+            service.store._service(saved.credential_id), "oauth", "invalid-secret-content"
         )
     else:
         service.store.write(
-            saved.config_id,
+            saved.credential_id,
             StoredCredentials(
                 "other-app" if issue == "wrong-app" else saved.client_id,
                 99 if issue == "wrong-account" else saved.account_id,
@@ -499,7 +499,7 @@ def test_missing_or_mismatched_saved_credentials_require_reauthorization_without
     assert response.json()["account"]["reauthorization_required"] is True
     assert response.json()["account"]["id"] == 42
     assert service.test_remote.profile_calls == prior_calls
-    assert service.store.read(saved.config_id) is None
+    assert service.store.read(saved.credential_id) is None
     assert "secret-content" not in response.content.decode()
 
 
@@ -511,7 +511,7 @@ def test_remote_account_mismatch_cannot_switch_the_saved_identity(client, servic
     assert response.json()["account"]["id"] == 42
     assert response.json()["account"]["login"] == "chosen-user"
     assert response.json()["account"]["reauthorization_required"] is True
-    assert service.store.read(saved.config_id) is None
+    assert service.store.read(saved.credential_id) is None
 
 
 def test_revoked_refresh_clears_credentials_but_retains_account_context(
@@ -528,7 +528,7 @@ def test_revoked_refresh_clears_credentials_but_retains_account_context(
     monkeypatch.setattr(service.test_remote, "refresh_tokens", revoked, raising=False)
     response = verify(client)
     assert response.json()["account"]["reauthorization_required"] is True
-    assert service.store.read(saved.config_id) is None
+    assert service.store.read(saved.credential_id) is None
     assert GitHubConnection.objects.get().account_id == 42
 
 
@@ -544,7 +544,7 @@ def test_temporary_profile_outage_after_rotation_keeps_the_new_refresh_token(
 
     monkeypatch.setattr(service.test_remote, "user", offline)
     assert verify(client).status_code == 503
-    assert service.store.read(saved.config_id).tokens == rotated
+    assert service.store.read(saved.credential_id).tokens == rotated
     monkeypatch.setattr(service.test_remote, "user", lambda token: service.test_remote.account)
     assert verify(client).status_code == 200
     assert len(calls) == 1
@@ -571,7 +571,7 @@ def test_expired_refresh_requires_sign_in_without_sending_a_refresh_request(clie
     connect_account(client, service)
     saved = GitHubConnection.objects.get()
     service.store.write(
-        saved.config_id,
+        saved.credential_id,
         StoredCredentials(
             saved.client_id,
             saved.account_id,
@@ -585,7 +585,7 @@ def test_expired_refresh_requires_sign_in_without_sending_a_refresh_request(clie
     )
     response = verify(client)
     assert response.json()["account"]["reauthorization_required"] is True
-    assert service.store.read(saved.config_id) is None
+    assert service.store.read(saved.credential_id) is None
 
 
 def test_rotation_storage_failure_requires_reauthorization(client, service, monkeypatch):
@@ -702,4 +702,4 @@ def test_disconnect_during_saved_verification_cannot_restore_credentials(
     assert not thread.is_alive()
     assert len(errors) == 1
     assert not GitHubConnection.objects.exists()
-    assert service.store.read(saved.config_id) is None
+    assert service.store.read(saved.credential_id) is None

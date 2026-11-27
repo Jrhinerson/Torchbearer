@@ -101,12 +101,12 @@ class GitHubService:
                 and (
                     not connection.client_id
                     or connection.client_id != settings.TORCHBEARER_GITHUB_CLIENT_ID
-                    or connection.config_id in self.invalid_credentials
+                    or connection.credential_id in self.invalid_credentials
                 )
             )
             if connection and not reauthorize and not reason:
                 try:
-                    credentials = self.store.read(connection.config_id)
+                    credentials = self.store.read(connection.credential_id)
                     reauthorize = not self._credentials_match(connection, credentials)
                 except InvalidCredentials:
                     reauthorize = True
@@ -222,18 +222,18 @@ class GitHubService:
                             pk=1,
                             defaults={
                                 **account,
-                                "config_id": authorization.id,
+                                "credential_id": authorization.id,
                                 "client_id": authorization.client_id,
                             },
                         )
                         if previous and previous.client_id:
-                            self.store.delete(previous.config_id)
+                            self.store.delete(previous.credential_id)
                 except Exception:
                     self.store.delete(authorization.id)
                     raise
                 self.authorization = None
                 if previous:
-                    self.invalid_credentials.discard(previous.config_id)
+                    self.invalid_credentials.discard(previous.credential_id)
                 return self.status()
         except StaleAuthorization:
             self.store.delete(authorization.id)
@@ -276,11 +276,11 @@ class GitHubService:
             if connection:
                 try:
                     if connection.client_id:
-                        self.store.delete(connection.config_id)
+                        self.store.delete(connection.credential_id)
                 except CredentialError as error:
                     raise GitHubError(str(error)) from None
                 connection.delete()
-                self.invalid_credentials.discard(connection.config_id)
+                self.invalid_credentials.discard(connection.credential_id)
             return self.status()
 
     @staticmethod
@@ -293,8 +293,8 @@ class GitHubService:
 
     def _connection_current(self, snapshot):
         current = GitHubConnection.objects.filter(pk=1).first()
-        if not current or (current.config_id, current.account_id, current.client_id) != (
-            snapshot.config_id,
+        if not current or (current.credential_id, current.account_id, current.client_id) != (
+            snapshot.credential_id,
             snapshot.account_id,
             snapshot.client_id,
         ):
@@ -306,8 +306,8 @@ class GitHubService:
     def _invalidate(self, snapshot):
         with self.lock:
             self._connection_current(snapshot)
-            self.invalid_credentials.add(snapshot.config_id)
-            self.store.delete(snapshot.config_id)
+            self.invalid_credentials.add(snapshot.credential_id)
+            self.store.delete(snapshot.credential_id)
             return self.status()
 
     def _save_rotated(self, snapshot, tokens):
@@ -315,18 +315,18 @@ class GitHubService:
             self._connection_current(snapshot)
         try:
             self.store.write(
-                snapshot.config_id,
+                snapshot.credential_id,
                 StoredCredentials(snapshot.client_id, snapshot.account_id, tokens),
             )
         except CredentialError:
             with self.lock:
-                self.invalid_credentials.add(snapshot.config_id)
+                self.invalid_credentials.add(snapshot.credential_id)
             raise
         with self.lock:
             try:
                 self._connection_current(snapshot)
             except StaleAuthorization:
-                self.store.delete(snapshot.config_id)
+                self.store.delete(snapshot.credential_id)
                 raise
 
     def verify(self):
@@ -339,14 +339,14 @@ class GitHubService:
                     not snapshot
                     or not snapshot.client_id
                     or snapshot.client_id != settings.TORCHBEARER_GITHUB_CLIENT_ID
-                    or snapshot.config_id in self.invalid_credentials
+                    or snapshot.credential_id in self.invalid_credentials
                 ):
                     return self.status()
                 if reason := self._availability():
                     raise GitHubError(reason)
             try:
                 try:
-                    credentials = self.store.read(snapshot.config_id)
+                    credentials = self.store.read(snapshot.credential_id)
                 except InvalidCredentials:
                     return self._invalidate(snapshot)
                 if not self._credentials_match(snapshot, credentials):

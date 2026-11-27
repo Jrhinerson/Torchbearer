@@ -5,7 +5,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from .device import github
+from .credentials import CredentialError
+from .device import GitHubError, github
 
 
 class AuthorizationSerializer(serializers.Serializer):
@@ -17,17 +18,18 @@ class GitHubView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
 
-    def handle_exception(self, exc):
-        from .credentials import CredentialError
-        from .device import GitHubError
+    def finalize_response(self, request, response, *args, **kwargs):
+        response = super().finalize_response(request, response, *args, **kwargs)
+        response["Cache-Control"] = "no-store"
+        return response
 
+    def handle_exception(self, exc):
         if isinstance(exc, CredentialError):
             exc = GitHubError(str(exc))
         return super().handle_exception(exc)
 
     def get(self, request):
-        with github.lock:
-            return Response(github.status(), headers={"Cache-Control": "no-store"})
+        return Response(github.status())
 
     def delete(self, request):
         return Response(github.disconnect())
@@ -37,7 +39,7 @@ class GitHubConnectView(GitHubView):
     http_method_names = ["post", "options"]
 
     def post(self, request):
-        return Response(github.connect(), headers={"Cache-Control": "no-store"})
+        return Response(github.connect())
 
 
 class GitHubPollView(GitHubView):
@@ -46,10 +48,7 @@ class GitHubPollView(GitHubView):
     def post(self, request):
         serializer = AuthorizationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        return Response(
-            github.poll(serializer.validated_data["authorization_id"]),
-            headers={"Cache-Control": "no-store"},
-        )
+        return Response(github.poll(serializer.validated_data["authorization_id"]))
 
 
 class GitHubCancelView(GitHubView):
@@ -65,4 +64,4 @@ class GitHubVerifyView(GitHubView):
     http_method_names = ["post", "options"]
 
     def post(self, request):
-        return Response(github.verify(), headers={"Cache-Control": "no-store"})
+        return Response(github.verify())

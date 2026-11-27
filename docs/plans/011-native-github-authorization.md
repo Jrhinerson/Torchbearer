@@ -1,5 +1,7 @@
 # Native GitHub App authorization
 
+Status: Implemented and verified locally on Windows. Live authorization awaits the publisher's one-time GitHub App registration and public Client ID; see [setup](../github-app.md).
+
 Base: `2c0700f`. Builds on the two GitHub Connections commits already on this branch. No additional prerequisite commits outside this change. Commit locally between chunks; do not push.
 
 ## Commit 1: `feat: add native GitHub OAuth and secure credential storage`
@@ -40,5 +42,10 @@ Base: `2c0700f`. Builds on the two GitHub Connections commits already on this br
 ## Verification by chunk
 
 - Commit 1 (`4ac31fb`): all 46 connection tests pass, including 29 new OAuth/credential cases. Python lint/format, Django system checks, dependency consistency, and this worktree's required setup script pass.
-- Commit 2: all 49 connection tests and nine Chromium Connections tests pass. Django system/migration checks, Python lint/format, frontend lint, TypeScript, production build, and whitespace checks pass. Tests use mocked GitHub and an in-memory vault, with no CLI or real credential access.
-- Commit 3: all 67 connection tests and 11 Chromium Connections tests pass. Coverage includes refresh rotation, restored service state, expired/revoked/missing/corrupt credentials, numeric account identity, concurrent refresh, temporary outages after rotation, and disconnect during network/storage operations. Static, migration, frontend lint/type/build, and whitespace checks pass.
+- Commit 2 (`f2cadb3`): all 49 connection tests and nine Chromium Connections tests pass. Django system/migration checks, Python lint/format, frontend lint, TypeScript, production build, and whitespace checks pass. Tests use mocked GitHub and an in-memory vault, with no CLI or real credential access.
+- Commit 3 (`3653f15`): all 67 connection tests and 11 Chromium Connections tests pass. Coverage includes refresh rotation, restored service state, expired/revoked/missing/corrupt credentials, numeric account identity, concurrent refresh, temporary outages after rotation, and disconnect during network/storage operations. Static, migration, frontend lint/type/build, and whitespace checks pass.
+- Final cleanup: all 69 connection tests pass, including upgrades from the original schema and the intermediate native schema. Both preserve account identity and UUIDs; native credentials remain usable after the field rename.
+- `python scripts/check.py` passes with 234 backend tests, Python lint/format, Django system/migration checks, frontend formatting/lint, TypeScript, and the production build. The full Chromium suite passes all 74 tests, including 11 Connections cases and the existing workflows, projects, navigation, and styling regressions.
+- `python scripts/check_persistence.py` passes for task/project restart persistence. Desktop and 320px native-authorization screenshots were visually inspected.
+- The cleanup audit finds no CLI command resolution, subprocess ownership, terminal-output parsing, or obsolete CLI fixture in the connection implementation. Shared process utilities remain in use by coding-agent adapters. Historical migrations and the archived earlier plan are retained for upgrades and review.
+- All authorization tests use simulated GitHub responses and an in-memory keychain. No live OAuth grant or developer credentials were used. Hosted/Linux checks have not been run in this Windows session.

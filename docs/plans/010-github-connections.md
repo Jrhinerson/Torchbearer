@@ -1,6 +1,6 @@
 # GitHub Connections in Settings
 
-Status: Implemented and verified locally on Windows.
+Status: Superseded by [native GitHub App authorization](011-native-github-authorization.md). This is the historical plan and validation record for the earlier CLI implementation; current setup is in [publisher registration](../github-app.md).
 
 Base: local HEAD. No prerequisite commits outside this change. Commit locally only.
 

@@ -8,7 +8,6 @@ import uuid
 from dataclasses import dataclass, field
 
 from django.conf import settings
-from keyring.errors import PasswordDeleteError
 
 from .oauth import Tokens, secret_string
 
@@ -119,10 +118,6 @@ class CredentialStore:
             service = self._service(credential_id)
             if backend.get_password(service, "oauth") is not None:
                 backend.delete_password(service, "oauth")
-        except PasswordDeleteError:
-            raise CredentialError(
-                "Could not remove GitHub credentials. Unlock your keychain and try again."
-            ) from None
         except Exception:
             raise CredentialError(
                 "Could not remove GitHub credentials. Unlock your keychain and try again."

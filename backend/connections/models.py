@@ -6,7 +6,7 @@ from django.db import models
 class GitHubConnection(models.Model):
     # Torchbearer is a local single-user app with one explicitly selected GitHub account.
     id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
-    config_id = models.UUIDField(default=uuid.uuid4, editable=False)
+    credential_id = models.UUIDField(default=uuid.uuid4, editable=False)
     client_id = models.CharField(max_length=255, blank=True)
     account_id = models.PositiveBigIntegerField()
     login = models.CharField(max_length=39)

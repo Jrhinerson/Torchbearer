@@ -12,7 +12,7 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 - `backend/config/`: local settings, routing, health, and CSRF bootstrap.
 - `backend/tasks/`: task models, serializers, views, migrations, and API tests.
 - `backend/projects/`: stored projects, local directory and Git operations, serializers, views, migrations and API tests.
-- `backend/connections/`: GitHub CLI authorization processes, isolated credential configuration, verified account identity, and connection APIs.
+- `backend/connections/`: native GitHub App OAuth, OS-backed credentials, token refresh, verified account identity, and connection APIs.
 - `scripts/`: setup, process management, verification, and isolated test services.
 
 During development, Vite serves `http://127.0.0.1:5173` and forwards `/api/` to Django at `127.0.0.1:8000`. Both bind to loopback. Frontend code uses relative API URLs so a later desktop wrapper can reuse the interface and local service boundary.
@@ -44,11 +44,12 @@ Each card has an independent expand/collapse button with `aria-expanded` and `ar
 | GET/PATCH | `/api/v1/projects/<uuid>/` | Read a project or update its display name. |
 | DELETE | `/api/v1/projects/<uuid>/` | Archive the project; keep files and associated tasks. |
 | POST | `/api/v1/projects/folders/` | Browse visible child folders with repository markers, parent, breadcrumbs, and location shortcuts; defaults to the server user's home. |
-| GET | `/api/v1/connections/github/` | Saved GitHub account, CLI availability, and current pending authorization; never tokens. |
-| POST | `/api/v1/connections/github/connect/` | Start or resume a bounded browser device authorization attempt through GitHub CLI. |
+| GET | `/api/v1/connections/github/` | Saved GitHub account, app/keychain readiness, reauthorization requirement, and current pending authorization; never tokens. |
+| POST | `/api/v1/connections/github/connect/` | Start or resume native GitHub App device authorization. |
 | POST | `/api/v1/connections/github/poll/` | Poll the specified authorization UUID and save identity only after authenticated GitHub verification. |
-| POST | `/api/v1/connections/github/cancel/` | Stop the specified attempt and discard its CLI configuration. |
-| DELETE | `/api/v1/connections/github/` | Stop any pending login and remove Torchbearer's saved connection/configuration. |
+| POST | `/api/v1/connections/github/cancel/` | Invalidate the specified attempt and prevent late completion. |
+| POST | `/api/v1/connections/github/verify/` | Refresh expiring credentials, verify the selected numeric account identity, and report revoked or missing authorization. |
+| DELETE | `/api/v1/connections/github/` | Cancel pending login and remove Torchbearer's saved connection and OS-vault credential. |
 
 A task contains a UUID, title, description, optional nested project, execution repository, routing mode, optional frontier agent, resolved stage agents, next stage, current stage, revision, workspace metadata, completion timestamp, and creation/update timestamps. Titles are limited to 200 characters and descriptions to 10,000. New tasks always begin in `backlog`; creating a task or choosing routing never starts execution. Clients cannot directly set stage, revision, workspace metadata, or completion. Existing tasks can remain without a repository until planning starts.
 
@@ -88,13 +89,15 @@ Planning prompts replay all planning turns in sequence through `plan_conversatio
 
 ## GitHub authorization
 
-GitHub CLI handles OAuth device authorization and credential storage. Django starts `gh auth login --web --hostname github.com --git-protocol https --skip-ssh-key` without a terminal or shell, reads its one-time code, and exposes only the code and a fixed GitHub verification URL. React reserves a tab during the Connect click and navigates it to GitHub once the code arrives; a manual link supports blocked popups and refreshed pages. No browser callback or custom OAuth app credentials are required.
+`oauth.py` implements GitHub App device authorization, refresh, and authenticated user lookup over HTTPS using Python's standard HTTP client. It uses fixed GitHub endpoints, rejects redirects, bounds response sizes and timeouts, validates response fields, and sanitizes errors. The publisher registers a GitHub App and bundles its public Client ID; device-issued tokens and refreshes require no app secret/private key. See [publisher setup](github-app.md). React reserves a tab during the Connect click and navigates it to GitHub once the one-time code arrives, with a manual link for blocked popups and refreshed pages.
 
-Each attempt gets a generated UUID and its own `DATA_DIR/github/<uuid>/` CLI configuration. Inherited `GH_*` and `GITHUB_*` variables are removed, so environment tokens and global active accounts cannot silently supply authorization. The newly authenticated configuration runs `gh api --hostname github.com user`; only a successful, valid identity replaces the singleton `GitHubConnection`. The database stores account ID, login, display name, timestamp, and configuration UUID. Tokens remain in CLI-managed system credential storage or its local file fallback and are excluded from API responses and error messages.
+`credentials.py` selects Windows Credential Manager, macOS Keychain, or Linux Secret Service explicitly rather than accepting arbitrary keyring plugins or plaintext fallback. Its service names include the resolved data-directory namespace and generated credential UUID. The OS store contains the access/refresh tokens, expiry, client identity and numeric account binding. SQLite contains only the singleton account ID, login, display name, connection timestamp, GitHub App Client ID and credential UUID. Browser/API responses exclude tokens and GitHub's private device code. Environment-provided GitHub tokens and external CLI accounts are never consulted.
 
-A process-local locked service owns one pending attempt. Requests are CSRF-protected, polls name the active attempt UUID, and cancellation/disconnect serialize with completion to prevent late reconnection. A 15-minute timer kills pending process trees and discards configuration; frontend polls do not overlap and recover after backend restarts or another tab's cancellation. Process ownership reuses the existing Windows Job Object/POSIX parent-monitoring implementation. Pending login state ends when the single Django backend stops; connected identity and credential configuration persist. Multiple Django processes against one data directory are unsupported.
+`device.py` owns one pending attempt in the existing local single-process deployment. A monotonic deadline enforces GitHub's code lifetime, and server-side scheduling honors the provider's polling interval, `slow_down`, and rate-limit delays regardless of browser poll frequency. No transaction or service lock spans GitHub network requests. Cancellation/disconnect invalidate attempt UUIDs; completion rechecks identity after network and vault operations so a stale response cannot restore a connection. Only verified, securely stored replacement credentials replace the previous account. Pending attempts end with Django; saved account metadata and OS credentials survive restart. Multiple Django processes against one data directory remain unsupported.
 
-Changing accounts retains the previous connection until verification succeeds. Disconnect removes only app metadata/configuration, avoiding `gh auth logout` because system keyring entries may be shared with other CLI clients. Revocation remains available through GitHub's OAuth application settings. The GitHub CLI OAuth grant has the CLI's standard `repo`, `read:org`, and `gist` scopes. This connection does not yet change project-clone credentials or agent authentication.
+Opening Settings checks saved authorization through the CSRF-protected verification endpoint. A separate single-flight lock prevents concurrent requests from rotating one refresh token twice while allowing disconnect to proceed during HTTPS. Refresh rotation is saved before another profile request, preserving it across a temporary outage. Account verification compares numeric GitHub IDs, allowing username changes without silently switching accounts; missing, mismatched, expired or revoked credentials require fresh consent. Disconnect deletes only Torchbearer's vault entry and metadata; remote grant revocation remains in GitHub's authorized GitHub Apps settings. Repository permissions belong to the GitHub App registration. Project-clone credentials and coding-agent authentication are separate integrations.
+
+The Client ID migration marks older connections for reauthorization without importing their credentials. The cleanup migration renames the old configuration field to `credential_id` while preserving its UUID, including references created by native authorization before the rename. Historical migrations remain available for existing installations; the old CLI service and test executable are removed.
 
 ## Local persistence
 
