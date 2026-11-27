@@ -54,6 +54,88 @@
   flex-wrap: wrap;
   gap: var(--space-2);
 }
+.workflow-map-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.workflow-entry-label {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+  max-width: 16rem;
+  font-size: var(--text-compact);
+}
+.workflow-editor-fields {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  border: 0;
+}
+.workflow-editor-fields .field-label {
+  margin: 0;
+}
+.workflow-editor-fields details {
+  min-width: 0;
+}
+.workflow-editor-fields textarea.field {
+  min-height: 5rem;
+}
+.workflow-editor-fields summary,
+.workflow-comparison summary {
+  padding-block: var(--space-3);
+  min-height: var(--control-size);
+  cursor: pointer;
+}
+.workflow-requirement-editor,
+.workflow-edge-editor,
+.workflow-output-editor {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-control);
+  min-width: 0;
+}
+.workflow-requirement-editor:not([open]) {
+  display: block;
+}
+.workflow-requirement-editor summary {
+  padding: 0;
+}
+.workflow-requirement-editor[open] summary {
+  margin-bottom: var(--space-3);
+}
+.workflow-comparison {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--space-4);
+  margin-block: var(--space-4);
+}
+.workflow-comparison > section {
+  padding: var(--space-3);
+  min-width: 0;
+}
+.workflow-comparison details > * + * {
+  margin-top: var(--space-3);
+}
+.workflow-decision > p {
+  margin-top: var(--space-4);
+}
+.workflow-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
 .workflow-view-toggle [aria-pressed='true'] {
   border-color: var(--color-primary);
   color: var(--color-primary);
@@ -145,6 +227,13 @@
   font-weight: var(--weight-medium);
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+.workflow-node > p,
+.workflow-node li {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 .workflow-node ul {
   display: grid;

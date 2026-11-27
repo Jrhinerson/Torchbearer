@@ -59,6 +59,22 @@ export function getWorkflowGraph(key: string, signal?: AbortSignal) {
   )
 }
 
+export async function saveWorkflowGraph(
+  key: string,
+  graph: WorkflowGraph,
+  revision: number,
+) {
+  const { csrfToken } = await requestJson<{ csrfToken: string }>('csrf/')
+  return requestJson<WorkflowGraphDetail>(
+    `workflows/${encodeURIComponent(key)}/graph/`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ graph, revision }),
+    },
+  )
+}
+
 export interface WorkType {
   key: string
   name: string

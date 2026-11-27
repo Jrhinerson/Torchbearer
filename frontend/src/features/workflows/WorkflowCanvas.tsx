@@ -10,7 +10,7 @@ import {
 import type { Node, NodeProps } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { WorkflowGraph, WorkflowNode } from './api'
-import { orderedNodes } from './graph'
+import { canConnect, orderedNodes } from './graph'
 
 type CanvasNode = Node<{ node: WorkflowNode; number: number }, 'workflow'>
 
@@ -48,10 +48,14 @@ export default function WorkflowCanvas({
   graph,
   selected,
   onSelect,
+  editing = false,
+  onChange,
 }: {
   graph: WorkflowGraph
   selected: string | null
   onSelect: (id: string | null) => void
+  editing?: boolean
+  onChange: (graph: WorkflowGraph) => void
 }) {
   const nodes = useMemo(
     () =>
@@ -86,8 +90,54 @@ export default function WorkflowCanvas({
         fitViewOptions={{ padding: 0.12 }}
         minZoom={0.15}
         maxZoom={1.5}
-        nodesDraggable={false}
-        nodesConnectable={false}
+        nodesDraggable={editing}
+        nodesConnectable={editing}
+        isValidConnection={(connection) =>
+          canConnect(graph, connection.source, connection.target)
+        }
+        onConnect={(connection) => {
+          if (
+            editing &&
+            canConnect(graph, connection.source, connection.target)
+          )
+            onChange({
+              ...graph,
+              edges: [
+                ...graph.edges,
+                {
+                  id: `edge-${crypto.randomUUID()}`,
+                  source: connection.source,
+                  target: connection.target,
+                  condition: 'Requirements met',
+                },
+              ],
+            })
+        }}
+        onNodesChange={(changes) => {
+          if (!editing) return
+          const positions = new Map(
+            changes
+              .applyTo(nodes)
+              .filter((node) =>
+                graph.nodes.some(
+                  (original) =>
+                    original.id === node.id &&
+                    (original.position.x !== node.position.x ||
+                      original.position.y !== node.position.y),
+                ),
+              )
+              .map((node) => [node.id, node.position]),
+          )
+          if (positions.size)
+            onChange({
+              ...graph,
+              nodes: graph.nodes.map((node) =>
+                positions.has(node.id)
+                  ? { ...node, position: positions.get(node.id)! }
+                  : node,
+              ),
+            })
+        }}
         edgesFocusable
         deleteKeyCode={null}
         onNodeClick={(_, node) => onSelect(node.id)}

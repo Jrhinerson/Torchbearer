@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { locationChanged, navigateTo } from '../../lib/navigation'
 import { listWorkflows, listWorkTypes } from './api'
 import type { WorkflowDefinition, WorkType } from './api'
 import { WorkTypeCard } from './WorkTypeCard'
@@ -28,16 +29,15 @@ export default function WorkflowsPage() {
 
   useEffect(() => {
     const update = () => setLocation(workflowLocation())
-    window.addEventListener('popstate', update)
-    return () => window.removeEventListener('popstate', update)
+    window.addEventListener(locationChanged, update)
+    return () => window.removeEventListener(locationChanged, update)
   }, [])
 
   function navigate(tab: string, workflow = location.workflow) {
     const url = new URL(window.location.href)
     url.searchParams.set('tab', tab)
     url.searchParams.set('workflow', workflow)
-    window.history.pushState(null, '', url)
-    setLocation(workflowLocation())
+    navigateTo(url)
   }
 
   useEffect(() => {
