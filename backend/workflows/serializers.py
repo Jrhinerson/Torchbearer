@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .graph import graph_projection
+from .graph import GraphValidationError, graph_projection, validate_graph
 from .models import WorkflowDefinition, WorkType
 
 
@@ -37,6 +37,27 @@ class WorkflowGraphSerializer(serializers.ModelSerializer):
     class Meta:
         model = WorkflowDefinition
         fields = ["key", "name", "description", "graph", "revision", "updated_at"]
+
+
+class WorkflowGraphUpdateSerializer(serializers.Serializer):
+    graph = serializers.JSONField()
+    revision = serializers.IntegerField(min_value=0, max_value=2147483646)
+
+    def to_internal_value(self, data):
+        if isinstance(data, dict):
+            if set(data) - self.fields.keys():
+                raise serializers.ValidationError(
+                    {"non_field_errors": ["Only the graph and its revision can be changed."]}
+                )
+            if "revision" in data and type(data["revision"]) is not int:
+                raise serializers.ValidationError({"revision": ["Use an integer revision."]})
+        return super().to_internal_value(data)
+
+    def validate_graph(self, value):
+        try:
+            return validate_graph(value)
+        except GraphValidationError as error:
+            raise serializers.ValidationError(error.errors) from error
 
 
 class WorkTypeSerializer(serializers.ModelSerializer):

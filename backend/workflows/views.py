@@ -13,6 +13,7 @@ from .serializers import (
     AssignmentSerializer,
     WorkflowDefinitionSerializer,
     WorkflowGraphSerializer,
+    WorkflowGraphUpdateSerializer,
     WorkTypeSerializer,
 )
 
@@ -33,6 +34,34 @@ class WorkflowListView(LocalView):
 class WorkflowGraphView(LocalView):
     def get(self, request, key):
         workflow = get_object_or_404(WorkflowDefinition, pk=key)
+        return Response(WorkflowGraphSerializer(workflow).data)
+
+    @transaction.atomic
+    def patch(self, request, key):
+        serializer = WorkflowGraphUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(
+                {"detail": "Review the workflow graph before saving.", "errors": serializer.errors},
+                status=400,
+            )
+        values = serializer.validated_data
+        # The first database operation is a conditional write. Keeping the expected
+        # revision in this UPDATE prevents a stale tab from winning a read/write race.
+        changed = WorkflowDefinition.objects.filter(
+            pk=key, graph_revision=values["revision"], graph__isnull=False
+        ).update(
+            graph=values["graph"],
+            graph_revision=F("graph_revision") + 1,
+            graph_updated_at=timezone.now(),
+        )
+        workflow = get_object_or_404(WorkflowDefinition, pk=key)
+        if not changed:
+            detail = (
+                "This workflow changed elsewhere. Load the latest version to compare your draft."
+                if workflow.graph is not None
+                else "This workflow's map has not been authored yet."
+            )
+            return Response({"detail": detail}, status=409)
         return Response(WorkflowGraphSerializer(workflow).data)
 
 
