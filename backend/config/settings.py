@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "projects",
     "tasks",
+    "workflows",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
