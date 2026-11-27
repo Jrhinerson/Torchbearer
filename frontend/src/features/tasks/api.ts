@@ -103,7 +103,32 @@ export interface Task {
   base_commit: string
   created_at: string
   updated_at: string
+  operations?: {
+    group: 'backlog' | 'active' | 'needs_you' | 'done'
+    reason: string
+    state: string
+    agent: Agent | null
+    next_agent: Agent | null
+    running: boolean
+    stage_label: string
+    workflow_name: string
+  }
 }
+
+export interface OperationsOverview {
+  tasks: Task[]
+  counts: Record<'backlog' | 'active' | 'needs_you' | 'done', number>
+  agents: (Routing['agents'][number] & { queued: number; running: number })[]
+  worker: Routing['worker']
+  observed_at: string
+  filters: { project: string; q: string }
+}
+
+export const getOperations = (signal?: AbortSignal, query = '', project = '') =>
+  requestJson<OperationsOverview>(
+    `operations/?${new URLSearchParams({ q: query, project })}`,
+    { signal },
+  )
 
 export function listTasks(signal?: AbortSignal) {
   return requestJson<Task[]>('tasks/', { signal })

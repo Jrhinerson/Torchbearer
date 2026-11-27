@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
+import { useContext, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   createTask,
   deleteTask,
   getRouting,
   listRepositories,
-  listTasks,
+  getOperations,
 } from './api'
 import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
+import type { OperationsOverview } from './api'
+import { OperationsSummaryContext } from './operationsSummary'
+import TaskRoute from './TaskRoute'
 import { RoutingFields } from './TaskRouting'
 import { TaskAgent } from './TaskAgent'
 import { taskCardStatus } from './taskCardStatus'
@@ -26,24 +29,19 @@ const columns = [
     description: 'Capture the problem and desired outcome.',
   },
   {
-    id: 'plan',
-    title: 'Plan',
-    description: 'Agree on scope, design, and how to verify success.',
+    id: 'active',
+    title: 'Active',
+    description: 'Running or queued agent work.',
   },
   {
-    id: 'integrate',
-    title: 'Integrate',
-    description: 'Implement in small steps and validate the result.',
+    id: 'needs_you',
+    title: 'Needs you',
+    description: 'Decisions, approvals, and recovery.',
   },
   {
-    id: 'code_review',
-    title: 'Code Review',
-    description: 'Independently check requirements, design, and evidence.',
-  },
-  {
-    id: 'final_approval',
-    title: 'Final Approval',
-    description: 'Review the delivered behavior and decide.',
+    id: 'done',
+    title: 'Done',
+    description: 'Accepted work and its retained evidence.',
   },
 ] as const
 
@@ -53,6 +51,11 @@ const dateFormat = new Intl.DateTimeFormat(undefined, {
 })
 
 export default function Board() {
+  const publishSummary = useContext(OperationsSummaryContext)
+  const [overview, setOverview] = useState<OperationsOverview | null>(null)
+  const [query, setQuery] = useState('')
+  const [projectFilter, setProjectFilter] = useState('')
+  const [projectOptions, setProjectOptions] = useState<Project[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(
     () => new Set(),
@@ -90,6 +93,7 @@ export default function Board() {
     setTasks((current) =>
       current.map((item) => (item.id === task.id ? task : item)),
     )
+    setReload((value) => value + 1)
   }
 
   function toggleTask(id: string) {
@@ -110,67 +114,65 @@ export default function Board() {
 
   useEffect(() => {
     const controller = new AbortController()
-    Promise.all([
-      listTasks(controller.signal),
-      getRouting(controller.signal),
-      listRepositories(controller.signal),
-    ])
-      .then(([result, configuration, registered]) => {
-        if (!controller.signal.aborted) {
-          setTasks(result)
-          setRouting(configuration)
-          setRepositories(registered)
-        }
-      })
-      .catch((error: unknown) => {
-        if (!controller.signal.aborted) {
-          setLoadError(
-            error instanceof Error
-              ? error.message
-              : 'Could not load your tasks.',
-          )
-        }
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false)
-      })
-    return () => controller.abort()
-  }, [reload])
-
-  useEffect(() => {
-    if (loading || loadError) return
-    const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout>
+    let initial = true
     async function refresh() {
       const version = mutation.current
       try {
-        const [updated, configuration] = await Promise.all([
-          listTasks(controller.signal),
-          getRouting(controller.signal),
+        const [updated, configuration, registered] = await Promise.all([
+          getOperations(controller.signal, query, projectFilter),
+          initial ? getRouting(controller.signal) : Promise.resolve(null),
+          initial ? listRepositories(controller.signal) : Promise.resolve(null),
         ])
-        if (!controller.signal.aborted && mutation.current === version) {
-          setTasks(updated)
-          setRouting(configuration)
+        if (!controller.signal.aborted && version === mutation.current) {
+          setTasks(updated.tasks)
+          setOverview(updated)
+          publishSummary?.(updated)
+          setProjectOptions((current) => {
+            const projects = new Map(
+              current.map((project) => [project.id, project]),
+            )
+            updated.tasks.forEach((task) => {
+              if (task.project) projects.set(task.project.id, task.project)
+            })
+            return [...projects.values()].sort((a, b) =>
+              a.name.localeCompare(b.name),
+            )
+          })
+          if (configuration) setRouting(configuration)
+          else
+            setRouting((current) =>
+              current
+                ? { ...current, agents: updated.agents, worker: updated.worker }
+                : current,
+            )
+          if (registered) setRepositories(registered)
+          setLoadError('')
           setSyncError('')
+          initial = false
         }
       } catch (cause) {
-        if (!controller.signal.aborted)
-          setSyncError(
+        if (!controller.signal.aborted) {
+          const message =
             cause instanceof Error
               ? cause.message
-              : 'Could not refresh the board.',
-          )
+              : 'Could not refresh the board.'
+          if (initial) setLoadError(message)
+          else setSyncError(message)
+        }
       } finally {
-        if (!controller.signal.aborted)
+        if (!controller.signal.aborted) {
+          setLoading(false)
           timer = setTimeout(() => void refresh(), 2000)
+        }
       }
     }
-    timer = setTimeout(() => void refresh(), 2000)
+    void refresh()
     return () => {
       controller.abort()
       clearTimeout(timer)
     }
-  }, [loading, loadError])
+  }, [query, projectFilter, reload, publishSummary])
 
   function openComposer() {
     setSaveError('')
@@ -195,6 +197,7 @@ export default function Board() {
       )
       mutation.current++
       setTasks((current) => [task, ...current])
+      setReload((value) => value + 1)
       setTitle('')
       setDescription('')
       setRoutingMode('frontier')
@@ -220,6 +223,7 @@ export default function Board() {
       await deleteTask(task.id)
       mutation.current++
       setTasks((current) => current.filter((item) => item.id !== task.id))
+      setReload((value) => value + 1)
       setAnnouncement(`Deleted ${task.title} from the backlog.`)
       newTaskButton.current?.focus()
     } catch (error) {
@@ -237,7 +241,50 @@ export default function Board() {
 
   return (
     <>
-      <h1 className="sr-only">Kanban board</h1>
+      <header className="operations-heading">
+        <div>
+          <h1>Operations</h1>
+          <p>Agent work, handoffs, and decisions.</p>
+        </div>
+        <div className="operations-filters">
+          <label className="sr-only" htmlFor="operations-search">
+            Search tasks
+          </label>
+          <input
+            id="operations-search"
+            className="field"
+            type="search"
+            placeholder="Search tasks…"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          <label className="sr-only" htmlFor="operations-project">
+            Filter by project
+          </label>
+          <select
+            id="operations-project"
+            className="field"
+            value={projectFilter}
+            onChange={(event) => setProjectFilter(event.target.value)}
+          >
+            <option value="">All projects</option>
+            <option value="none">No project</option>
+            {projectOptions.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </header>
+      {overview && (
+        <p className="operations-counts" role="status">
+          {overview.agents.reduce((total, agent) => total + agent.running, 0)}{' '}
+          running ·{' '}
+          {overview.agents.reduce((total, agent) => total + agent.queued, 0)}{' '}
+          queued · {overview.counts.needs_you} need you
+        </p>
+      )}
       {routing && !routing.worker.available && (
         <p className="feedback feedback-warning worker-notice" role="status">
           Agent worker is offline. Queued runs will start when Torchbearer’s
@@ -252,13 +299,13 @@ export default function Board() {
       <div
         className="board-scroll"
         role="region"
-        aria-label="Kanban columns"
+        aria-label="Operations columns"
         tabIndex={0}
       >
-        <div className="kanban-board">
+        <div className="kanban-board operations-board">
           {columns.map((column) => {
             const columnTasks = tasks.filter(
-              (task) => task.status === column.id,
+              (task) => (task.operations?.group ?? 'backlog') === column.id,
             )
             const isBacklog = column.id === 'backlog'
             return (
@@ -325,7 +372,13 @@ export default function Board() {
                       <li key={task.id}>
                         <article
                           className="surface surface-raised task-card"
-                          data-activity={taskCardStatus(task).activity}
+                          data-activity={
+                            task.operations?.running
+                              ? 'running'
+                              : task.operations?.group === 'needs_you'
+                                ? 'awaiting-input'
+                                : 'idle'
+                          }
                           aria-label={task.title}
                         >
                           <div className="task-card-heading">
@@ -378,6 +431,18 @@ export default function Board() {
                             </div>
                             <TaskAgent task={task} routing={routing} />
                           </div>
+                          <p className="task-workflow-label">
+                            {task.operations?.workflow_name ??
+                              'Engineering workflow'}
+                          </p>
+                          <p
+                            className="task-operation-state"
+                            data-group={task.operations?.group}
+                          >
+                            {task.operations?.reason ??
+                              taskCardStatus(task).label}
+                          </p>
+                          <TaskRoute task={task} />
                           <div
                             id={`task-details-${task.id}`}
                             hidden={!expandedTasks.has(task.id)}

@@ -1,0 +1,151 @@
+.operations-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-3);
+  flex-wrap: wrap;
+}
+.operations-heading h1 {
+  margin: 0;
+  font-size: var(--text-icon);
+}
+.operations-heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-text-muted);
+}
+.operations-filters {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.operations-filters .field {
+  width: auto;
+  min-width: 0;
+}
+.operations-counts {
+  margin: 0;
+  padding: 0 var(--space-6) var(--space-3);
+  color: var(--color-text-muted);
+  font-size: var(--text-compact);
+}
+.kanban-board.operations-board {
+  grid-template-columns: repeat(4, minmax(15rem, 1fr));
+}
+.task-workflow-label {
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+  margin: var(--space-2) 0 var(--space-1);
+}
+.task-operation-state {
+  margin: 0;
+  font-size: var(--text-compact);
+}
+.task-operation-state[data-group='needs_you'] {
+  color: var(--color-warning);
+}
+.task-operation-state[data-group='active'] {
+  color: var(--color-info);
+}
+.task-operation-state[data-group='done'] {
+  color: var(--color-success);
+}
+.task-mini-route {
+  display: flex;
+  padding: 0;
+  margin: var(--space-3) 0 var(--space-1);
+  list-style: none;
+}
+.task-mini-route li {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-meta);
+  color: var(--color-text-muted);
+  text-align: center;
+}
+.task-mini-route li + li::before {
+  content: '';
+  position: absolute;
+  height: 1px;
+  background: var(--color-border);
+  width: calc(100% - 1rem);
+  left: calc(-50% + 0.5rem);
+  top: 0.35rem;
+}
+.route-mark {
+  width: 0.7rem;
+  height: 0.7rem;
+  border: 1px solid var(--color-text-muted);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-raised);
+  z-index: 1;
+}
+.task-mini-route li[data-current='true'] .route-mark {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.agent-activity {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-4);
+  margin-top: var(--space-5);
+}
+.agent-activity h2 {
+  font-size: var(--text-meta);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 var(--space-3);
+}
+.agent-activity-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+  font-size: var(--text-compact);
+}
+.agent-activity-row > :last-child {
+  color: var(--color-text-muted);
+  font-size: var(--text-meta);
+}
+.activity-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: var(--color-text-muted);
+}
+.activity-dot.running {
+  background: var(--color-info);
+}
+.activity-dot.queued {
+  background: var(--color-warning);
+}
+@media (max-width: 800px) {
+  .operations-heading,
+  .operations-counts {
+    padding-inline: var(--space-3);
+  }
+  .kanban-board.operations-board {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    min-width: 0;
+  }
+  .operations-filters {
+    width: 100%;
+  }
+  .operations-filters .field {
+    flex: 1;
+    width: 100%;
+  }
+}
+@media (max-width: 520px) {
+  .kanban-board.operations-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agent-activity {
+    display: none;
+  }
+}

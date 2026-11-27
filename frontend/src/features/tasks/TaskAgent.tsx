@@ -26,7 +26,9 @@ export function TaskAgent({
     <span className="task-agent" role="img" aria-label={label} title={label}>
       <span
         className="task-agent-spinner"
-        data-running={activity === 'running'}
+        data-running={
+          task.operations ? task.operations.running : activity === 'running'
+        }
         aria-hidden="true"
       />
       {agent ? (
