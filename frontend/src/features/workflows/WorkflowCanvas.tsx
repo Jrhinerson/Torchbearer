@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import {
   Background,
   Controls,
@@ -7,7 +7,7 @@ import {
   Position,
   ReactFlow,
 } from '@xyflow/react'
-import type { Node, NodeProps } from '@xyflow/react'
+import type { Node, NodeProps, ReactFlowInstance } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { WorkflowGraph, WorkflowNode } from './api'
 import { canConnect, orderedNodes } from './graph'
@@ -43,6 +43,9 @@ function WorkflowCard({ data }: NodeProps<CanvasNode>) {
 }
 
 const nodeTypes = { workflow: WorkflowCard }
+const fitOptions = {
+  padding: { x: '32px', top: '24px', bottom: '132px' },
+} as const
 
 export default function WorkflowCanvas({
   graph,
@@ -57,6 +60,26 @@ export default function WorkflowCanvas({
   editing?: boolean
   onChange: (graph: WorkflowGraph) => void
 }) {
+  const container = useRef<HTMLDivElement>(null)
+  const instance = useRef<ReactFlowInstance<CanvasNode> | null>(null)
+  useEffect(() => {
+    if (!container.current) return
+    let width = container.current.clientWidth
+    let frame = 0
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width === width) return
+      width = entry.contentRect.width
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(() => {
+        void instance.current?.fitView(fitOptions)
+      })
+    })
+    observer.observe(container.current)
+    return () => {
+      observer.disconnect()
+      cancelAnimationFrame(frame)
+    }
+  }, [])
   const nodes = useMemo(
     () =>
       orderedNodes(graph).map((node, index): CanvasNode => ({
@@ -81,14 +104,21 @@ export default function WorkflowCanvas({
     [graph],
   )
   return (
-    <div className="workflow-canvas" aria-label="Workflow graph">
+    <div
+      className="workflow-canvas"
+      aria-label="Workflow graph"
+      ref={container}
+    >
       <ReactFlow<CanvasNode>
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        onInit={(value) => {
+          instance.current = value
+        }}
         fitView
-        fitViewOptions={{ padding: 0.12 }}
-        minZoom={0.15}
+        fitViewOptions={fitOptions}
+        minZoom={0.001}
         maxZoom={1.5}
         nodesDraggable={editing}
         nodesConnectable={editing}
@@ -114,10 +144,12 @@ export default function WorkflowCanvas({
             })
         }}
         onNodesChange={(changes) => {
+          const updated = changes.applyTo(nodes)
+          const nextSelected = updated.find((node) => node.selected)?.id ?? null
+          if (nextSelected !== selected) onSelect(nextSelected)
           if (!editing) return
           const positions = new Map(
-            changes
-              .applyTo(nodes)
+            updated
               .filter((node) =>
                 graph.nodes.some(
                   (original) =>
@@ -139,16 +171,15 @@ export default function WorkflowCanvas({
             })
         }}
         edgesFocusable
+        multiSelectionKeyCode={null}
+        selectionKeyCode={null}
         deleteKeyCode={null}
         onNodeClick={(_, node) => onSelect(node.id)}
-        onSelectionChange={({ nodes }) => {
-          if (nodes.length === 1) onSelect(nodes[0].id)
-        }}
         onPaneClick={() => onSelect(null)}
         proOptions={{ hideAttribution: false }}
       >
         <Background gap={20} size={1} />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false} fitViewOptions={fitOptions} />
       </ReactFlow>
     </div>
   )

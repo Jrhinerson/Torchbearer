@@ -35,6 +35,12 @@
 .workflow-map h3 {
   font-size: var(--text-body);
 }
+.workflow-map h4 {
+  font-size: var(--text-body);
+}
+.workflow-map > [role='status']:empty {
+  display: none;
+}
 .workflow-picker {
   flex: 1 1 18rem;
   max-width: 32rem;
@@ -213,23 +219,24 @@
   display: grid;
   gap: 12px;
   padding: 18px;
-  font-size: 13px;
+  font-size: var(--text-compact);
 }
 .workflow-node h3 {
-  font-size: 15px;
+  font-size: 0.9375rem;
 }
 .workflow-node h3 > span,
 .workflow-step-number {
   color: var(--color-primary);
 }
 .workflow-node h4 {
-  font-size: 11px;
+  font-size: 0.6875rem;
   font-weight: var(--weight-medium);
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .workflow-node > p,
-.workflow-node li {
+.workflow-node li,
+.workflow-node h3 {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;

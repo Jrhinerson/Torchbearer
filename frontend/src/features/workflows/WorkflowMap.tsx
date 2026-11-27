@@ -29,10 +29,16 @@ export default function WorkflowMap({
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [selected, setSelected] = useState<string | null>(null)
-  const [view, setView] = useState<'graph' | 'steps'>('graph')
+  const [view, setView] = useState<'graph' | 'steps'>(() =>
+    window.matchMedia('(max-width: 47.5rem)').matches ? 'steps' : 'graph',
+  )
   const [removing, setRemoving] = useState<WorkflowNode | null>(null)
   const [canvasVersion, setCanvasVersion] = useState(0)
   const inspectorHeading = useRef<HTMLHeadingElement>(null)
+  const editButton = useRef<HTMLButtonElement>(null)
+  const mapElement = useRef<HTMLDivElement>(null)
+  const wasEditing = useRef(false)
+  const returnFocus = useRef<string | null>(null)
   const workflow = workflows.find((item) => item.key === workflowKey)
 
   useEffect(() => {
@@ -62,8 +68,35 @@ export default function WorkflowMap({
   const node = nodes.find((item) => item.id === selected)
   const summary = graph ? graphSummary(graph) : null
 
+  useEffect(() => {
+    if (wasEditing.current && !editor.draft) editButton.current?.focus()
+    wasEditing.current = Boolean(editor.draft)
+  }, [editor.draft])
+
+  useEffect(() => {
+    if (selected === null && returnFocus.current) {
+      const id = returnFocus.current
+      returnFocus.current = null
+      mapElement.current
+        ?.querySelector<HTMLElement>(
+          `.react-flow__node[data-id="${CSS.escape(id)}"]`,
+        )
+        ?.focus()
+    }
+  }, [selected])
+
   function select(id: string | null) {
     setSelected(id)
+  }
+
+  function inspect(id: string) {
+    setSelected(id)
+    requestAnimationFrame(() => inspectorHeading.current?.focus())
+  }
+
+  function closeInspector() {
+    returnFocus.current = selected
+    setSelected(null)
   }
 
   function addStep() {
@@ -132,7 +165,7 @@ export default function WorkflowMap({
   }
 
   return (
-    <div className="workflow-map">
+    <div className="workflow-map" ref={mapElement}>
       <div className="workflows-toolbar">
         <div className="workflow-picker">
           <label className="field-label" htmlFor="map-workflow">
@@ -191,11 +224,15 @@ export default function WorkflowMap({
               </>
             ) : (
               <button
+                ref={editButton}
                 type="button"
                 className="button button-primary"
                 onClick={() => {
                   editor.start()
                   setSelected(node?.id ?? nodes[0]?.id ?? null)
+                  requestAnimationFrame(() =>
+                    document.getElementById('node-title')?.focus(),
+                  )
                 }}
               >
                 Edit workflow
@@ -410,9 +447,10 @@ export default function WorkflowMap({
                       <NodeRequirements
                         node={item}
                         graph={graph}
+                        nested
                         onSelect={(id) => {
                           setView('graph')
-                          select(id)
+                          inspect(id)
                         }}
                       />
                     </li>
@@ -445,8 +483,12 @@ export default function WorkflowMap({
                   <button
                     type="button"
                     className="button button-quiet"
-                    aria-label="Close node requirements"
-                    onClick={() => select(null)}
+                    aria-label={
+                      editor.draft
+                        ? 'Close node editor'
+                        : 'Close node requirements'
+                    }
+                    onClick={closeInspector}
                   >
                     ×
                   </button>
@@ -464,7 +506,7 @@ export default function WorkflowMap({
                   <NodeRequirements
                     node={node}
                     graph={graph}
-                    onSelect={select}
+                    onSelect={inspect}
                   />
                 )}
               </aside>

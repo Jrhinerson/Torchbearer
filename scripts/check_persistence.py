@@ -106,6 +106,24 @@ def main():
             with opener.open(assignment_request, timeout=3) as response:
                 assert response.status == 200
                 saved_assignment = json.load(response)
+            graph_url = f"{url}/api/v1/workflows/plan-execute/graph/"
+            with opener.open(graph_url, timeout=3) as response:
+                graph_detail = json.load(response)
+            graph = graph_detail["graph"]
+            graph["nodes"][2]["description"] = "Retain this edited validation requirement."
+            graph["nodes"][2]["position"] = {"x": 750, "y": 90}
+            graph["nodes"][2]["requirements"][2]["applicability_note"] = (
+                "When documentation changes are included."
+            )
+            graph_request = urllib.request.Request(
+                graph_url,
+                data=json.dumps({"graph": graph, "revision": graph_detail["revision"]}).encode(),
+                headers={"Content-Type": "application/json", "X-CSRFToken": token},
+                method="PATCH",
+            )
+            with opener.open(graph_request, timeout=3) as response:
+                assert response.status == 200
+                saved_graph = json.load(response)
         finally:
             stop_process(process)
 
@@ -133,9 +151,11 @@ def main():
             assert assignment["assigned_workflow"] == "test-driven"
             assert assignment["recommended_workflow"] == "diagnose-regression"
             assert assignment["revision"] == saved_assignment["revision"]
+            with opener.open(graph_url, timeout=3) as response:
+                assert json.load(response) == saved_graph
         finally:
             stop_process(process)
-    print("PASS: SQLite retained task, project, and workflow assignments across a backend restart.")
+    print("PASS: SQLite retained tasks, projects, assignments, and edited DAGs across a restart.")
 
 
 if __name__ == "__main__":

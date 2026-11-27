@@ -10,6 +10,9 @@ export function RequirementList({
       {requirements.map((requirement) => (
         <li key={requirement.id}>
           <p>{requirement.description}</p>
+          {requirement.kind === 'validation' && (
+            <span className="badge">Validation check</span>
+          )}
           {requirement.kind === 'approval' && (
             <span className="badge workflow-approval">Human approval</span>
           )}
@@ -29,18 +32,21 @@ export function NodeRequirements({
   node,
   graph,
   onSelect,
+  nested = false,
 }: {
   node: WorkflowNode
   graph: WorkflowGraph
   onSelect: (id: string) => void
+  nested?: boolean
 }) {
+  const Heading = nested ? 'h4' : 'h3'
   const transitions = graph.edges.filter((edge) => edge.source === node.id)
   return (
     <>
       <p>{node.description}</p>
-      <h3>Before moving on</h3>
+      <Heading>Before moving on</Heading>
       <RequirementList requirements={node.requirements} />
-      <h3>Expected outputs</h3>
+      <Heading>Expected outputs</Heading>
       {node.outputs.length ? (
         <ul>
           {node.outputs.map((output, index) => (
@@ -52,11 +58,11 @@ export function NodeRequirements({
       )}
       {node.iteration_note && (
         <>
-          <h3>Iteration</h3>
+          <Heading>Iteration</Heading>
           <p>{node.iteration_note}</p>
         </>
       )}
-      <h3>Continues to</h3>
+      <Heading>Continues to</Heading>
       {transitions.length ? (
         <ul className="workflow-transitions">
           {transitions.map((edge) => (

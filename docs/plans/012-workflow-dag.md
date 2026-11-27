@@ -1,6 +1,7 @@
 # Editable workflow DAGs
 
-Proposed implementation; application code has not been changed by this design work.
+First delivery implemented: the shared viewer/editor and Plan and execute DAG.
+The remaining 14 workflow maps stay queued for individual authoring after review.
 
 Add a **Workflow map** tab beside **Assignments** on `/workflows`. Display one
 selected workflow as a directed acyclic graph (DAG), with a description and the
@@ -115,7 +116,8 @@ label, without presenting requirements as live completion controls.
    restoration, both themes, and pending/error/empty states. Verify the complete first
    graph and existing assignment journeys in Playwright, and document the feature.
 
-   **Backend:** **No changes.**
+   **Backend:** Extend isolated restart verification to cover edited graph definitions,
+   positions, applicability, and revisions; API behavior is unchanged in this commit.
 
    **Database:** **No changes.**
 
@@ -396,3 +398,37 @@ the proposed feature and are not screenshots of implemented application behavior
 
 Consulted November 26, 2026. React Flow supplies graph UI primitives; server validation,
 requirements semantics, persistence, and revision conflict handling remain application code.
+
+## First delivery: implemented and verified
+
+The first six commits are implemented. Plan and execute is the only authored DAG;
+the remaining 14 definitions retain their assignments and unmapped state for the
+individual review sequence above. The map supports node requirements and applicability,
+human approvals, outputs, transitions, graph/list views, one editable draft, saved
+positions, validation, revision conflicts, and unsaved-navigation protection.
+
+Verified locally on November 26, 2026:
+
+- `python scripts/check.py` passed: all 319 backend tests, Python/frontend lint and
+  formatting, Django system/migration checks, TypeScript, and the production build.
+  The default machine pytest temp directory was unreadable, so the successful run
+  used `PYTEST_ADDOPTS` with a fresh isolated base directory. Existing permissions
+  were not changed.
+- The full Chromium run passed 100 of 101 cases, including all 12 DAG scenarios.
+  The existing Backlog refinement case raced the board's revision poll; its test now
+  waits for the completed task snapshot before sending answers, and passed its
+  focused rerun. Task execution and approval application code was not changed.
+- `python scripts/check_persistence.py` passed across a real backend restart,
+  preserving graph edits, positions, conditional applicability, revisions, tasks,
+  projects, and assignments in an isolated database.
+- Browser checks cover saved edits, adding/removing nodes, connection repair, cycle
+  prevention, network failures, two-tab conflict comparison, pending saves, URL/history
+  state, unsaved-navigation guards, keyboard movement, and focus restoration.
+- Desktop graph/inspector/editor screenshots were inspected. Both themes and 320px/
+  390px layouts passed overflow checks at 100% and 200% text size; ordered steps is
+  the initial mobile view. The canvas refits when the inspector changes its width.
+
+The build succeeds with a dependency bundler warning about the `use no memo`
+directive in `react-compiler-runtime`, brought in by React Flow. The graph behavior
+passes the browser checks. Package versions are pinned to `@xyflow/react` 13.0.3
+and `@dagrejs/dagre` 3.1.4.

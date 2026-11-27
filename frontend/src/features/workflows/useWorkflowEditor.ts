@@ -107,7 +107,11 @@ export function useWorkflowEditor(
         cause.body &&
         typeof cause.body === 'object'
       ) {
-        setFieldErrors([...new Set(errorMessages(cause.body))])
+        setFieldErrors([
+          ...new Set(
+            errorMessages((cause.body as Record<string, unknown>).errors),
+          ),
+        ])
       }
     } finally {
       setPending(null)

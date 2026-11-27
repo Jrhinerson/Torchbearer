@@ -284,6 +284,11 @@ test('refines a Backlog task through questions and carries the answers into Plan
   ).toBeVisible()
   await expect(card.getByLabel('Approach', { exact: true })).toHaveCount(0)
   await expect(card.getByRole('button', { name: /^Delete / })).toHaveCount(0)
+  // Run history can arrive before the board's revision poll. Wait for the task
+  // snapshot too, so Send answers uses the revision that finished refinement.
+  await expect(
+    card.getByText('Refinement: Blocked', { exact: true }),
+  ).toBeVisible({ timeout: 20000 })
   await review
     .getByLabel('Refinement answers or instructions')
     .fill('Display only; do not change sorting.')

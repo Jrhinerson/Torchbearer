@@ -8,13 +8,13 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 - `frontend/src/features/tasks/`: five-column board, task-creation popup, and task-specific API operations.
 - `frontend/src/features/projects/`: searchable project selection, local-folder browser, cloning and project management inside task creation.
 - `frontend/src/features/settings/`: account Connections, GitHub browser authorization handoff, and pending-login polling.
-- `frontend/src/features/workflows/`: alphabetical, searchable work-type catalogue with responsive columns and saved assignment management.
+- `frontend/src/features/workflows/`: searchable work-type assignments and a lazy-loaded DAG viewer/editor with node requirements, ordered steps, and revision conflict recovery.
 - `frontend/src/lib/api.ts`: same-origin requests and useful HTTP/connection errors.
 - `backend/config/`: local settings, routing, health, and CSRF bootstrap.
 - `backend/tasks/`: task models, serializers, views, migrations, and API tests.
 - `backend/projects/`: stored projects, local directory and Git operations, serializers, views, migrations and API tests.
 - `backend/connections/`: native GitHub App OAuth, OS-backed credentials, token refresh, verified account identity, and connection APIs.
-- `backend/workflows/`: built-in engineering workflow definitions, work types, revision-checked assignments, and catalogue migrations.
+- `backend/workflows/`: workflow definitions, bounded DAG validation, revision-checked graph and assignment saves, and catalogue migrations.
 - `scripts/`: setup, process management, verification, and isolated test services.
 
 During development, Vite serves `http://127.0.0.1:5173` and forwards `/api/` to Django at `127.0.0.1:8000`. Both bind to loopback. Frontend code uses relative API URLs so a later desktop wrapper can reuse the interface and local service boundary.
@@ -37,6 +37,7 @@ Each card has an independent expand/collapse button with `aria-expanded` and `ar
 | GET/PATCH | `/api/v1/tasks/<uuid>/` | Read a task; revision-checked PATCH of repository and routing in Backlog, or an initial routing choice for an inactive legacy task. |
 | GET | `/api/v1/routing/` | Agent classifications, supported task approaches, and worker availability. |
 | GET | `/api/v1/workflows/` | Ordered built-in workflow definitions, steps, outputs, validation, and approval points. |
+| GET/PATCH | `/api/v1/workflows/<key>/graph/` | Read an authored graph or normal unmapped response; save a full graph with its expected revision. |
 | GET | `/api/v1/work-types/` | Ordered work types with their recommended and assigned workflow keys and revisions. |
 | GET/PATCH | `/api/v1/work-types/<key>/` | Read a work type or change its assigned workflow using its expected revision. |
 | GET/POST | `/api/v1/repositories/` | List or register validated local Git repository roots. |
@@ -74,13 +75,49 @@ Backlog tasks without agent history retain Delete with confirmation and failure 
 
 ## Workflow catalogue assignments
 
-The catalogue contains 19 work types and 15 reusable workflow definitions. Stable slug keys identify both. Each work type has protected references to its recommended and assigned workflows, a revision, and an update timestamp. Workflow definitions and work-type metadata are read-only through the API; any catalogue workflow can be assigned to any type. Frozen data migrations add missing records without overwriting existing assignments.
+The catalogue contains 19 work types and 15 reusable workflow definitions. Stable slug keys identify both. Each work type has protected references to its recommended and assigned workflows, a revision, and an update timestamp. Work-type metadata and workflow identities are read-only; authored workflow graphs are editable. Any catalogue workflow can be assigned to any type. Frozen data migrations add missing records without overwriting existing assignments.
 
 Migration `0003_consolidate_workflows` folds `docs-as-code` into `plan-execute`, `contract-testing` into `spec-driven`, and `design-proposal` into `timeboxed-discovery` (renamed Discovery and design review). The shared definitions retain documentation verification, interface contract tests, and architectural decisions as applicable. Both recommended and saved references to retired choices move to their shared equivalents, including custom assignments on other work types. Other assignments remain unchanged. Each affected work type receives one revision increment and an updated timestamp so stale saves conflict. Retired choices are removed only after references move. Reversing restores the original catalogue choices and definitions, while saved references remain on their shared equivalents; the original choice within a merged group cannot be reconstructed.
 
 Assignment PATCH accepts only `assigned_workflow` and `revision`. A conditional update increments the revision atomically; stale requests return 409 without changing the saved assignment. Unknown workflow keys return 400 and missing work types return 404. Writes require the same CSRF bootstrap as task and project changes. The client keeps unsaved selections during filtering, failed saves, and conflict recovery; reloading a conflicting assignment updates the saved value and revision while preserving the draft for explicit review and saving.
 
 These records configure application-wide catalogue defaults. Tasks currently have no work-type reference and the execution engine does not consume these definitions; task routing, stage transitions, approval rules, and historical reports remain independent. The management page states this scope explicitly.
+
+`WorkflowDefinition` also stores nullable graph JSON, an independent graph revision,
+and its update timestamp. Migration `0005_plan_execute_graph` authors only Plan and
+execute; other maps are intentionally absent until individually reviewed. Its seed
+only populates an unmapped row, and its reverse clears only the untouched initial
+revision. A graph is authoritative when present: the list serializer projects its
+topologically ordered descriptions, outputs, validation checks, and approval points,
+including conditional applicability, into the legacy catalogue fields. Persisted
+flat lists remain the fallback for unmapped workflows, not a second editable source.
+
+The graph contract is independent of React Flow: schema version, declared entry,
+stable node/requirement/edge IDs, node descriptions and outputs, typed requirement
+descriptions/applicability, optional iteration notes, positions, and descriptive edge
+conditions. `backend/workflows/graph.py` enforces finite bounded JSON (256 KiB, at most
+100 nodes, 300 edges, and 30 requirements/outputs per node), known fields and endpoints,
+one reachable entry, nonempty requirements, unique identities/connections, and no
+cycles. Iteration is explained within a node rather than represented by backward
+edges. Conditions describe the definition; they are not executable rules.
+
+Graph PATCH accepts only `graph` and integer `revision`. The first database operation
+is a conditional UPDATE of an authored row at that revision, inside a transaction;
+it increments the revision and timestamp together. Invalid documents return 400 with
+field paths, stale saves or unmapped writes return 409, and missing keys return 404.
+All graph writes require CSRF verification. Reads expose mapping availability via
+`has_graph`, and graph detail uses `graph: null` for an existing unmapped workflow.
+
+The map tab lazy-loads React Flow custom nodes and viewport controls. Dagre runs only
+on explicit Arrange; saved node positions survive refresh and restart. The canvas
+refits when the inspector changes its width and exposes complete text via the
+inspector and equivalent ordered steps view. Editing maintains one local draft,
+disables graph switching, retains errors and conflicts, and requires explicit
+comparison/revision adoption before retrying a stale save. `frontend/src/lib/navigation.ts`
+coordinates app links, query-tab changes, and browser history with a draft blocker;
+native unload protection covers browser reload and closing. No draft is published
+until Save succeeds. The isolated persistence script verifies graph edits and
+positions across a real server restart.
 
 ## Workflow and workspaces
 

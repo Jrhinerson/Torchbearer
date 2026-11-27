@@ -34,7 +34,11 @@ in run context provide attribution; they do not grant permissions or trigger ext
 ## Workflow catalogue
 
 The Workflows page defines 15 reusable workflows for 19 work types. Each type keeps one
-assignment. Overlapping procedures share a definition, with applicable checks and outputs
+assignment. Its Workflow map tab starts with an editable Plan and execute DAG; other maps
+will be authored and reviewed individually. Nodes describe requirements before continuing,
+conditional checks, handoff outputs, and human approval points. These are catalogue
+definitions; the task execution engine continues to enforce its existing stage workflow
+independently. Overlapping procedures share a definition, with applicable checks and outputs
 retained in that definition:
 
 - **Plan and execute** includes documentation work: identify the audience, review accuracy

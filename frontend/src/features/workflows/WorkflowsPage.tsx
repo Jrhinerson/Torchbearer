@@ -210,6 +210,7 @@ export default function WorkflowsPage() {
         >
           <Suspense fallback={<p role="status">Loading workflow map…</p>}>
             <WorkflowMap
+              key={location.workflow}
               workflows={catalogue.workflows}
               workflowKey={
                 catalogue.workflows.some(
