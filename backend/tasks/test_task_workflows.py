@@ -8,7 +8,7 @@ from rest_framework.exceptions import ValidationError
 from workflows.models import WorkflowDefinition, WorkType
 from workflows.profiles import LEGACY_SNAPSHOT, snapshot_for
 
-from .adapters import RunnerFailure, validate_result
+from .adapters import RunnerFailure, arguments, validate_result
 from .conftest import csrf
 from .models import AgentRun, Task
 from .worker import Worker
@@ -171,3 +171,114 @@ def test_invalid_step_evidence_cannot_complete(profiles, mutation):
         reports[0]["outcome"] = "failed"
     with pytest.raises(RunnerFailure):
         validate_result(value, "integrate", snapshot)
+
+
+@pytest.mark.parametrize(
+    ("mode", "agent"),
+    [("frontier", "codex"), ("frontier", "claude"), ("hybrid", "codex"), ("local_only", None)],
+)
+def test_discovery_delivers_a_reviewed_decision_without_edits(
+    profiles, repository, fake_cli, settings, tmp_path, mode, agent
+):
+    from pathlib import Path
+
+    settings.DATA_DIR = tmp_path / "data"
+    for runner in ["codex", "claude", "pi"]:
+        fake_cli(runner, "implement")
+    work_type = WorkType.objects.get(pk="research")
+    task = Task.objects.create(
+        title="Queue discovery",
+        repository=repository,
+        routing_mode=mode,
+        frontier_agent=agent,
+        work_type=work_type,
+        workflow_snapshot=snapshot_for(work_type),
+    )
+    act(task.id, action="start", revision=0)
+    for stage in ["plan", "integrate", "code_review"]:
+        assert Worker().run_once()
+        task.refresh_from_db()
+        run = task.runs.first()
+        assert run.state == "succeeded", run.error
+        assert run.result["tests"] == []
+        if stage == "integrate":
+            assert run.result["artifacts"]["decision"]["options"]
+        if stage == "code_review":
+            assert run.input_context["artifacts"]["implementation"]["result"]["artifacts"][
+                "decision"
+            ]
+        act(
+            task.id,
+            action="approve",
+            revision=task.revision,
+            run_id=run.id,
+            fingerprint=run.review_fingerprint,
+        )
+    task.refresh_from_db()
+    run = task.runs.first()
+    act(
+        task.id,
+        action="final_approve",
+        revision=task.revision,
+        run_id=run.id,
+        fingerprint=run.review_fingerprint,
+    )
+    task.refresh_from_db()
+    assert task.completed_at
+    assert not (Path(task.workspace_path) / "feature.txt").exists()
+    for runner in ["codex", "claude", "pi"]:
+        args = arguments(runner, "integrate", Path("schema.json"), task.workflow_snapshot)
+        assert "workspace-write" not in args
+        if runner != "codex":
+            tools = args[args.index("--tools") + 1]
+            assert "write" not in tools.lower() and "bash" not in tools.lower()
+
+
+def test_discovery_workspace_mutation_is_blocked(
+    profiles, repository, fake_cli, settings, tmp_path
+):
+    settings.DATA_DIR = tmp_path / "data"
+    fake_cli("codex", "implement")
+    task = Task.objects.create(
+        title="Read-only discovery",
+        repository=repository,
+        workflow_snapshot=snapshot_for(WorkType.objects.get(pk="research")),
+    )
+    act(task.id, action="start", revision=0)
+    Worker().run_once()
+    task.refresh_from_db()
+    run = task.runs.first()
+    act(
+        task.id,
+        action="approve",
+        revision=task.revision,
+        run_id=run.id,
+        fingerprint=run.review_fingerprint,
+    )
+    fake_cli("codex", "modify")
+    Worker().run_once()
+    run = task.runs.first()
+    assert run.state == "blocked" and "changed workspace" in run.error
+
+
+def test_discovery_requires_decision_artifact(profiles):
+    snapshot = snapshot_for(WorkType.objects.get(pk="research"))
+    result = {
+        "outcome": "complete",
+        "summary": "Done",
+        "details": "Findings",
+        "tests": [],
+        "workflow_steps": [
+            {
+                "step_id": step["id"],
+                "outcome": "complete",
+                "summary": "Recorded",
+                "test_indexes": [],
+            }
+            for step in snapshot["steps"]
+            if step["stage"] == "integrate"
+        ],
+        "artifacts": {"decision": None},
+    }
+    with pytest.raises(RunnerFailure, match="decision artifact"):
+        validate_result(result, "integrate", snapshot)

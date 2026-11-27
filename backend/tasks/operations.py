@@ -105,6 +105,17 @@ def projection(task, worker):
     else:
         group, reason = "needs_you", "Review missing execution history"
     next_stage = NEXT_STAGE.get(task.status)
+    if (
+        snapshot.get("execution_mode") == "decision"
+        and group == "needs_you"
+        and (task.status == "final_approval" or (run and run.state == "succeeded"))
+    ):
+        reason = {
+            "plan": "Approve investigation plan",
+            "integrate": "Approve findings",
+            "code_review": "Approve decision review",
+            "final_approval": "Accept decision",
+        }.get(task.status, reason)
     next_agent = owner_for(task, next_stage) if next_stage in Stage.values else None
     return {
         "group": group,
@@ -267,11 +278,19 @@ def flow(task):
         nodes.append(
             {
                 "id": f"approve_{stage}",
-                "label": {
-                    "plan": "Approve plan",
-                    "integrate": "Approve validation",
-                    "code_review": "Approve review",
-                }[stage],
+                "label": (
+                    {
+                        "plan": "Approve investigation plan",
+                        "integrate": "Approve findings",
+                        "code_review": "Approve decision review",
+                    }
+                    if snapshot.get("execution_mode") == "decision"
+                    else {
+                        "plan": "Approve plan",
+                        "integrate": "Approve validation",
+                        "code_review": "Approve review",
+                    }
+                )[stage],
                 "kind": "gate",
                 "agent": "human",
                 "state": "accepted"
@@ -287,7 +306,7 @@ def flow(task):
     nodes.append(
         {
             "id": "final_approval",
-            "label": "Final approval",
+            "label": snapshot.get("stage_labels", {}).get("final_approval", "Final approval"),
             "kind": "gate",
             "agent": "human",
             "state": "accepted"
@@ -302,8 +321,22 @@ def flow(task):
         if decision.action == "send_back":
             edges.append(
                 {
-                    "source": decision.from_stage,
-                    "target": decision.to_stage,
+                    "source": next(
+                        (
+                            node["id"]
+                            for node in reversed(nodes)
+                            if node.get("stage", node["id"]) == decision.from_stage
+                        ),
+                        decision.from_stage,
+                    ),
+                    "target": next(
+                        (
+                            node["id"]
+                            for node in nodes
+                            if node.get("stage", node["id"]) == decision.to_stage
+                        ),
+                        decision.to_stage,
+                    ),
                     "kind": "rework",
                     "decision_id": decision.id,
                 }

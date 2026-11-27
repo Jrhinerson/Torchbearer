@@ -13,9 +13,9 @@ from django.db.models import F
 from django.utils import timezone
 
 from .adapters import RunnerFailure, execute
+from .execution import policy_for
 from .models import AgentRun, Task, WorkerStatus
 from .prompts import prompt_for
-from .routing import REPORT_ONLY_STAGES
 from .workspaces import ensure_workspace, fingerprint
 
 
@@ -167,7 +167,10 @@ class Worker:
                 workflow=run.input_context.get("workflow"),
             )
             snapshot = fingerprint(run.task)
-            if run.stage in REPORT_ONLY_STAGES and snapshot != before:
+            if (
+                not policy_for(run.stage, run.input_context.get("workflow")).can_write
+                and snapshot != before
+            ):
                 raise RunnerFailure(
                     f"The {run.stage.title()} agent changed workspace files. "
                     "Review them before requesting another run.",

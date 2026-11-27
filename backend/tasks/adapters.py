@@ -9,6 +9,7 @@ import threading
 import time
 
 from .cli import LABELS, resolve_command
+from .execution import policy_for
 from .processes import ProcessTree
 from .results import profiled, result_schema, validate_workflow_report
 
@@ -73,8 +74,9 @@ def preflight(agent):
 
 
 def arguments(agent, stage, schema_path, workflow=None):
+    policy = policy_for(stage, workflow)
     if agent == "codex":
-        sandbox = "workspace-write" if stage == "integrate" else "read-only"
+        sandbox = "workspace-write" if policy.can_write else "read-only"
         return [
             "-a",
             "never",
@@ -89,9 +91,9 @@ def arguments(agent, stage, schema_path, workflow=None):
         ]
     if agent == "claude":
         tools = "Read,Grep,Glob"
-        if stage == "integrate":
+        if policy.can_write:
             tools += ",Edit,Write,Bash"
-        elif stage == "code_review":
+        elif policy.can_shell:
             tools += ",Bash"
         return [
             "-p",
@@ -108,9 +110,9 @@ def arguments(agent, stage, schema_path, workflow=None):
             json.dumps(result_schema(RESULT_SCHEMA, workflow)),
         ]
     tools = "read,grep,find,ls"
-    if stage == "integrate":
+    if policy.can_write:
         tools += ",edit,write,bash"
-    elif stage == "code_review":
+    elif policy.can_shell:
         tools += ",bash"
     return ["--mode", "json", "--no-session", "--tools", tools]
 
@@ -156,7 +158,7 @@ def validate_result(value, stage, workflow=None):
         ):
             raise RunnerFailure("The agent returned an invalid test report entry.")
     if (
-        stage == "integrate"
+        policy_for(stage, workflow).requires_commands
         and value["outcome"] == "complete"
         and (not tests or any(test["outcome"] != "pass" for test in tests))
     ):

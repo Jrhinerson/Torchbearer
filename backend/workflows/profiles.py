@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from rest_framework.exceptions import ValidationError
 
-SUPPORTED_MODES = {"code_change"}
+SUPPORTED_MODES = {"code_change", "decision"}
 LEGACY_SNAPSHOT = {
     "schema_version": 1,
     "key": "legacy-standard",
