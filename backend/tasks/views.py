@@ -41,6 +41,20 @@ class RoutingView(LocalView):
         )
 
 
+class OperationsView(LocalView):
+    def get(self, request):
+        from .operations import overview
+
+        return Response(overview(request.query_params))
+
+
+class TaskFlowView(LocalView):
+    def get(self, request, pk):
+        from .operations import flow
+
+        return Response(flow(get_object_or_404(Task, pk=pk)))
+
+
 @method_decorator(csrf_protect, name="dispatch")
 class RepositoryListView(generics.ListCreateAPIView):
     authentication_classes = []

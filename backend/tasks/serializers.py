@@ -90,6 +90,24 @@ class TaskSerializer(serializers.ModelSerializer):
         return {stage: agent_for(obj, stage) for stage in [*Stage, *SupportStage]}
 
     def get_latest_run(self, obj):
+        if hasattr(obj, "operation_runs"):
+            run = next(iter(obj.operation_runs), None)
+            return (
+                {
+                    field: getattr(run, field)
+                    for field in (
+                        "id",
+                        "stage",
+                        "agent",
+                        "state",
+                        "sequence",
+                        "error",
+                        "cancel_requested",
+                    )
+                }
+                if run
+                else None
+            )
         return obj.runs.values(
             "id", "stage", "agent", "state", "sequence", "error", "cancel_requested"
         ).first()
