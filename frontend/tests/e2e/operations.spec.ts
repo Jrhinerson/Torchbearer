@@ -283,3 +283,65 @@ test('shows operations groups and filters cards and counts together', async ({
     ),
   ).toBe(true)
 })
+
+test('retries a failed attempt from its inspector and preserves the source error', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const csrf = (await (await page.request.get('/api/v1/csrf/')).json())
+    .csrfToken
+  const repos = await (await page.request.get('/api/v1/repositories/')).json()
+  const task = await (
+    await page.request.post('/api/v1/tasks/', {
+      headers: { 'X-CSRFToken': csrf },
+      data: {
+        title: `[validation fails] Inspector recovery ${Date.now()}`,
+        repository: repos[0].id,
+      },
+    })
+  ).json()
+  await page.request.post(`/api/v1/tasks/${task.id}/actions/`, {
+    headers: { 'X-CSRFToken': csrf },
+    data: { action: 'start', revision: task.revision },
+  })
+  await page
+    .getByRole('button', { name: `Open ${task.title}`, exact: true })
+    .click()
+  const workspace = page.getByRole('dialog', { name: task.title, exact: true })
+  await workspace
+    .getByRole('button', {
+      name: 'Approve plan & start Integrate',
+      exact: true,
+    })
+    .click({ timeout: 20000 })
+  const inspector = workspace.getByRole('complementary', {
+    name: 'Task evidence and actions',
+  })
+  await expect(
+    inspector.getByRole('region', { name: 'Execution blocker' }),
+  ).toBeVisible({ timeout: 20000 })
+  await expect(inspector).toContainText('Execution needs attention')
+  const before = await (
+    await page.request.get(`/api/v1/tasks/${task.id}/runs/`)
+  ).json()
+  await inspector
+    .getByRole('button', { name: 'Retry reply', exact: true })
+    .click()
+  await expect
+    .poll(
+      async () =>
+        (
+          await (
+            await page.request.get(`/api/v1/tasks/${task.id}/runs/`)
+          ).json()
+        ).runs.length,
+    )
+    .toBe(before.runs.length + 1)
+  const after = await (
+    await page.request.get(`/api/v1/tasks/${task.id}/runs/`)
+  ).json()
+  expect(
+    after.runs.find((run: { id: string }) => run.id === before.runs[0].id)
+      .state,
+  ).toBe('failed')
+})

@@ -112,3 +112,22 @@ def test_missing_routing_needs_attention_and_history_404():
     client = APIClient()
     assert client.get("/api/v1/operations/").json()["counts"]["needs_you"] == 1
     assert client.get(f"/api/v1/tasks/{uuid.uuid4()}/flow/").status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("stage", "run_stage", "state", "action", "label"),
+    [
+        ("plan", "plan", "failed", "retry", "Retry reply"),
+        ("backlog", "refine", "failed", "refine", "Retry refinement"),
+        ("backlog", "refine", "blocked", "refine", "Answer question"),
+        ("plan", "plan", "blocked", "plan_message", "Answer question"),
+        ("integrate", "integrate", "running", "cancel", "Stop reply"),
+    ],
+)
+def test_inspector_recovery_descriptors(stage, run_stage, state, action, label):
+    task = Task.objects.create(title="Recover", status=stage)
+    AgentRun.objects.create(task=task, stage=run_stage, state=state, agent="codex", sequence=1)
+    flow = APIClient().get(f"/api/v1/tasks/{task.id}/flow/").json()
+    descriptor = next(item for item in flow["actions"] if item["action"] == action)
+    assert descriptor["label"] == label
+    assert descriptor["enabled"] == (action != "refine")

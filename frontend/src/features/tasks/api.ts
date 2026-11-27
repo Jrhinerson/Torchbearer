@@ -167,6 +167,13 @@ export interface FlowNode {
   run_id: string | null
 }
 export interface TaskFlowData extends RunHistory {
+  actions: {
+    action: TaskAction | 'cancel' | 'settings'
+    label: string
+    enabled: boolean
+    reason: string
+    requires_fingerprint: boolean
+  }[]
   task: Task
   task_id: string
   revision: number

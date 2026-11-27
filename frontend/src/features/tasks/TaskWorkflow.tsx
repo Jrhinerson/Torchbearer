@@ -308,6 +308,7 @@ export function WorkflowDialog({
     embedded ? 'flow' : 'conversation',
   )
   const [focused, setFocused] = useState(false)
+  const [focusComposer, setFocusComposer] = useState(0)
   const [localInspectedRunId, setLocalInspectedRunId] = useState<string | null>(
     null,
   )
@@ -585,6 +586,7 @@ export function WorkflowDialog({
                   (task.latest_run?.stage === 'retro' ? 'retro' : 'workflow')
                 }
                 showApproval={!embedded || focused}
+                focusRequest={focusComposer}
                 task={task}
                 history={history}
                 run={run}
@@ -652,8 +654,25 @@ export function WorkflowDialog({
                   : '')
             }
             busy={busy}
+            actionsCurrent={
+              !loadError &&
+              history.revision === task.revision &&
+              history.latest_run_id === task.latest_run?.id
+            }
+            onAction={(descriptor) => {
+              if (
+                descriptor.action === 'settings' ||
+                descriptor.label === 'Answer question'
+              ) {
+                setTab('conversation')
+                setFocusComposer((value) => value + 1)
+              } else void act(descriptor.action)
+            }}
             error={error}
-            onConversation={() => setTab('conversation')}
+            onConversation={() => {
+              setTab('conversation')
+              setFocusComposer((value) => value + 1)
+            }}
             onApprove={() =>
               void act(
                 task.status === 'backlog'

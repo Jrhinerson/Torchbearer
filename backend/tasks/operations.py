@@ -178,21 +178,36 @@ def action_descriptors(task, run):
                 "Choose a Git project" if not task.repository else "",
                 bool(run),
             )
-            add("refine", "Refine task", bool(task.repository))
+            add(
+                "refine",
+                "Answer question"
+                if run and run.state == "blocked"
+                else "Continue refinement"
+                if run and run.state == "succeeded"
+                else "Retry refinement"
+                if run
+                else "Refine task",
+                bool(task.repository),
+            )
         elif run:
             if run.state == "succeeded":
                 action = "final_approve" if task.status == "final_approval" else "approve"
                 add(action, projection(task, {"available": False})["reason"], fingerprint=True)
-            else:
+            elif task.status in Stage.values:
                 add("retry", "Retry reply")
             if task.status == "plan":
-                add("plan_message", "Send message")
+                add("plan_message", "Answer question" if run.state == "blocked" else "Send message")
             elif task.status in {"integrate", "code_review"}:
                 add("revise", "Request revision")
             if task.status in {"integrate", "code_review", "final_approval"}:
                 add("send_back", "Send back")
     elif run:
-        add("retro", "Run retrospective")
+        add(
+            "retro",
+            "Retry retrospective"
+            if run.stage == "retro" and run.state != "succeeded"
+            else "Run retrospective",
+        )
     return actions
 
 

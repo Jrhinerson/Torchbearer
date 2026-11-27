@@ -16,6 +16,8 @@ export function DecisionInspector({
   onLatest,
   history,
   onInspectRun,
+  onAction,
+  actionsCurrent,
 }: {
   task: Task
   run: Run | undefined
@@ -30,6 +32,8 @@ export function DecisionInspector({
   onLatest: () => void
   history: TaskFlowData
   onInspectRun: (id: string | null) => void
+  onAction: (action: TaskFlowData['actions'][number]) => void
+  actionsCurrent: boolean
 }) {
   const evidence = run?.result.tests?.length
     ? run.result.tests
@@ -75,6 +79,24 @@ export function DecisionInspector({
           : task.operations?.reason}
       </p>
       {run?.result.summary && <p>{run.result.summary}</p>}
+      {run &&
+        ['failed', 'blocked', 'cancelled', 'interrupted'].includes(
+          run.state,
+        ) && (
+          <section aria-label="Execution blocker">
+            <h4>
+              {run.state === 'blocked'
+                ? 'Input or resolution needed'
+                : 'Execution needs attention'}
+            </h4>
+            <p className="feedback feedback-error">
+              {run.error ||
+                run.result.details ||
+                run.result.summary ||
+                `Attempt ${run.sequence} was ${run.state}. Review the workspace before retrying.`}
+            </p>
+          </section>
+        )}
       {!historical && !task.completed_at && (
         <section>
           <h4>Next handoff</h4>
@@ -99,13 +121,72 @@ export function DecisionInspector({
               {taskApprovalLabel(task)}
             </button>
           )}
-          {approvalHint && !task.completed_at && (
+          {approvalHint && run?.state === 'succeeded' && !task.completed_at && (
             <p className="workflow-hint">{approvalHint}</p>
           )}
+          {(history.actions ?? [])
+            .filter(
+              (action) =>
+                ![
+                  'approve',
+                  'final_approve',
+                  'plan_message',
+                  'revise',
+                  'send_back',
+                ].includes(action.action) &&
+                action.label !== 'Answer question' &&
+                !(action.action === 'start' && run?.state === 'succeeded'),
+            )
+            .map((action) => {
+              const stage =
+                action.action === 'refine' || action.action === 'retro'
+                  ? action.action
+                  : task.status
+              const agent =
+                task.stage_agents[stage as keyof Task['stage_agents']]
+              const unavailable =
+                !['cancel', 'settings'].includes(action.action) &&
+                agent &&
+                routing?.agents.some(
+                  (item) => item.id === agent && !item.available,
+                )
+              return (
+                <div key={action.action}>
+                  <button
+                    className="button button-secondary"
+                    disabled={
+                      busy ||
+                      !actionsCurrent ||
+                      !action.enabled ||
+                      Boolean(unavailable) ||
+                      (action.requires_fingerprint && !canApprove)
+                    }
+                    onClick={() => onAction(action)}
+                  >
+                    {action.label}
+                  </button>
+                  {action.reason && (
+                    <p className="workflow-hint">{action.reason}</p>
+                  )}
+                  {unavailable && (
+                    <p className="workflow-hint">
+                      Install {agentLabel(agent!, routing)} before continuing.
+                    </p>
+                  )}
+                </div>
+              )
+            })}
           <button className="button button-secondary" onClick={onConversation}>
             {task.completed_at
               ? 'View conversation'
-              : 'Conversation & revision'}
+              : run?.state === 'blocked'
+                ? task.status === 'plan' || task.status === 'backlog'
+                  ? 'Answer question'
+                  : 'Resolve blocker'
+                : run &&
+                    ['failed', 'cancelled', 'interrupted'].includes(run.state)
+                  ? 'Review failure & revise'
+                  : 'Conversation & revision'}
           </button>
         </>
       )}

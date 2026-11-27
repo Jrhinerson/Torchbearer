@@ -36,9 +36,11 @@ export function WorkflowConversation({
   onApprove,
   onRetrospective,
   showApproval = true,
+  focusRequest = 0,
 }: {
   task: Task
   showApproval?: boolean
+  focusRequest?: number
   history: RunHistory
   run: Run | undefined
   routing: Routing | null
@@ -82,6 +84,9 @@ export function WorkflowConversation({
   const submitting = useRef(false)
   const thread = useRef<HTMLOListElement>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
+  useEffect(() => {
+    if (focusRequest) composer.current?.focus()
+  }, [focusRequest])
   const followReplies = useRef(true)
   const [following, setFollowing] = useState(true)
   const attempts = [...history.runs].sort((a, b) => a.sequence - b.sequence)
