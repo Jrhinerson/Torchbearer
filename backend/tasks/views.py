@@ -48,6 +48,13 @@ class OperationsView(LocalView):
         return Response(overview(request.query_params))
 
 
+class ActivityView(LocalView):
+    def get(self, request):
+        from .activity import activity
+
+        return Response(activity(request.query_params))
+
+
 class TaskFlowView(LocalView):
     def get(self, request, pk):
         from .operations import flow

@@ -1,5 +1,5 @@
 import { agentLabel } from './api'
-import type { Routing, Run, Task } from './api'
+import type { Routing, Run, Task, TaskFlowData } from './api'
 import { taskApprovalLabel } from './workflowLabels'
 
 export function DecisionInspector({
@@ -14,6 +14,8 @@ export function DecisionInspector({
   onConversation,
   historical,
   onLatest,
+  history,
+  onInspectRun,
 }: {
   task: Task
   run: Run | undefined
@@ -26,6 +28,8 @@ export function DecisionInspector({
   onConversation: () => void
   historical: boolean
   onLatest: () => void
+  history: TaskFlowData
+  onInspectRun: (id: string | null) => void
 }) {
   const evidence = run?.result.tests?.length
     ? run.result.tests
@@ -34,6 +38,22 @@ export function DecisionInspector({
   const decision =
     run?.result.artifacts?.decision ??
     run?.input_context?.artifacts?.implementation?.result.artifacts?.decision
+  const recent = [
+    ...history.runs.map((attempt) => ({
+      id: `run-${attempt.id}`,
+      runId: attempt.id,
+      time: attempt.finished_at ?? attempt.started_at ?? attempt.created_at,
+      label: `${agentLabel(attempt.agent, routing)} · ${attempt.stage.replaceAll('_', ' ')} · ${attempt.state}`,
+    })),
+    ...history.decisions.map((item) => ({
+      id: `decision-${item.id}`,
+      runId: (item as typeof item & { run?: string }).run ?? null,
+      time: item.created_at,
+      label: `You · ${item.action.replaceAll('_', ' ')}`,
+    })),
+  ]
+    .sort((a, b) => b.time.localeCompare(a.time) || b.id.localeCompare(a.id))
+    .slice(0, 5)
   return (
     <aside
       className="decision-inspector"
@@ -173,6 +193,22 @@ export function DecisionInspector({
           {error}
         </p>
       )}
+      <section aria-label="Recent task activity">
+        <h4>Recent activity</h4>
+        <ol className="inspector-activity">
+          {recent.map((item) => (
+            <li key={item.id}>
+              <button
+                className="button button-link"
+                type="button"
+                onClick={() => onInspectRun(item.runId)}
+              >
+                {item.label}
+              </button>
+            </li>
+          ))}
+        </ol>
+      </section>
     </aside>
   )
 }

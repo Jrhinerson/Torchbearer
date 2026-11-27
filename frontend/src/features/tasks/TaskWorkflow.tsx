@@ -282,6 +282,8 @@ export function WorkflowDialog({
   routing,
   embedded = false,
   refreshToken,
+  selectedRunId,
+  onInspectRun,
 }: {
   task: Task
   onTask: (task: Task) => void
@@ -289,6 +291,8 @@ export function WorkflowDialog({
   routing: Routing | null
   embedded?: boolean
   refreshToken?: string
+  selectedRunId?: string | null
+  onInspectRun?: (id: string | null) => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   const closeButton = useRef<HTMLButtonElement>(null)
@@ -303,7 +307,12 @@ export function WorkflowDialog({
     embedded ? 'flow' : 'conversation',
   )
   const [focused, setFocused] = useState(false)
-  const [inspectedRunId, setInspectedRunId] = useState<string | null>(null)
+  const [localInspectedRunId, setLocalInspectedRunId] = useState<string | null>(
+    null,
+  )
+  const inspectedRunId =
+    selectedRunId === undefined ? localInspectedRunId : selectedRunId
+  const setInspectedRunId = onInspectRun ?? setLocalInspectedRunId
   const acting = useRef(false)
   const run = history?.runs.find((item) => item.id === task.latest_run?.id)
   const active = isActive(task)
@@ -359,6 +368,7 @@ export function WorkflowDialog({
         const result = await getTaskFlow(task.id, controller.signal)
         if (controller.signal.aborted) return
         setHistory(result)
+        if (result.revision > task.revision) onTask(result.task)
         setLoadError('')
         if (task.workspace_path && !active) {
           try {
@@ -398,6 +408,7 @@ export function WorkflowDialog({
   }, [
     task.id,
     task.revision,
+    onTask,
     refreshToken,
     embedded,
     task.latest_run?.id,
@@ -619,6 +630,8 @@ export function WorkflowDialog({
         {embedded && history && (
           <DecisionInspector
             task={task}
+            history={history}
+            onInspectRun={setInspectedRunId}
             run={
               history.runs.find((attempt) => attempt.id === inspectedRunId) ??
               run

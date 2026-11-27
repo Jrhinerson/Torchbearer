@@ -109,6 +109,21 @@ test('selects a flow, inspects evidence, and preserves conversation drafts acros
   await expect(workspace.getByLabel('Message your planning agent')).toHaveValue(
     'Keep this draft',
   )
+  await page.getByRole('tab', { name: 'Activity', exact: true }).click()
+  const feed = page.getByRole('region', { name: 'Operations activity' })
+  await expect(
+    feed.getByRole('button', { name: title, exact: true }).first(),
+  ).toBeVisible()
+  await page
+    .getByRole('searchbox', { name: 'Search tasks' })
+    .fill('No matching selection 8c52')
+  await expect(
+    page.getByRole('region', { name: 'Operations activity' }),
+  ).toContainText('No recorded activity matches these filters.')
+  await expect(workspace).toBeVisible()
+  await expect(workspace.getByLabel('Message your planning agent')).toHaveValue(
+    'Keep this draft',
+  )
 })
 
 test('shows operations groups and filters cards and counts together', async ({

@@ -341,7 +341,9 @@ def flow(task):
                     "decision_id": decision.id,
                 }
             )
+    operation_state = projection(task, worker_status())
     return {
+        "task": {**TaskSerializer(task).data, "operations": operation_state},
         "task_id": str(task.id),
         "revision": task.revision,
         "latest_run_id": str(runs[0].id) if runs else None,
@@ -349,7 +351,7 @@ def flow(task):
         "edges": edges,
         "runs": RunSerializer(runs, many=True).data,
         "decisions": DecisionSerializer(decisions, many=True).data,
-        "operations": projection(task, worker_status()),
+        "operations": operation_state,
         "workflow": snapshot,
         "actions": action_descriptors(task, runs[0] if runs else None),
     }

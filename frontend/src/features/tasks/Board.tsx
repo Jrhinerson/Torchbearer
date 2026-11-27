@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState } from 'react'
+import { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import {
   createTask,
@@ -11,6 +11,7 @@ import type { Approach, FrontierAgent, Repository, Routing, Task } from './api'
 import type { OperationsOverview } from './api'
 import { OperationsSummaryContext } from './operationsSummary'
 import TaskRoute from './TaskRoute'
+import { OperationsActivity } from './OperationsActivity'
 import { WorkflowChoice } from './WorkflowChoice'
 import { RoutingFields } from './TaskRouting'
 import { TaskAgent } from './TaskAgent'
@@ -66,6 +67,9 @@ export default function Board() {
   const [routingMode, setRoutingMode] = useState<Approach>('frontier')
   const [frontier, setFrontier] = useState<FrontierAgent>('codex')
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selectedFallback, setSelectedFallback] = useState<Task | null>(null)
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null)
+  const [view, setView] = useState<'board' | 'activity'>('board')
   const [syncError, setSyncError] = useState('')
   const mutation = useRef(0)
   const [loading, setLoading] = useState(true)
@@ -88,15 +92,35 @@ export default function Board() {
   const titleInput = useRef<HTMLInputElement>(null)
   const newTaskButton = useRef<HTMLButtonElement>(null)
   const composer = useRef<HTMLDialogElement>(null)
-  const selectedTask = tasks.find((task) => task.id === selectedId)
+  const selectedTask =
+    tasks.find((task) => task.id === selectedId) ??
+    (selectedFallback?.id === selectedId ? selectedFallback : undefined)
   const formBusy = saving || projectBusy
 
-  function updateTask(task: Task) {
-    mutation.current++
-    setTasks((current) =>
-      current.map((item) => (item.id === task.id ? task : item)),
-    )
-    setReload((value) => value + 1)
+  const updateTask = useCallback(
+    (task: Task) => {
+      mutation.current++
+      setTasks((current) =>
+        current.map((item) =>
+          item.id === task.id
+            ? { ...task, operations: task.operations ?? item.operations }
+            : item,
+        ),
+      )
+      if (task.id === selectedId)
+        setSelectedFallback((current) => ({
+          ...task,
+          operations: task.operations ?? current?.operations,
+        }))
+      setReload((value) => value + 1)
+    },
+    [selectedId],
+  )
+
+  function selectTask(task: Task, runId: string | null = null) {
+    setSelectedFallback(task)
+    setSelectedRunId(runId)
+    setSelectedId(task.id)
   }
 
   function toggleTask(id: string) {
@@ -311,208 +335,255 @@ export default function Board() {
         </p>
       )}
       <div
-        className="board-scroll"
-        role="region"
-        aria-label="Operations columns"
-        tabIndex={0}
+        className="operations-view-switch"
+        role="tablist"
+        aria-label="Operations views"
       >
-        <div className="kanban-board operations-board">
-          {columns.map((column) => {
-            const columnTasks = tasks.filter(
-              (task) => (task.operations?.group ?? 'backlog') === column.id,
-            )
-            const isBacklog = column.id === 'backlog'
-            return (
-              <section
-                className="workflow-column"
-                data-stage={column.id}
-                key={column.id}
-                aria-labelledby={`${column.id}-heading`}
-                aria-busy={isBacklog && loading}
-              >
-                <div className="column-heading">
-                  <h2 id={`${column.id}-heading`}>
-                    <span className="status-dot" aria-hidden="true" />
-                    {column.title}
-                  </h2>
-                  <span
-                    className="badge task-count"
-                    aria-label={`${columnTasks.length} ${column.title} tasks`}
-                  >
-                    {columnTasks.length}
-                  </span>
-                </div>
-                <p className="workflow-hint column-description">
-                  {column.description}
-                </p>
-                {isBacklog && loading ? (
-                  <p className="state-message" role="status">
-                    Loading your tasks…
-                  </p>
-                ) : isBacklog && loadError ? (
-                  <div
-                    className="feedback feedback-error error-state"
-                    role="alert"
-                  >
-                    <p>{loadError}</p>
-                    <button
-                      className="button button-link"
-                      onClick={() => {
-                        setLoading(true)
-                        setLoadError('')
-                        setReload((value) => value + 1)
-                      }}
+        {(['board', 'activity'] as const).map((mode) => (
+          <button
+            className="button button-quiet"
+            id={`operations-${mode}-tab`}
+            aria-controls={`operations-${mode}-panel`}
+            type="button"
+            role="tab"
+            aria-selected={view === mode}
+            onClick={() => setView(mode)}
+            key={mode}
+          >
+            {mode === 'board' ? 'Board' : 'Activity'}
+          </button>
+        ))}
+      </div>
+      <div
+        hidden={view !== 'board'}
+        id="operations-board-panel"
+        role="tabpanel"
+        aria-labelledby="operations-board-tab"
+      >
+        <div
+          className="board-scroll"
+          role="region"
+          aria-label="Operations columns"
+          tabIndex={0}
+        >
+          <div className="kanban-board operations-board">
+            {columns.map((column) => {
+              const columnTasks = tasks.filter(
+                (task) => (task.operations?.group ?? 'backlog') === column.id,
+              )
+              const isBacklog = column.id === 'backlog'
+              return (
+                <section
+                  className="workflow-column"
+                  data-stage={column.id}
+                  key={column.id}
+                  aria-labelledby={`${column.id}-heading`}
+                  aria-busy={isBacklog && loading}
+                >
+                  <div className="column-heading">
+                    <h2 id={`${column.id}-heading`}>
+                      <span className="status-dot" aria-hidden="true" />
+                      {column.title}
+                    </h2>
+                    <span
+                      className="badge task-count"
+                      aria-label={`${columnTasks.length} ${column.title} tasks`}
                     >
-                      Try again
-                    </button>
+                      {columnTasks.length}
+                    </span>
                   </div>
-                ) : columnTasks.length === 0 ? (
-                  <p className="column-empty-state">No tasks yet.</p>
-                ) : (
-                  <ul className="task-list">
-                    {columnTasks.map((task) => (
-                      <li key={task.id}>
-                        <article
-                          className="surface surface-raised task-card"
-                          data-activity={
-                            task.operations?.running
-                              ? 'running'
-                              : task.operations?.group === 'needs_you'
-                                ? 'awaiting-input'
-                                : 'idle'
-                          }
-                          aria-label={task.title}
-                          data-selected={selectedId === task.id}
-                        >
-                          <div className="task-card-heading">
-                            <button
-                              type="button"
-                              className="button button-quiet button-icon task-collapse-button"
-                              aria-label={`${expandedTasks.has(task.id) ? 'Collapse' : 'Expand'} ${task.title}`}
-                              aria-expanded={expandedTasks.has(task.id)}
-                              aria-controls={`task-details-${task.id}`}
-                              onClick={() => toggleTask(task.id)}
-                            >
-                              <svg
-                                viewBox="0 0 16 16"
-                                aria-hidden="true"
-                                focusable="false"
+                  <p className="workflow-hint column-description">
+                    {column.description}
+                  </p>
+                  {isBacklog && loading ? (
+                    <p className="state-message" role="status">
+                      Loading your tasks…
+                    </p>
+                  ) : isBacklog && loadError ? (
+                    <div
+                      className="feedback feedback-error error-state"
+                      role="alert"
+                    >
+                      <p>{loadError}</p>
+                      <button
+                        className="button button-link"
+                        onClick={() => {
+                          setLoading(true)
+                          setLoadError('')
+                          setReload((value) => value + 1)
+                        }}
+                      >
+                        Try again
+                      </button>
+                    </div>
+                  ) : columnTasks.length === 0 ? (
+                    <p className="column-empty-state">No tasks yet.</p>
+                  ) : (
+                    <ul className="task-list">
+                      {columnTasks.map((task) => (
+                        <li key={task.id}>
+                          <article
+                            className="surface surface-raised task-card"
+                            data-activity={
+                              task.operations?.running
+                                ? 'running'
+                                : task.operations?.group === 'needs_you'
+                                  ? 'awaiting-input'
+                                  : 'idle'
+                            }
+                            aria-label={task.title}
+                            data-selected={selectedId === task.id}
+                          >
+                            <div className="task-card-heading">
+                              <button
+                                type="button"
+                                className="button button-quiet button-icon task-collapse-button"
+                                aria-label={`${expandedTasks.has(task.id) ? 'Collapse' : 'Expand'} ${task.title}`}
+                                aria-expanded={expandedTasks.has(task.id)}
+                                aria-controls={`task-details-${task.id}`}
+                                onClick={() => toggleTask(task.id)}
                               >
-                                <path d="m4 6 4 4 4-4" />
-                              </svg>
-                            </button>
-                            <div className="task-card-summary">
-                              <h3>
-                                <button
-                                  type="button"
-                                  className="task-title-button"
-                                  aria-label={`Open ${task.title}`}
-                                  onClick={() => setSelectedId(task.id)}
+                                <svg
+                                  viewBox="0 0 16 16"
+                                  aria-hidden="true"
+                                  focusable="false"
                                 >
-                                  {task.title}
-                                </button>
-                              </h3>
-                              {task.project ? (
-                                <p
-                                  className="task-project"
-                                  title={task.project.path}
-                                >
-                                  <span aria-hidden="true">▱</span>{' '}
-                                  <span className="task-project-name">
-                                    {task.project.name}
-                                    {task.project.archived && (
-                                      <span className="removed-project-label">
-                                        {' '}
-                                        Removed project
-                                      </span>
-                                    )}
-                                  </span>
-                                </p>
-                              ) : (
-                                <p className="task-project">No project</p>
-                              )}
-                            </div>
-                            <TaskAgent task={task} routing={routing} />
-                          </div>
-                          <p className="task-workflow-label">
-                            {task.operations?.workflow_name ??
-                              'Engineering workflow'}
-                          </p>
-                          <p
-                            className="task-operation-state"
-                            data-group={task.operations?.group}
-                          >
-                            {task.operations?.reason ??
-                              taskCardStatus(task).label}
-                          </p>
-                          <TaskRoute task={task} />
-                          <div
-                            id={`task-details-${task.id}`}
-                            hidden={!expandedTasks.has(task.id)}
-                          >
-                            {task.description && (
-                              <p className="task-description">
-                                {task.description}
-                              </p>
-                            )}
-                            <CardWorkflow
-                              task={task}
-                              repositories={repositories}
-                              routing={routing}
-                              onTask={updateTask}
-                              onReview={() => setSelectedId(task.id)}
-                            />
-                            <footer className="task-footer">
-                              <span>
-                                Added{' '}
-                                <time dateTime={task.created_at}>
-                                  {dateFormat.format(new Date(task.created_at))}
-                                </time>
-                              </span>
-                              {task.status === 'backlog' &&
-                                !task.latest_run && (
+                                  <path d="m4 6 4 4 4-4" />
+                                </svg>
+                              </button>
+                              <div className="task-card-summary">
+                                <h3>
                                   <button
                                     type="button"
-                                    className="button button-destructive button-icon delete-task-button"
-                                    aria-busy={deletingId === task.id}
-                                    aria-label={`Delete ${task.title}`}
-                                    title={
-                                      deletingId === task.id
-                                        ? 'Deleting task…'
-                                        : 'Delete task'
-                                    }
-                                    disabled={deletingId !== null}
-                                    onClick={() => handleDelete(task)}
+                                    className="task-title-button"
+                                    aria-label={`Open ${task.title}`}
+                                    onClick={() => selectTask(task)}
                                   >
-                                    <svg
-                                      viewBox="0 0 24 24"
-                                      aria-hidden="true"
-                                      focusable="false"
-                                    >
-                                      <path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7" />
-                                    </svg>
+                                    {task.title}
                                   </button>
+                                </h3>
+                                {task.project ? (
+                                  <p
+                                    className="task-project"
+                                    title={task.project.path}
+                                  >
+                                    <span aria-hidden="true">▱</span>{' '}
+                                    <span className="task-project-name">
+                                      {task.project.name}
+                                      {task.project.archived && (
+                                        <span className="removed-project-label">
+                                          {' '}
+                                          Removed project
+                                        </span>
+                                      )}
+                                    </span>
+                                  </p>
+                                ) : (
+                                  <p className="task-project">No project</p>
                                 )}
-                            </footer>
-                            {deleteError?.id === task.id && (
-                              <p
-                                className="feedback feedback-error form-error"
-                                role="alert"
-                              >
-                                {deleteError.message}
-                              </p>
-                            )}
-                          </div>
-                        </article>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            )
-          })}
+                              </div>
+                              <TaskAgent task={task} routing={routing} />
+                            </div>
+                            <p className="task-workflow-label">
+                              {task.operations?.workflow_name ??
+                                'Engineering workflow'}
+                            </p>
+                            <p
+                              className="task-operation-state"
+                              data-group={task.operations?.group}
+                            >
+                              {task.operations?.reason ??
+                                taskCardStatus(task).label}
+                            </p>
+                            <TaskRoute task={task} />
+                            <div
+                              id={`task-details-${task.id}`}
+                              hidden={!expandedTasks.has(task.id)}
+                            >
+                              {task.description && (
+                                <p className="task-description">
+                                  {task.description}
+                                </p>
+                              )}
+                              <CardWorkflow
+                                task={task}
+                                repositories={repositories}
+                                routing={routing}
+                                onTask={updateTask}
+                                onReview={() => selectTask(task)}
+                              />
+                              <footer className="task-footer">
+                                <span>
+                                  Added{' '}
+                                  <time dateTime={task.created_at}>
+                                    {dateFormat.format(
+                                      new Date(task.created_at),
+                                    )}
+                                  </time>
+                                </span>
+                                {task.status === 'backlog' &&
+                                  !task.latest_run && (
+                                    <button
+                                      type="button"
+                                      className="button button-destructive button-icon delete-task-button"
+                                      aria-busy={deletingId === task.id}
+                                      aria-label={`Delete ${task.title}`}
+                                      title={
+                                        deletingId === task.id
+                                          ? 'Deleting task…'
+                                          : 'Delete task'
+                                      }
+                                      disabled={deletingId !== null}
+                                      onClick={() => handleDelete(task)}
+                                    >
+                                      <svg
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true"
+                                        focusable="false"
+                                      >
+                                        <path d="M3 6h18M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M5 6l1 14a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1l1-14M10 10v7M14 10v7" />
+                                      </svg>
+                                    </button>
+                                  )}
+                              </footer>
+                              {deleteError?.id === task.id && (
+                                <p
+                                  className="feedback feedback-error form-error"
+                                  role="alert"
+                                >
+                                  {deleteError.message}
+                                </p>
+                              )}
+                            </div>
+                          </article>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </section>
+              )
+            })}
+          </div>
         </div>
       </div>
+      {view === 'activity' && (
+        <div
+          id="operations-activity-panel"
+          role="tabpanel"
+          aria-labelledby="operations-activity-tab"
+        >
+          <OperationsActivity
+            key={`${query}:${projectFilter}`}
+            query={query}
+            project={projectFilter}
+            refreshToken={overview?.observed_at}
+            onSelect={(taskId, runId) => {
+              const task = tasks.find((entry) => entry.id === taskId)
+              if (task) selectTask(task, runId)
+            }}
+          />
+        </div>
+      )}
 
       <dialog
         ref={composer}
@@ -646,6 +717,8 @@ export default function Board() {
       ) : selectedTask ? (
         <WorkflowDialog
           embedded
+          selectedRunId={selectedRunId}
+          onInspectRun={setSelectedRunId}
           refreshToken={overview?.observed_at}
           key={selectedTask.id}
           task={selectedTask}

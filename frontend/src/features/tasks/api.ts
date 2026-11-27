@@ -167,6 +167,7 @@ export interface FlowNode {
   run_id: string | null
 }
 export interface TaskFlowData extends RunHistory {
+  task: Task
   task_id: string
   revision: number
   latest_run_id: string | null
@@ -181,6 +182,34 @@ export interface TaskFlowData extends RunHistory {
 }
 export const getTaskFlow = (id: string, signal?: AbortSignal) =>
   requestJson<TaskFlowData>(`tasks/${id}/flow/`, { signal })
+
+export interface ActivityEvent {
+  id: string
+  created_at: string
+  kind: string
+  task_id: string
+  task_title: string
+  actor: Agent | 'human'
+  run_id: string | null
+  stage: string
+  action: string
+  revision: number
+}
+export interface ActivityPage {
+  events: ActivityEvent[]
+  next_cursor: string | null
+  observed_at: string
+}
+export const getActivity = (
+  signal: AbortSignal,
+  query: string,
+  project: string,
+  cursor = '',
+) =>
+  requestJson<ActivityPage>(
+    `operations/activity/?${new URLSearchParams({ q: query, project, cursor })}`,
+    { signal },
+  )
 
 export function listTasks(signal?: AbortSignal) {
   return requestJson<Task[]>('tasks/', { signal })
