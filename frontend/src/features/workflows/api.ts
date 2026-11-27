@@ -8,6 +8,71 @@ export interface WorkflowDefinition {
   outputs: string[]
   validation: string[]
   approval_points: string[]
+  has_graph: boolean
+}
+
+export interface WorkflowRequirement {
+  id: string
+  description: string
+  kind: 'requirement' | 'validation' | 'approval'
+  applicability: 'always' | 'when_relevant'
+  applicability_note?: string
+}
+
+export interface WorkflowNode {
+  id: string
+  title: string
+  description: string
+  requirements: WorkflowRequirement[]
+  outputs: string[]
+  iteration_note?: string
+  position: { x: number; y: number }
+}
+
+export interface WorkflowEdge {
+  id: string
+  source: string
+  target: string
+  condition: string
+}
+
+export interface WorkflowGraph {
+  schema_version: 1
+  entry_node_id: string
+  nodes: WorkflowNode[]
+  edges: WorkflowEdge[]
+}
+
+export interface WorkflowGraphDetail {
+  key: string
+  name: string
+  description: string
+  graph: WorkflowGraph | null
+  revision: number
+  updated_at: string | null
+}
+
+export function getWorkflowGraph(key: string, signal?: AbortSignal) {
+  return requestJson<WorkflowGraphDetail>(
+    `workflows/${encodeURIComponent(key)}/graph/`,
+    { signal },
+  )
+}
+
+export async function saveWorkflowGraph(
+  key: string,
+  graph: WorkflowGraph,
+  revision: number,
+) {
+  const { csrfToken } = await requestJson<{ csrfToken: string }>('csrf/')
+  return requestJson<WorkflowGraphDetail>(
+    `workflows/${encodeURIComponent(key)}/graph/`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({ graph, revision }),
+    },
+  )
 }
 
 export interface WorkType {

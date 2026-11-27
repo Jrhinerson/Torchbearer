@@ -17,6 +17,8 @@ def catalogue(db):
         "workflows.migrations.0004_workflowdefinition_definition_version_and_more"
     )
     migration.seed_profiles(apps, connection.schema_editor())
+    migration = import_module("workflows.migrations.0005_plan_execute_graph")
+    migration.seed_graph(apps, connection.schema_editor())
 
 
 @pytest.fixture

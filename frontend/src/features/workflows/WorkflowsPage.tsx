@@ -1,7 +1,19 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
+import { locationChanged, navigateTo } from '../../lib/navigation'
 import { listWorkflows, listWorkTypes } from './api'
 import type { WorkflowDefinition, WorkType } from './api'
 import { WorkTypeCard } from './WorkTypeCard'
+import './workflow-map.css'
+
+const WorkflowMap = lazy(() => import('./WorkflowMap'))
+
+function workflowLocation() {
+  const params = new URLSearchParams(window.location.search)
+  return {
+    tab: params.get('tab') === 'map' ? 'map' : 'assignments',
+    workflow: params.get('workflow') ?? 'plan-execute',
+  }
+}
 
 interface Catalogue {
   workflows: WorkflowDefinition[]
@@ -13,6 +25,20 @@ export default function WorkflowsPage() {
   const [error, setError] = useState('')
   const [attempt, setAttempt] = useState(0)
   const [query, setQuery] = useState('')
+  const [location, setLocation] = useState(workflowLocation)
+
+  useEffect(() => {
+    const update = () => setLocation(workflowLocation())
+    window.addEventListener(locationChanged, update)
+    return () => window.removeEventListener(locationChanged, update)
+  }, [])
+
+  function navigate(tab: string, workflow = location.workflow) {
+    const url = new URL(window.location.href)
+    url.searchParams.set('tab', tab)
+    url.searchParams.set('workflow', workflow)
+    navigateTo(url)
+  }
 
   useEffect(() => {
     const controller = new AbortController()
@@ -69,6 +95,39 @@ export default function WorkflowsPage() {
         assignment; existing tasks keep their workflow snapshot. Refresh an
         unstarted task's workflow explicitly to adopt a changed default.
       </p>
+      <div className="workflows-tabs" role="tablist" aria-label="Workflows">
+        {['assignments', 'map'].map((tab) => (
+          <button
+            key={tab}
+            id={`workflows-tab-${tab}`}
+            type="button"
+            role="tab"
+            aria-selected={location.tab === tab}
+            aria-controls={`workflows-panel-${tab}`}
+            tabIndex={location.tab === tab ? 0 : -1}
+            onClick={() => navigate(tab)}
+            onKeyDown={(event) => {
+              if (
+                !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)
+              )
+                return
+              event.preventDefault()
+              const next =
+                event.key === 'Home'
+                  ? 'assignments'
+                  : event.key === 'End'
+                    ? 'map'
+                    : tab === 'map'
+                      ? 'assignments'
+                      : 'map'
+              navigate(next)
+              document.getElementById(`workflows-tab-${next}`)?.focus()
+            }}
+          >
+            {tab === 'map' ? 'Workflow map' : 'Assignments'}
+          </button>
+        ))}
+      </div>
       {!catalogue && !error && (
         <p role="status">Loading work types and workflows…</p>
       )}
@@ -88,7 +147,13 @@ export default function WorkflowsPage() {
         </div>
       )}
       {catalogue && (
-        <>
+        <div
+          id="workflows-panel-assignments"
+          role="tabpanel"
+          aria-labelledby="workflows-tab-assignments"
+          hidden={location.tab !== 'assignments'}
+          className="workflow-assignments"
+        >
           <div className="workflows-toolbar">
             <div className="workflows-search">
               <label className="field-label" htmlFor="work-type-search">
@@ -136,7 +201,29 @@ export default function WorkflowsPage() {
               </li>
             ))}
           </ul>
-        </>
+        </div>
+      )}
+      {catalogue && location.tab === 'map' && (
+        <div
+          id="workflows-panel-map"
+          role="tabpanel"
+          aria-labelledby="workflows-tab-map"
+        >
+          <Suspense fallback={<p role="status">Loading workflow map…</p>}>
+            <WorkflowMap
+              key={location.workflow}
+              workflows={catalogue.workflows}
+              workflowKey={
+                catalogue.workflows.some(
+                  (item) => item.key === location.workflow,
+                )
+                  ? location.workflow
+                  : 'plan-execute'
+              }
+              onChoose={(key) => navigate('map', key)}
+            />
+          </Suspense>
+        </div>
       )}
     </section>
   )

@@ -1,10 +1,12 @@
 export class ApiError extends Error {
   status: number
+  body: unknown
 
-  constructor(message: string, status = 0) {
+  constructor(message: string, status = 0, body: unknown = null) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.body = body
   }
 }
 
@@ -44,6 +46,7 @@ export async function requestJsonWithMetadata<T>(
     throw new ApiError(
       message ?? 'The request failed. Please try again.',
       response.status,
+      body,
     )
   }
   return { data: body as T, etag }

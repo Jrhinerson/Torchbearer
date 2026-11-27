@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { MouseEvent } from 'react'
+import { locationChanged, navigateTo } from '../lib/navigation'
 import Board from '../features/tasks/Board'
 import WorkflowsPage from '../features/workflows/WorkflowsPage'
 import SettingsPage from '../features/settings/SettingsPage'
@@ -53,8 +54,8 @@ export default function App() {
     function handlePopState() {
       setPathname(window.location.pathname)
     }
-    window.addEventListener('popstate', handlePopState)
-    return () => window.removeEventListener('popstate', handlePopState)
+    window.addEventListener(locationChanged, handlePopState)
+    return () => window.removeEventListener(locationChanged, handlePopState)
   }, [])
 
   useEffect(() => {
@@ -80,8 +81,7 @@ export default function App() {
     event.preventDefault()
     const destination = event.currentTarget
     if (destination.pathname === window.location.pathname) return
-    window.history.pushState(null, '', destination.href)
-    setPathname(destination.pathname)
+    navigateTo(destination.href)
   }
 
   return (
