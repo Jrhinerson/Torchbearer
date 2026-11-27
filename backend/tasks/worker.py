@@ -59,6 +59,8 @@ def worker_status():
 
 class Worker:
     def __init__(self, stop=None):
+        if settings.DEMO_MODE:
+            raise RuntimeError("Agent execution is disabled in demo mode.")
         self.id = uuid.uuid4()
         self.stop = stop or threading.Event()
         self.last_heartbeat = 0

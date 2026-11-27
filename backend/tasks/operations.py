@@ -2,6 +2,7 @@
 
 from collections import Counter
 
+from django.conf import settings
 from django.db.models import Prefetch, Q
 from django.utils import timezone
 from workflows.profiles import workflow_snapshot
@@ -236,6 +237,7 @@ def overview(params):
             for run in runs
         )
     return {
+        **({"read_only": True} if settings.DEMO_MODE else {}),
         "tasks": cards,
         "counts": {group: counts[group] for group in GROUPS},
         "agents": agents,
@@ -377,6 +379,7 @@ def flow(task):
             )
     operation_state = projection(task, worker_status())
     return {
+        **({"read_only": True} if settings.DEMO_MODE else {}),
         "task": {**TaskSerializer(task).data, "operations": operation_state},
         "task_id": str(task.id),
         "revision": task.revision,

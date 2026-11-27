@@ -27,6 +27,16 @@ Vite refreshes frontend edits automatically. Restart the launcher after editing 
 
 ## Projects in New Task
 
+To inspect a busy board without running agents, launch `python scripts/demo.py`.
+It serves the read-only demo at **http://127.0.0.1:5174** (backend 8001), using a
+fresh temporary database with 40 fictional tasks, varied procedures, recovery states,
+and discovery artifacts. API writes and worker startup are disabled. Stopping the
+demo removes its temporary data; normal application data is separate. Override
+ports with `--frontend-port` and `--backend-port`.
+
+Run its isolated browser acceptance check with `npm run test:e2e:demo` from `frontend/`.
+It captures the actual populated board and verifies phone layouts and read-only behavior.
+
 Choose **Project** to search saved projects by name or folder, then select one for the task. A Git project with an initial commit also supplies the repository used for agent execution. **No project** keeps a task unassigned. The selection stays with the draft when you dismiss the popup and stays selected for subsequent tasks until you change it. Existing registered repositories and their task selections are retained as saved projects when upgrading.
 
 Use **Add Project** to open the local folder explorer. Navigate with Home, available common-folder and drive shortcuts, breadcrumbs, or **Parent folder**. Open a folder, then choose **Use this folder** and **Add and select project**. Git repositories and linked worktrees appear first with a **Git repository** marker; ordinary folders are also supported. **Filter folders** searches the current location, and **Enter a path** is an optional shortcut. **Change folder** reopens the selected location, while Cancel or Escape returns to the task draft.

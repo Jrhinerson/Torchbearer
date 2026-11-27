@@ -331,6 +331,7 @@ export function WorkflowDialog({
     !active &&
     !task.completed_at &&
     !loadError &&
+    !history?.read_only &&
     history?.revision === task.revision &&
     history?.latest_run_id === task.latest_run?.id,
   )
@@ -655,6 +656,7 @@ export function WorkflowDialog({
             }
             busy={busy}
             actionsCurrent={
+              !history.read_only &&
               !loadError &&
               history.revision === task.revision &&
               history.latest_run_id === task.latest_run?.id

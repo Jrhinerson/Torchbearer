@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
@@ -34,6 +35,7 @@ class RoutingView(LocalView):
     def get(self, request):
         return Response(
             {
+                **({"read_only": True} if settings.DEMO_MODE else {}),
                 "agents": agent_catalog(),
                 "approaches": [{"id": mode, "label": mode.label} for mode in Approach],
                 "worker": worker_status(),
@@ -138,6 +140,10 @@ class WorkspaceView(LocalView):
     def get(self, request, pk):
         task = get_object_or_404(Task, pk=pk)
         try:
+            if settings.DEMO_MODE:
+                from .demo import workspace_preview
+
+                return Response(workspace_preview(task))
             return Response(changes(task))
         except (OSError, ValueError) as error:
             raise Conflict(str(error)) from error

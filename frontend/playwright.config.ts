@@ -17,6 +17,7 @@ const python = path.join(
 
 export default defineConfig({
   testDir: './tests/e2e',
+  testIgnore: '**/populated-demo.spec.ts',
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),

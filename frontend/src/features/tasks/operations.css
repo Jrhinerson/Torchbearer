@@ -6,6 +6,12 @@
   padding: 0 0 var(--space-3);
   flex-wrap: wrap;
 }
+.demo-action-group {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
 .operations-heading h1 {
   margin: 0;
   font-size: var(--text-icon);

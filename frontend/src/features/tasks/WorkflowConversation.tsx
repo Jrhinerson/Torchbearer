@@ -62,7 +62,7 @@ export function WorkflowConversation({
   const refining = task.status === 'backlog'
   const retrospective = completed && task.latest_run?.stage === 'retro'
   const support = refining || retrospective
-  const readOnly = completed && !retrospective
+  const readOnly = Boolean(history.read_only) || (completed && !retrospective)
   const finalReview = task.status === 'final_approval' && !retrospective
   const currentStage = refining
     ? 'refine'

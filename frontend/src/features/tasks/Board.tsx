@@ -313,12 +313,18 @@ export default function Board() {
             aria-busy={loading}
             ref={newTaskButton}
             onClick={openComposer}
-            disabled={loading || Boolean(loadError)}
+            disabled={loading || Boolean(loadError) || overview?.read_only}
           >
             <span aria-hidden="true">+</span> New Task
           </button>
         </div>
       </header>
+      {overview?.read_only && (
+        <p className="feedback feedback-warning" role="status">
+          Read-only demo: 40 fictional tasks. Agent execution and changes are
+          disabled; queued and running records are simulated.
+        </p>
+      )}
       {overview && (
         <p className="operations-counts" role="status">
           {overview.agents.reduce((total, agent) => total + agent.running, 0)}{' '}
@@ -327,7 +333,7 @@ export default function Board() {
           queued · {overview.counts.needs_you} need you
         </p>
       )}
-      {routing && !routing.worker.available && (
+      {routing && !routing.worker.available && !overview?.read_only && (
         <p className="feedback feedback-warning worker-notice" role="status">
           Agent worker is offline. Queued runs will start when Torchbearer’s
           launcher is running.
@@ -512,13 +518,18 @@ export default function Board() {
                                   {task.description}
                                 </p>
                               )}
-                              <CardWorkflow
-                                task={task}
-                                repositories={repositories}
-                                routing={routing}
-                                onTask={updateTask}
-                                onReview={() => selectTask(task)}
-                              />
+                              <fieldset
+                                className="demo-action-group"
+                                disabled={overview?.read_only}
+                              >
+                                <CardWorkflow
+                                  task={task}
+                                  repositories={repositories}
+                                  routing={routing}
+                                  onTask={updateTask}
+                                  onReview={() => selectTask(task)}
+                                />
+                              </fieldset>
                               <footer className="task-footer">
                                 <span>
                                   Added{' '}
@@ -540,7 +551,10 @@ export default function Board() {
                                           ? 'Deleting task…'
                                           : 'Delete task'
                                       }
-                                      disabled={deletingId !== null}
+                                      disabled={
+                                        deletingId !== null ||
+                                        overview?.read_only
+                                      }
                                       onClick={() => handleDelete(task)}
                                     >
                                       <svg
@@ -711,7 +725,9 @@ export default function Board() {
           A task captures intent. You decide when it is ready to move forward.
         </p>
       </dialog>
-      {selectedTask?.status === 'backlog' && !selectedTask.latest_run ? (
+      {selectedTask?.status === 'backlog' &&
+      !selectedTask.latest_run &&
+      !overview?.read_only ? (
         <TaskSettingsDialog
           key={selectedTask.id}
           task={selectedTask}

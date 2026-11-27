@@ -12,6 +12,7 @@ export interface Repository {
   path: string
 }
 export interface Routing {
+  read_only?: boolean
   agents: {
     id: Agent
     label: string
@@ -82,6 +83,7 @@ export interface Decision {
   created_at: string
 }
 export interface RunHistory {
+  read_only?: boolean
   runs: Run[]
   decisions: Decision[]
 }
@@ -143,6 +145,7 @@ export interface Task {
 }
 
 export interface OperationsOverview {
+  read_only?: boolean
   tasks: Task[]
   counts: Record<'backlog' | 'active' | 'needs_you' | 'done', number>
   agents: (Routing['agents'][number] & { queued: number; running: number })[]

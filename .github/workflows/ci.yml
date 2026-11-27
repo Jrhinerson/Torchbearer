@@ -49,3 +49,5 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run browser integration checks
         run: npm run test:e2e --prefix frontend
+      - name: Verify populated read-only demo
+        run: npm run test:e2e:demo --prefix frontend
