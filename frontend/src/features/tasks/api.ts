@@ -1,4 +1,4 @@
-import { requestJson } from '../../lib/api'
+import { requestJson, requestJsonWithMetadata } from '../../lib/api'
 import type { Project } from '../projects/api'
 
 export type Stage = 'plan' | 'integrate' | 'code_review'
@@ -88,6 +88,7 @@ export interface RunHistory {
   decisions: Decision[]
 }
 export interface WorkspaceChanges {
+  preview_loaded?: boolean
   diff: string
   fingerprint: string
   truncated: boolean
@@ -192,6 +193,21 @@ export interface TaskFlowData extends RunHistory {
 }
 export const getTaskFlow = (id: string, signal?: AbortSignal) =>
   requestJson<TaskFlowData>(`tasks/${id}/flow/`, { signal })
+export const getTaskFlowUpdate = (
+  id: string,
+  signal: AbortSignal,
+  etag?: string,
+) =>
+  requestJsonWithMetadata<TaskFlowData>(`tasks/${id}/flow/`, {
+    signal,
+    cache: 'no-store',
+    headers: etag ? { 'If-None-Match': etag } : undefined,
+  })
+export const getWorkspaceFingerprint = (id: string, signal: AbortSignal) =>
+  requestJson<{ fingerprint: string }>(`tasks/${id}/workspace/?fingerprint=1`, {
+    signal,
+    cache: 'no-store',
+  })
 
 export interface ActivityEvent {
   id: string

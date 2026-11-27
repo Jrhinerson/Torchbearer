@@ -1,5 +1,7 @@
 """Read-only views of task ownership, attention, and recorded execution."""
 
+import hashlib
+import json
 from collections import Counter
 
 from django.conf import settings
@@ -392,3 +394,40 @@ def flow(task):
         "workflow": snapshot,
         "actions": action_descriptors(task, runs[0] if runs else None),
     }
+
+
+def flow_etag(task):
+    """History mutations bump task revision; live logs need their own content digest.
+
+    Read only the bounded latest log, not every historical result, context and log.
+    Heartbeat timestamps are excluded so an idle worker does not invalidate a view.
+    """
+    run = task.runs.only(
+        "task_id",
+        "stage",
+        "agent",
+        "state",
+        "sequence",
+        "error",
+        "cancel_requested",
+        "log",
+        "cli_version",
+        "started_at",
+        "finished_at",
+    ).first()
+    task.operation_runs = [run] if run else []
+    worker = worker_status()
+    payload = {
+        "task": TaskSerializer(task).data,
+        "log": run.log if run else "",
+        "version": run.cli_version if run else "",
+        "started": run.started_at if run else None,
+        "finished": run.finished_at if run else None,
+        "worker": [worker["available"], str(worker["active_run"])],
+        "read_only": settings.DEMO_MODE,
+    }
+    return (
+        '"'
+        + hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()
+        + '"'
+    )

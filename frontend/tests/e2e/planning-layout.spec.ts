@@ -131,7 +131,7 @@ async function openPlanning(
       },
     }),
   )
-  await page.route(`**/api/v1/tasks/${task.id}/workspace/`, (route) =>
+  await page.route(`**/api/v1/tasks/${task.id}/workspace/**`, (route) =>
     route.fulfill({
       json: {
         fingerprint: 'snapshot',

@@ -2,8 +2,9 @@ import { useEffect, useRef, useState } from 'react'
 import {
   agentLabel,
   cancelRun,
-  getTaskFlow,
+  getTaskFlowUpdate,
   getWorkspace,
+  getWorkspaceFingerprint,
   performAction,
   updateTaskSettings,
 } from './api'
@@ -298,6 +299,9 @@ export function WorkflowDialog({
   const suppressedCloseEvents = useRef(0)
   const closeButton = useRef<HTMLButtonElement>(null)
   const [history, setHistory] = useState<TaskFlowData | null>(null)
+  const flowEtag = useRef<string | undefined>(undefined)
+  const workspaceCache = useRef<WorkspaceChanges | null>(null)
+  const diffFingerprint = useRef<string | null>(null)
   const [workspace, setWorkspace] = useState<WorkspaceChanges | null>(null)
   const [workspaceError, setWorkspaceError] = useState('')
   const [loadError, setLoadError] = useState('')
@@ -371,15 +375,45 @@ export function WorkflowDialog({
     let timer: ReturnType<typeof setTimeout>
     async function load() {
       try {
-        const result = await getTaskFlow(task.id, controller.signal)
+        const update = await getTaskFlowUpdate(
+          task.id,
+          controller.signal,
+          flowEtag.current,
+        )
         if (controller.signal.aborted) return
-        setHistory(result)
-        if (result.revision > task.revision) onTask(result.task)
+        flowEtag.current = update.etag ?? undefined
+        if (update.data) {
+          setHistory(update.data)
+          if (update.data.revision > task.revision) onTask(update.data.task)
+        }
         setLoadError('')
         if (task.workspace_path && !active) {
           try {
-            const snapshot = await getWorkspace(task.id, controller.signal)
+            const current = await getWorkspaceFingerprint(
+              task.id,
+              controller.signal,
+            )
+            if (controller.signal.aborted) return
+            let snapshot = workspaceCache.current
+            if (!snapshot || snapshot.fingerprint !== current.fingerprint) {
+              snapshot = {
+                preview_loaded: false,
+                fingerprint: current.fingerprint,
+                diff: '',
+                truncated: false,
+              }
+              diffFingerprint.current = null
+            }
+            if (
+              (!embedded || tab !== 'flow') &&
+              diffFingerprint.current !== current.fingerprint
+            ) {
+              snapshot = await getWorkspace(task.id, controller.signal)
+              if (controller.signal.aborted) return
+              diffFingerprint.current = snapshot.fingerprint
+            }
             if (!controller.signal.aborted) {
+              workspaceCache.current = snapshot
               setWorkspace(snapshot)
               setWorkspaceError('')
             }
@@ -422,6 +456,7 @@ export function WorkflowDialog({
     task.workspace_path,
     active,
     reload,
+    tab,
   ])
 
   async function act(action: TaskAction | 'cancel', message = '') {
@@ -549,7 +584,7 @@ export function WorkflowDialog({
               <h3>Current workspace changes</h3>
               {workspaceError ? (
                 <p role="alert">{workspaceError}</p>
-              ) : workspace ? (
+              ) : workspace && workspace.preview_loaded !== false ? (
                 <>
                   <pre className="run-log">
                     {workspace.diff || 'No code changes.'}
@@ -595,7 +630,9 @@ export function WorkflowDialog({
                 active={active}
                 busy={busy}
                 error={error}
-                workspace={workspace}
+                workspace={
+                  workspace?.preview_loaded === false ? null : workspace
+                }
                 workspaceError={workspaceError}
                 canApprove={canApprove && !missingAgent}
                 approvalHint={

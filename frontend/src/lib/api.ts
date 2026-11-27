@@ -12,6 +12,13 @@ export async function requestJson<T>(
   path: string,
   options?: RequestInit,
 ): Promise<T> {
+  return (await requestJsonWithMetadata<T>(path, options)).data as T
+}
+
+export async function requestJsonWithMetadata<T>(
+  path: string,
+  options?: RequestInit,
+): Promise<{ data: T | null; etag: string | null }> {
   let response: Response
   try {
     response = await fetch(`/api/v1/${path}`, {
@@ -26,6 +33,8 @@ export async function requestJson<T>(
     )
   }
 
+  const etag = response.headers.get('ETag')
+  if (response.status === 304) return { data: null, etag }
   const body: unknown = await response.json().catch(() => null)
   if (!response.ok) {
     const messages = body && typeof body === 'object' ? Object.values(body) : []
@@ -37,5 +46,5 @@ export async function requestJson<T>(
       response.status,
     )
   }
-  return body as T
+  return { data: body as T, etag }
 }

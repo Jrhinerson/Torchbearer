@@ -31,6 +31,28 @@ Each card has an independent expand/collapse button with `aria-expanded` and `ar
 
 ## API contract
 
+Selected flow requests support `ETag` / `If-None-Match` and return 304 without
+loading and serializing full history when unchanged. The token covers task revision,
+project/snapshot metadata, the latest attempt state, bounded latest log content,
+and worker availability. Heartbeat timestamps do not invalidate it. History-changing
+services must increment the task revision; historical attempts remain immutable.
+The client retains evidence and drafts across 304 responses and retries failed polls.
+
+`GET /api/v1/tasks/<uuid>/workspace/?fingerprint=1` checks current workspace validity
+without constructing a diff. These checks continue on settled-task polls, including
+when flow data is unchanged, so external edits still disable approval. Full previews
+load when Conversation or Changes is opened and are reused only while the fingerprint
+matches. The action service independently checks the fingerprint at approval time.
+
+The inspector uses recorded action descriptors for retry, support-stage recovery,
+and cancellation. It displays source error/details and focuses the existing composer
+for answers or revisions. Historical attempts do not expose current mutation controls.
+
+The optional demo launcher seeds 40 deterministic fictional tasks into a fresh
+temporary database. `TORCHBEARER_DEMO=1` requires a separate data directory, middleware
+rejects API mutations, and worker construction refuses execution. The launcher starts
+no worker. Demo workspace previews are synthetic and labeled as demo evidence.
+
 | Method | Path | Behavior |
 | --- | --- | --- |
 | GET | `/api/v1/health/` | Service health, independent of task data. |

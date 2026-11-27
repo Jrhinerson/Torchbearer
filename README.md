@@ -25,7 +25,7 @@ Setup creates `.venv/`, installs the pinned Python requirements and frontend loc
 
 Vite refreshes frontend edits automatically. Restart the launcher after editing Python code; Django's automatic reloader is disabled so the launcher can reliably manage its process tree. These commands start local development services.
 
-## Projects in New Task
+## Populated demo
 
 To inspect a busy board without running agents, launch `python scripts/demo.py`.
 It serves the read-only demo at **http://127.0.0.1:5174** (backend 8001), using a
@@ -36,6 +36,8 @@ ports with `--frontend-port` and `--backend-port`.
 
 Run its isolated browser acceptance check with `npm run test:e2e:demo` from `frontend/`.
 It captures the actual populated board and verifies phone layouts and read-only behavior.
+
+## Projects in New Task
 
 Choose **Project** to search saved projects by name or folder, then select one for the task. A Git project with an initial commit also supplies the repository used for agent execution. **No project** keeps a task unassigned. The selection stays with the draft when you dismiss the popup and stays selected for subsequent tasks until you change it. Existing registered repositories and their task selections are retained as saved projects when upgrading.
 

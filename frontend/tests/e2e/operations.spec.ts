@@ -345,3 +345,61 @@ test('retries a failed attempt from its inspector and preserves the source error
       .state,
   ).toBe('failed')
 })
+
+test('revalidates unchanged flows and fetches full diffs only when opened', async ({
+  page,
+}) => {
+  await page.goto('/')
+  const csrf = (await (await page.request.get('/api/v1/csrf/')).json())
+    .csrfToken
+  const repos = await (await page.request.get('/api/v1/repositories/')).json()
+  const task = await (
+    await page.request.post('/api/v1/tasks/', {
+      headers: { 'X-CSRFToken': csrf },
+      data: {
+        title: `Conditional detail ${Date.now()}`,
+        repository: repos[0].id,
+      },
+    })
+  ).json()
+  await page.request.post(`/api/v1/tasks/${task.id}/actions/`, {
+    headers: { 'X-CSRFToken': csrf },
+    data: { action: 'start', revision: task.revision },
+  })
+  let previews = 0
+  page.on('request', (request) => {
+    const url = new URL(request.url())
+    if (
+      url.pathname.endsWith(`/tasks/${task.id}/workspace/`) &&
+      !url.searchParams.has('fingerprint')
+    )
+      previews++
+  })
+  await page
+    .getByRole('button', { name: `Open ${task.title}`, exact: true })
+    .click()
+  const workspace = page.getByRole('dialog', { name: task.title, exact: true })
+  await expect(
+    workspace.getByRole('button', {
+      name: 'Approve plan & start Integrate',
+      exact: true,
+    }),
+  ).toBeEnabled({ timeout: 20000 })
+  await page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/tasks/${task.id}/flow/`) &&
+      response.status() === 304,
+  )
+  expect(previews).toBe(0)
+  await workspace.getByRole('tab', { name: 'Changes', exact: true }).click()
+  await expect(
+    workspace.getByRole('tabpanel', { name: 'Changes', exact: true }),
+  ).toContainText('No code changes.')
+  expect(previews).toBe(1)
+  await page.waitForResponse(
+    (response) =>
+      response.url().endsWith(`/tasks/${task.id}/flow/`) &&
+      response.status() === 304,
+  )
+  expect(previews).toBe(1)
+})
