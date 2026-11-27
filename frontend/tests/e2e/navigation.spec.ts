@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('navigates between the board and placeholders with browser history', async ({
+test('navigates between the board, workflows, and settings with browser history', async ({
   page,
 }) => {
   await page.goto('/')
@@ -71,16 +71,17 @@ test('navigates between the board and placeholders with browser history', async 
 })
 
 for (const label of ['Workflows', 'Settings']) {
-  test(`opens and refreshes the ${label} placeholder directly`, async ({
-    page,
-  }) => {
+  test(`opens and refreshes the ${label} page directly`, async ({ page }) => {
     await page.goto(`/${label.toLowerCase()}`)
     await page.reload()
     await expect(page).toHaveTitle(`${label} | Torchbearer`)
     await expect(
       page.getByRole('heading', { name: label, exact: true }),
     ).toBeVisible()
-    await expect(page.getByText('Coming soon', { exact: true })).toBeVisible()
+    if (label === 'Workflows')
+      await expect(page.getByRole('article')).toHaveCount(19)
+    else
+      await expect(page.getByText('Coming soon', { exact: true })).toBeVisible()
     await expect(
       page
         .getByRole('navigation')
