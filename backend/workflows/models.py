@@ -9,6 +9,9 @@ class WorkflowDefinition(models.Model):
     outputs = models.JSONField(default=list)
     validation = models.JSONField(default=list)
     approval_points = models.JSONField(default=list)
+    graph = models.JSONField(null=True, blank=True, default=None)
+    graph_revision = models.PositiveIntegerField(default=0)
+    graph_updated_at = models.DateTimeField(null=True, blank=True)
     display_order = models.PositiveSmallIntegerField()
 
     class Meta:

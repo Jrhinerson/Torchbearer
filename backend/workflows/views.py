@@ -9,7 +9,12 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import WorkflowDefinition, WorkType
-from .serializers import AssignmentSerializer, WorkflowDefinitionSerializer, WorkTypeSerializer
+from .serializers import (
+    AssignmentSerializer,
+    WorkflowDefinitionSerializer,
+    WorkflowGraphSerializer,
+    WorkTypeSerializer,
+)
 
 
 @method_decorator(csrf_protect, name="dispatch")
@@ -23,6 +28,12 @@ class WorkflowListView(LocalView):
         return Response(
             WorkflowDefinitionSerializer(WorkflowDefinition.objects.all(), many=True).data
         )
+
+
+class WorkflowGraphView(LocalView):
+    def get(self, request, key):
+        workflow = get_object_or_404(WorkflowDefinition, pk=key)
+        return Response(WorkflowGraphSerializer(workflow).data)
 
 
 class WorkTypeListView(LocalView):
