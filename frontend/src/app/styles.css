@@ -2,6 +2,7 @@
 @import './styles/tokens.css';
 @import './styles/base.css';
 @import './styles/components.css';
+@import '../features/workflows/workflows.css';
 
 .app-shell {
   display: flex;

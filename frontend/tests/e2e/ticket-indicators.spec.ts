@@ -42,7 +42,6 @@ function task(title: string, overrides: Partial<Task> = {}): Task {
     stage_agents: {
       plan: 'codex',
       integrate: 'pi',
-      test: 'pi',
       code_review: 'codex',
     },
     next_stage: 'integrate',
