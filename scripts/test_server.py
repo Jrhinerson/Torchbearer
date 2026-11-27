@@ -14,6 +14,8 @@ from dev import stop_process
 def main():
     with tempfile.TemporaryDirectory(prefix="torchbearer-browser-") as data_dir:
         os.environ["TORCHBEARER_DATA_DIR"] = data_dir
+        # Browser checks must never discover the developer's real keychain or GitHub grant.
+        os.environ["TORCHBEARER_GITHUB_CLIENT_ID"] = ""
         os.environ["DJANGO_SETTINGS_MODULE"] = "config.settings"
         sys.path.insert(0, str(ROOT / "backend"))
         import django

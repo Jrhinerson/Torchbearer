@@ -19,7 +19,7 @@ python scripts/dev.py
 
 Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Code Review, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use an unstarted backlog card's trash icon and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
 
-Use the left sidebar to navigate between **Kanban** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Kanban is the task board, Workflows manages default engineering workflow assignments, and Settings is a placeholder for future development. The current page is highlighted, and each URL supports refresh and browser Back/Forward navigation.
+Use the left sidebar to navigate between **Kanban** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Kanban is the task board, Workflows manages default engineering workflow assignments, and Settings contains account Connections. The current page is highlighted, and each URL supports refresh and browser Back/Forward navigation.
 
 Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations, then starts Django, the agent worker, and Vite together. After a schema change, rerun setup or apply migrations explicitly. Use `--backend-port` and `--frontend-port` with the launcher when the default ports are occupied; separate app instances also need separate data directories.
 
@@ -31,9 +31,21 @@ Choose **Project** to search saved projects by name or folder, then select one f
 
 Use **Add Project** to open the local folder explorer. Navigate with Home, available common-folder and drive shortcuts, breadcrumbs, or **Parent folder**. Open a folder, then choose **Use this folder** and **Add and select project**. Git repositories and linked worktrees appear first with a **Git repository** marker; ordinary folders are also supported. **Filter folders** searches the current location, and **Enter a path** is an optional shortcut. **Change folder** reopens the selected location, while Cancel or Escape returns to the task draft.
 
-Alternatively, choose **Clone a Git URL**, enter an HTTPS or SSH clone URL and the full path to a new destination folder, then **Clone and select project**. **Browse parent** opens the same explorer to choose an existing parent and suggests a destination using the repository name. The machine running Django supplies the folders, Git installation and Git credentials. Cloning is noninteractive and times out after two minutes; an existing destination is never overwritten. GitHub sign-in and repository search are not included.
+Alternatively, choose **Clone a Git URL**, enter an HTTPS or SSH clone URL and the full path to a new destination folder, then **Clone and select project**. **Browse parent** opens the same explorer to choose an existing parent and suggests a destination using the repository name. The machine running Django supplies the folders, Git installation and Git credentials. Cloning is noninteractive and times out after two minutes; an existing destination is never overwritten. Repository search and using the Settings connection for cloning are future work.
 
 Project names default to the folder name. Adding a project selects it while keeping the task title and description. **Manage projects** provides rename and removal controls. Renaming updates existing task labels; removal hides the project from the picker while keeping its files and task history. Adding the same folder again restores the saved project. A project association does not execute any work.
+
+## GitHub connection
+
+Open **Settings → Connections** and choose **Connect GitHub**. Torchbearer requests a one-time code and opens GitHub in a new browser tab. Copy the code from Settings, enter it in GitHub, and sign in to the account you want to connect before approving access. Settings automatically displays the verified username after authorization. If your browser blocks the new tab, use **Continue on GitHub**. Sign-in codes expire after 15 minutes; **Cancel sign-in** stops the attempt.
+
+Sign-in uses Torchbearer's registered GitHub App directly over HTTPS. GitHub CLI is not required. The publisher supplies the app's public Client ID once before distributing a release; end users only authorize the app. The current source has no registered publisher ID yet: follow [publisher registration and configuration](docs/github-app.md) before the first live sign-in. Device authorization requires no client secret or private key.
+
+**Change account** starts a fresh browser authorization and replaces the connection only after successful verification and secure credential storage. Opening Settings or choosing **Check connection** verifies the saved account and automatically refreshes expiring tokens. **Reconnect GitHub** appears when authorization is missing, expired, or revoked. Earlier connections created through the CLI also require fresh consent for Torchbearer's app. **Disconnect** removes this app's saved credentials and connection; revoke the app's grant separately through GitHub's authorized GitHub Apps settings if desired.
+
+Account identity persists in SQLite; access and refresh tokens live only in Windows Credential Manager, macOS Keychain, or Linux Secret Service through the bundled `keyring` dependency. An unavailable/locked system store produces an actionable message; there is no plaintext fallback. Tokens and GitHub's private device code are never returned to the frontend. Moving the database to another machine requires a new sign-in. An unfinished login can survive navigating away or refreshing Settings while Django remains running; start a new sign-in after a backend restart.
+
+The connection currently records and validates the selected GitHub account. Project cloning and agent CLIs retain their existing authentication behavior.
 
 ## Configuration and data
 
@@ -43,6 +55,7 @@ Project names default to the folder name. Adding a project selects it while keep
 | `DJANGO_DEBUG` | `1` | Django development diagnostics; use `0` to disable. |
 | `DJANGO_SECRET_KEY` | Local development value | Override Django's development signing key. |
 | `TORCHBEARER_RUN_TIMEOUT` | `1800` | Maximum CLI execution time in seconds for a single run. |
+| `TORCHBEARER_GITHUB_CLIENT_ID` | Bundled public GitHub App Client ID (unset in source) | Publisher/deployment override for native GitHub sign-in; see [registration](docs/github-app.md). |
 
 The backend listens at `127.0.0.1:8000`. Vite forwards `/api/` requests to it; its own port is fixed at `5173`. The service health endpoint is `/api/v1/health/`.
 

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test('navigates between the board, workflows, and settings with browser history', async ({
+test('navigates between application pages with browser history', async ({
   page,
 }) => {
   await page.goto('/')
@@ -78,10 +78,13 @@ for (const label of ['Workflows', 'Settings']) {
     await expect(
       page.getByRole('heading', { name: label, exact: true }),
     ).toBeVisible()
-    if (label === 'Workflows')
+    if (label === 'Workflows') {
       await expect(page.getByRole('article')).toHaveCount(19)
-    else
-      await expect(page.getByText('Coming soon', { exact: true })).toBeVisible()
+    } else {
+      await expect(
+        page.getByRole('heading', { name: 'Connections' }),
+      ).toBeVisible()
+    }
     await expect(
       page
         .getByRole('navigation')

@@ -7,11 +7,13 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 - `frontend/src/app/`: application shell, theme-color synchronization, and layered shared styling. See the [styling system](styling.md) for font, token, and control conventions.
 - `frontend/src/features/tasks/`: five-column board, task-creation popup, and task-specific API operations.
 - `frontend/src/features/projects/`: searchable project selection, local-folder browser, cloning and project management inside task creation.
+- `frontend/src/features/settings/`: account Connections, GitHub browser authorization handoff, and pending-login polling.
 - `frontend/src/features/workflows/`: alphabetical, searchable work-type catalogue with responsive columns and saved assignment management.
 - `frontend/src/lib/api.ts`: same-origin requests and useful HTTP/connection errors.
 - `backend/config/`: local settings, routing, health, and CSRF bootstrap.
 - `backend/tasks/`: task models, serializers, views, migrations, and API tests.
 - `backend/projects/`: stored projects, local directory and Git operations, serializers, views, migrations and API tests.
+- `backend/connections/`: native GitHub App OAuth, OS-backed credentials, token refresh, verified account identity, and connection APIs.
 - `backend/workflows/`: built-in engineering workflow definitions, work types, revision-checked assignments, and catalogue migrations.
 - `scripts/`: setup, process management, verification, and isolated test services.
 
@@ -47,6 +49,12 @@ Each card has an independent expand/collapse button with `aria-expanded` and `ar
 | GET/PATCH | `/api/v1/projects/<uuid>/` | Read a project or update its display name. |
 | DELETE | `/api/v1/projects/<uuid>/` | Archive the project; keep files and associated tasks. |
 | POST | `/api/v1/projects/folders/` | Browse visible child folders with repository markers, parent, breadcrumbs, and location shortcuts; defaults to the server user's home. |
+| GET | `/api/v1/connections/github/` | Saved GitHub account, app/keychain readiness, reauthorization requirement, and current pending authorization; never tokens. |
+| POST | `/api/v1/connections/github/connect/` | Start or resume native GitHub App device authorization. |
+| POST | `/api/v1/connections/github/poll/` | Poll the specified authorization UUID and save identity only after authenticated GitHub verification. |
+| POST | `/api/v1/connections/github/cancel/` | Invalidate the specified attempt and prevent late completion. |
+| POST | `/api/v1/connections/github/verify/` | Refresh expiring credentials, verify the selected numeric account identity, and report revoked or missing authorization. |
+| DELETE | `/api/v1/connections/github/` | Cancel pending login and remove Torchbearer's saved connection and OS-vault credential. |
 
 A task contains a UUID, title, description, optional nested project, execution repository, routing mode, optional frontier agent, resolved stage agents, next stage, current stage, revision, workspace metadata, completion timestamp, and creation/update timestamps. Titles are limited to 200 characters and descriptions to 10,000. New tasks always begin in `backlog`; creating a task or choosing routing never starts execution. Clients cannot directly set stage, revision, workspace metadata, or completion. Existing tasks can remain without a repository until planning starts.
 
@@ -93,6 +101,18 @@ Approval names the latest run and its fingerprint. That fingerprint covers HEAD,
 Results require `outcome`, `summary`, `details`, and `tests`. Integrate cannot report completion without reported passing validation commands. Protocol failures, nonzero exit codes, malformed results, permission denials, timeouts, and output limits never count as success. Log tails retain 128,000 characters, JSONL records are limited to 2 MiB, and lifetime output to 20 MiB. Code previews are capped at 64,000 characters and indicate truncation.
 
 Planning prompts replay all planning turns in sequence through `plan_conversation`, independently of the six-attempt supplementary history. Earlier planning replies are not truncated. A complete reply must include a self-contained current plan incorporating the conversation's decisions, so the latest explicitly approved result remains the implementation handoff. Clarification questions use a blocked outcome and cannot be approved. The existing 200,000-character context guard blocks oversized conversations without silently losing decisions. Existing run and decision records provide persistence; no new table or migration is needed.
+
+## GitHub authorization
+
+`oauth.py` implements GitHub App device authorization, refresh, and authenticated user lookup over HTTPS using Python's standard HTTP client. It uses fixed GitHub endpoints, rejects redirects, bounds response sizes and timeouts, validates response fields, and sanitizes errors. The publisher registers a GitHub App and bundles its public Client ID; device-issued tokens and refreshes require no app secret/private key. See [publisher setup](github-app.md). React reserves a tab during the Connect click and navigates it to GitHub once the one-time code arrives, with a manual link for blocked popups and refreshed pages.
+
+`credentials.py` selects Windows Credential Manager, macOS Keychain, or Linux Secret Service explicitly rather than accepting arbitrary keyring plugins or plaintext fallback. Its service names include the resolved data-directory namespace and generated credential UUID. The OS store contains the access/refresh tokens, expiry, client identity and numeric account binding. SQLite contains only the singleton account ID, login, display name, connection timestamp, GitHub App Client ID and credential UUID. Browser/API responses exclude tokens and GitHub's private device code. Environment-provided GitHub tokens and external CLI accounts are never consulted.
+
+`device.py` owns one pending attempt in the existing local single-process deployment. A monotonic deadline enforces GitHub's code lifetime, and server-side scheduling honors the provider's polling interval, `slow_down`, and rate-limit delays regardless of browser poll frequency. No transaction or service lock spans GitHub network requests. Cancellation/disconnect invalidate attempt UUIDs; completion rechecks identity after network and vault operations so a stale response cannot restore a connection. Only verified, securely stored replacement credentials replace the previous account. Pending attempts end with Django; saved account metadata and OS credentials survive restart. Multiple Django processes against one data directory remain unsupported.
+
+Opening Settings checks saved authorization through the CSRF-protected verification endpoint. A separate single-flight lock prevents concurrent requests from rotating one refresh token twice while allowing disconnect to proceed during HTTPS. Refresh rotation is saved before another profile request, preserving it across a temporary outage. Account verification compares numeric GitHub IDs, allowing username changes without silently switching accounts; missing, mismatched, expired or revoked credentials require fresh consent. Disconnect deletes only Torchbearer's vault entry and metadata; remote grant revocation remains in GitHub's authorized GitHub Apps settings. Repository permissions belong to the GitHub App registration. Project-clone credentials and coding-agent authentication are separate integrations.
+
+The Client ID migration marks older connections for reauthorization without importing their credentials. The cleanup migration renames the old configuration field to `credential_id` while preserving its UUID, including references created by native authorization before the rename. Historical migrations remain available for existing installations; the old CLI service and test executable are removed.
 
 ## Local persistence
 
