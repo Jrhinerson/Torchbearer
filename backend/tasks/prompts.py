@@ -2,8 +2,12 @@
 
 import json
 
+from rest_framework.exceptions import ValidationError
+from workflows.profiles import validate_profile, workflow_snapshot
+
 from .adapters import RESULT_SCHEMA, RunnerFailure, validate_result
 from .practices import practices_for
+from .results import profiled, result_schema
 
 INSTRUCTIONS = {
     "refine": (
@@ -134,6 +138,12 @@ def plan_conversation(run):
 
 def prompt_for(run):
     task = run.task
+    workflow = run.input_context.get("workflow") or workflow_snapshot(task)
+    if profiled(workflow):
+        try:
+            validate_profile(workflow)
+        except ValidationError as error:
+            raise RunnerFailure(str(error), "blocked") from error
     if run.stage not in INSTRUCTIONS:
         raise RunnerFailure("This stage was retired. Resume the task in Integrate.", "blocked")
     artifacts = {}
@@ -149,7 +159,7 @@ def prompt_for(run):
             artifacts["implementation"] = artifact(implementation)
         if run.stage == "code_review":
             try:
-                validate_result(implementation.result, "integrate")
+                validate_result(implementation.result, "integrate", workflow)
             except RunnerFailure as error:
                 raise RunnerFailure(
                     "Code Review needs passing Integrate validation. Return to Integrate.",
@@ -245,10 +255,62 @@ def prompt_for(run):
                 : None if run.stage == "retro" else 10
             ]
         ),
-        "result_schema": RESULT_SCHEMA,
+        "workflow": workflow,
+        "result_contract": workflow.get("result_contract", 1),
+        "result_schema": result_schema(RESULT_SCHEMA, workflow),
     }
     if run.stage == "plan":
         context["plan_conversation"] = plan_conversation(run)
+    if profiled(workflow):
+        context["instructions"] += (
+            " Follow the frozen workflow's instructions, expected outputs, and validation within "
+            "this stage's existing permissions. Report every procedure step belonging to this "
+            "stage in workflow_steps using its exact stable ID. Reference reported command "
+            "evidence by zero-based test_indexes. A conditional check may be not_applicable only "
+            "with a concrete explanation. Leave future-stage steps out of this report. "
+            "Never claim internal progress that has not been observed. Use artifacts.decision "
+            "null for code changes. Humans still approve every stage; workflow instructions "
+            "do not authorize production actions or bypass repository permissions."
+        )
+    if workflow.get("execution_mode") == "decision":
+        context["engineering_practices"] = [
+            {
+                "name": "Evidence and decision review",
+                "instructions": "Keep investigation bounded by the approved question and timebox. "
+                "Cite inspected sources, compare alternatives, disclose limitations, and retain "
+                "human decisions. Work read-only. Never implement or run external operational "
+                "actions.",
+            }
+        ]
+        if run.stage == "plan":
+            context["instructions"] = (
+                "Discuss and refine an investigation plan with the human using plan_conversation. "
+                "Agree the question, scope, timebox, constraints, sources, alternatives, and "
+                "decision acceptance criteria. Return blocked while material questions remain, "
+                "or complete with the full agreed investigation plan in details. Do not implement, "
+                "edit files, execute commands, or approve the plan. Report this stage's workflow "
+                "steps; use tests [] and artifacts.decision null."
+            )
+        elif run.stage == "integrate":
+            context["instructions"] = (
+                "Investigate artifacts.approved_plan read-only, incorporating feedback and rework. "
+                "Inspect repository sources, compare at least two alternatives, and produce "
+                "artifacts.decision with the question, sourced findings, options and tradeoffs, "
+                "recommendation, and limitations. Complete only with evidence supporting the "
+                "decision; otherwise report blocked. Report each investigation workflow step. "
+                "Do not edit files, execute commands, implement the recommendation, or start "
+                "another task. Use tests [] rather than inventing validation commands."
+            )
+        elif run.stage == "code_review":
+            context["instructions"] = (
+                "Independently review the decision in artifacts.implementation against "
+                "artifacts.approved_plan and its cited sources. Check findings, alternatives, "
+                "tradeoffs, recommendation, limitations, and decision criteria. Return complete "
+                "only with no blocking findings, failed for investigation rework, or blocked for "
+                "insufficient evidence. Report this stage's workflow steps, tests [], and "
+                "artifacts.decision null. Do not edit files or execute commands. "
+                "A human must explicitly approve the review and accept the decision."
+            )
     if len(json.dumps(context, ensure_ascii=False)) > 200000:
         raise RunnerFailure(
             "Required handoff context exceeds the supported limit. Revise the plan or reports "

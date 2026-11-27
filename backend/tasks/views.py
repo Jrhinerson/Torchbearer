@@ -1,7 +1,9 @@
+from django.conf import settings
 from django.db import transaction
 from django.db.models import F
 from django.shortcuts import get_object_or_404
 from django.utils.decorators import method_decorator
+from django.utils.http import parse_etags
 from django.views.decorators.csrf import csrf_protect
 from rest_framework import generics
 from rest_framework.permissions import AllowAny
@@ -21,7 +23,7 @@ from .serializers import (
 )
 from .worker import worker_status
 from .workflow import Conflict, act, cancel, update_settings
-from .workspaces import changes
+from .workspaces import changes, fingerprint
 
 
 @method_decorator(csrf_protect, name="dispatch")
@@ -34,10 +36,42 @@ class RoutingView(LocalView):
     def get(self, request):
         return Response(
             {
+                **({"read_only": True} if settings.DEMO_MODE else {}),
                 "agents": agent_catalog(),
                 "approaches": [{"id": mode, "label": mode.label} for mode in Approach],
                 "worker": worker_status(),
             }
+        )
+
+
+class OperationsView(LocalView):
+    @transaction.atomic
+    def get(self, request):
+        from .operations import overview
+
+        return Response(overview(request.query_params))
+
+
+class ActivityView(LocalView):
+    def get(self, request):
+        from .activity import activity
+
+        return Response(activity(request.query_params))
+
+
+class TaskFlowView(LocalView):
+    @transaction.atomic
+    def get(self, request, pk):
+        from .operations import flow, flow_etag
+
+        task = get_object_or_404(Task.objects.select_related("project"), pk=pk)
+        etag = flow_etag(task)
+        candidates = parse_etags(request.headers.get("If-None-Match", ""))
+        unchanged = any(value == "*" or value.removeprefix("W/") == etag for value in candidates)
+        return Response(
+            None if unchanged else flow(task),
+            status=304 if unchanged else 200,
+            headers={"ETag": etag, "Cache-Control": "no-store"},
         )
 
 
@@ -115,6 +149,20 @@ class WorkspaceView(LocalView):
     def get(self, request, pk):
         task = get_object_or_404(Task, pk=pk)
         try:
-            return Response(changes(task))
+            if settings.DEMO_MODE:
+                from .demo import workspace_preview
+
+                preview = workspace_preview(task)
+                return Response(
+                    {"fingerprint": preview["fingerprint"]}
+                    if request.query_params.get("fingerprint") == "1"
+                    else preview,
+                    headers={"Cache-Control": "no-store"},
+                )
+            if request.query_params.get("fingerprint") == "1":
+                return Response(
+                    {"fingerprint": fingerprint(task)}, headers={"Cache-Control": "no-store"}
+                )
+            return Response(changes(task), headers={"Cache-Control": "no-store"})
         except (OSError, ValueError) as error:
             raise Conflict(str(error)) from error

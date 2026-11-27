@@ -52,7 +52,11 @@ if scenario == "malformed":
     sys.exit(0)
 if scenario == "modify":
     Path(f"violation-{stage}.txt").write_text("Unexpected edit\n", encoding="utf-8")
-if stage == "integrate" and scenario in {"implement", "conversation"}:
+if (
+    stage == "integrate"
+    and scenario in {"implement", "conversation"}
+    and context.get("workflow", {}).get("execution_mode") != "decision"
+):
     Path("feature.txt").write_text("Implemented by the fixture\n", encoding="utf-8")
 result = {
     "outcome": "blocked"
@@ -96,6 +100,32 @@ if scenario == "conversation" and stage == "plan":
         if len(messages) == 1
         else "Implement the agreed behavior:\n" + "\n\n".join(messages),
     )
+workflow = context.get("workflow", {})
+if workflow.get("execution_mode") == "decision":
+    result["tests"] = []
+if workflow.get("result_contract") == 2:
+    result["workflow_steps"] = [
+        {
+            "step_id": step["id"],
+            "outcome": "complete" if result["outcome"] == "complete" else "blocked",
+            "summary": "Fixture recorded step evidence",
+            "test_indexes": [0] if result["tests"] else [],
+        }
+        for step in workflow.get("steps", [])
+        if step["stage"] == stage
+    ]
+    result["artifacts"] = {"decision": None}
+    if workflow.get("execution_mode") == "decision" and stage == "integrate":
+        result["artifacts"]["decision"] = {
+            "question": "Which queue backend fits this project?",
+            "findings": [{"summary": "A local repository is available.", "source": "README.md"}],
+            "options": [
+                {"name": "Local queue", "tradeoffs": "Simple single-machine deployment."},
+                {"name": "Remote queue", "tradeoffs": "Additional infrastructure."},
+            ],
+            "recommendation": "Retain a local queue for this deployment.",
+            "limitations": "No production workload measurements were available.",
+        }
 text = json.dumps(result, ensure_ascii=False)
 if scenario == "verbose":
     print("diagnostic output\n" * 10000, file=sys.stderr, flush=True)

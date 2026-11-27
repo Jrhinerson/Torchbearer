@@ -2,15 +2,16 @@ import { useEffect, useRef, useState } from 'react'
 import {
   agentLabel,
   cancelRun,
-  getRuns,
+  getTaskFlowUpdate,
   getWorkspace,
+  getWorkspaceFingerprint,
   performAction,
   updateTaskSettings,
 } from './api'
 import type {
   Repository,
   Routing,
-  RunHistory,
+  TaskFlowData,
   RunState,
   Task,
   TaskAction,
@@ -19,7 +20,10 @@ import type {
 import { RepositoryPicker } from './RepositoryPicker'
 import { TaskRoutingEditor } from './TaskRouting'
 import { WorkflowConversation } from './WorkflowConversation'
-import { stageLabels } from './workflowLabels'
+import { taskStageLabel } from './workflowLabels'
+import { TaskFlow } from './TaskFlow'
+import { DecisionInspector } from './DecisionInspector'
+import { TaskWorkflowEditor } from './WorkflowChoice'
 
 const states: Record<RunState, string> = {
   queued: 'Queued',
@@ -255,6 +259,7 @@ export function TaskSettingsDialog({
         disabled={busy || Boolean(task.latest_run)}
         onTask={onTask}
       />
+      <TaskWorkflowEditor task={task} onTask={onTask} />
       <RepositoryPicker
         repositories={repositories}
         value={task.repository ?? ''}
@@ -276,21 +281,44 @@ export function WorkflowDialog({
   onTask,
   onClose,
   routing,
+  embedded = false,
+  refreshToken,
+  selectedRunId,
+  onInspectRun,
 }: {
   task: Task
   onTask: (task: Task) => void
   onClose: () => void
   routing: Routing | null
+  embedded?: boolean
+  refreshToken?: string
+  selectedRunId?: string | null
+  onInspectRun?: (id: string | null) => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
+  const suppressedCloseEvents = useRef(0)
   const closeButton = useRef<HTMLButtonElement>(null)
-  const [history, setHistory] = useState<RunHistory | null>(null)
+  const [history, setHistory] = useState<TaskFlowData | null>(null)
+  const flowEtag = useRef<string | undefined>(undefined)
+  const workspaceCache = useRef<WorkspaceChanges | null>(null)
+  const diffFingerprint = useRef<string | null>(null)
   const [workspace, setWorkspace] = useState<WorkspaceChanges | null>(null)
   const [workspaceError, setWorkspaceError] = useState('')
   const [loadError, setLoadError] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [reload, setReload] = useState(0)
+  const [tab, setTab] = useState<'flow' | 'conversation' | 'changes'>(
+    embedded ? 'flow' : 'conversation',
+  )
+  const [focused, setFocused] = useState(false)
+  const [focusComposer, setFocusComposer] = useState(0)
+  const [localInspectedRunId, setLocalInspectedRunId] = useState<string | null>(
+    null,
+  )
+  const inspectedRunId =
+    selectedRunId === undefined ? localInspectedRunId : selectedRunId
+  const setInspectedRunId = onInspectRun ?? setLocalInspectedRunId
   const acting = useRef(false)
   const run = history?.runs.find((item) => item.id === task.latest_run?.id)
   const active = isActive(task)
@@ -305,7 +333,11 @@ export function WorkflowDialog({
     run.result.outcome === 'complete' &&
     reviewCurrent &&
     !active &&
-    !task.completed_at,
+    !task.completed_at &&
+    !loadError &&
+    !history?.read_only &&
+    history?.revision === task.revision &&
+    history?.latest_run_id === task.latest_run?.id,
   )
   const next = task.status === 'backlog' ? 'plan' : task.next_stage
   const missingAgent =
@@ -320,26 +352,68 @@ export function WorkflowDialog({
       document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null
-    dialog.current?.showModal()
-    closeButton.current?.focus()
     return () => {
       previous?.focus()
     }
   }, [])
 
   useEffect(() => {
+    const element = dialog.current
+    if (!element) return
+    if (element.open) {
+      suppressedCloseEvents.current++
+      element.close()
+    }
+    if (!embedded || focused) {
+      element.showModal()
+      closeButton.current?.focus()
+    } else element.show()
+  }, [embedded, focused])
+
+  useEffect(() => {
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout>
     async function load() {
       try {
-        const result = await getRuns(task.id, controller.signal)
+        const update = await getTaskFlowUpdate(
+          task.id,
+          controller.signal,
+          flowEtag.current,
+        )
         if (controller.signal.aborted) return
-        setHistory(result)
+        flowEtag.current = update.etag ?? undefined
+        if (update.data) {
+          setHistory(update.data)
+          if (update.data.revision > task.revision) onTask(update.data.task)
+        }
         setLoadError('')
         if (task.workspace_path && !active) {
           try {
-            const snapshot = await getWorkspace(task.id, controller.signal)
+            const current = await getWorkspaceFingerprint(
+              task.id,
+              controller.signal,
+            )
+            if (controller.signal.aborted) return
+            let snapshot = workspaceCache.current
+            if (!snapshot || snapshot.fingerprint !== current.fingerprint) {
+              snapshot = {
+                preview_loaded: false,
+                fingerprint: current.fingerprint,
+                diff: '',
+                truncated: false,
+              }
+              diffFingerprint.current = null
+            }
+            if (
+              (!embedded || tab !== 'flow') &&
+              diffFingerprint.current !== current.fingerprint
+            ) {
+              snapshot = await getWorkspace(task.id, controller.signal)
+              if (controller.signal.aborted) return
+              diffFingerprint.current = snapshot.fingerprint
+            }
             if (!controller.signal.aborted) {
+              workspaceCache.current = snapshot
               setWorkspace(snapshot)
               setWorkspaceError('')
             }
@@ -363,7 +437,7 @@ export function WorkflowDialog({
           )
       } finally {
         if (!controller.signal.aborted)
-          timer = setTimeout(() => void load(), 2000)
+          if (!embedded) timer = setTimeout(() => void load(), 2000)
       }
     }
     void load()
@@ -373,11 +447,16 @@ export function WorkflowDialog({
     }
   }, [
     task.id,
+    task.revision,
+    onTask,
+    refreshToken,
+    embedded,
     task.latest_run?.id,
     task.latest_run?.state,
     task.workspace_path,
     active,
     reload,
+    tab,
   ])
 
   async function act(action: TaskAction | 'cancel', message = '') {
@@ -408,21 +487,28 @@ export function WorkflowDialog({
   return (
     <dialog
       ref={dialog}
-      className="surface surface-overlay task-dialog workflow-dialog planning-dialog"
+      className={`surface surface-overlay task-dialog workflow-dialog planning-dialog ${embedded && !focused ? 'embedded-workspace' : ''}`}
       aria-labelledby="workflow-heading"
       onCancel={(event) => {
         if (busy) event.preventDefault()
       }}
-      onClose={onClose}
+      onClose={() => {
+        if (suppressedCloseEvents.current) suppressedCloseEvents.current--
+        else onClose()
+      }}
     >
       <div className="dialog-heading">
         <div>
           <p className="planning-context">
             <span>{task.project?.name || 'Task'}</span>
             <span aria-hidden="true">/</span>
-            <span>{stageLabels[task.status]}</span>
+            <span>{taskStageLabel(task, task.status)}</span>
           </p>
           <h2 id="workflow-heading">{task.title}</h2>
+          <p className="workflow-hint">
+            {task.workflow_snapshot?.name ?? 'Legacy engineering workflow'} ·
+            Workflow fixed when agent work started
+          </p>
         </div>
         <button
           ref={closeButton}
@@ -455,58 +541,189 @@ export function WorkflowDialog({
         </p>
       )}
       {!history && !loadError && <p role="status">Loading runs…</p>}
-      {history && (
-        <WorkflowConversation
-          key={
-            task.id +
-            ':' +
-            task.status +
-            ':' +
-            (task.latest_run?.stage === 'retro' ? 'retro' : 'workflow')
-          }
-          task={task}
-          history={history}
-          run={run}
-          routing={routing}
-          active={active}
-          busy={busy}
-          error={error}
-          workspace={workspace}
-          workspaceError={workspaceError}
-          canApprove={canApprove && !missingAgent}
-          approvalHint={
-            workspaceError ||
-            (!reviewCurrent
-              ? workspace
-                ? 'Workspace changes have made this result stale. Request a new reply before approving.'
-                : 'Checking the workspace before approval…'
-              : missingAgent
-                ? 'The agent for ' +
-                  stageLabels[next!] +
-                  ' must be configured and installed before continuing.'
-                : '')
-          }
-          onMessage={(action, message) => act(action, message)}
-          onRetry={() =>
-            void act(
-              run?.stage === 'refine' || run?.stage === 'retro'
-                ? run.stage
-                : 'retry',
-            )
-          }
-          onStop={() => void act('cancel')}
-          onRetrospective={() => void act('retro')}
-          onApprove={() =>
-            void act(
-              task.status === 'backlog'
-                ? 'start'
-                : task.status === 'final_approval'
-                  ? 'final_approve'
-                  : 'approve',
-            )
-          }
-        />
+      {embedded && (
+        <div className="workspace-tabs" role="tablist" aria-label="Task views">
+          {(['flow', 'conversation', 'changes'] as const).map((view) => (
+            <button
+              className="button button-quiet"
+              type="button"
+              role="tab"
+              aria-selected={tab === view}
+              key={view}
+              onClick={() => setTab(view)}
+            >
+              {view[0].toUpperCase() + view.slice(1)}
+            </button>
+          ))}
+          <button
+            className="button button-secondary workspace-focus"
+            type="button"
+            onClick={() => setFocused(!focused)}
+          >
+            {focused ? 'Return to board' : 'Focus workspace'}
+          </button>
+        </div>
       )}
+      <div className={embedded ? 'selected-task-layout' : undefined}>
+        <div className="selected-task-content">
+          {history && embedded && (
+            <div hidden={tab !== 'flow'} role="tabpanel" aria-label="Flow">
+              <TaskFlow
+                flow={history}
+                routing={routing}
+                onRun={setInspectedRunId}
+              />
+            </div>
+          )}
+          {embedded && (
+            <div
+              hidden={tab !== 'changes'}
+              role="tabpanel"
+              aria-label="Changes"
+            >
+              <h3>Current workspace changes</h3>
+              {workspaceError ? (
+                <p role="alert">{workspaceError}</p>
+              ) : workspace && workspace.preview_loaded !== false ? (
+                <>
+                  <pre className="run-log">
+                    {workspace.diff || 'No code changes.'}
+                  </pre>
+                  {workspace.truncated && (
+                    <p>
+                      Preview truncated. Review the full diff in the task
+                      worktree.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p>
+                  {active
+                    ? 'Changes are available after the current attempt finishes.'
+                    : task.workspace_path
+                      ? 'Loading code changes…'
+                      : 'No task workspace is available.'}
+                </p>
+              )}
+            </div>
+          )}
+          <div
+            hidden={embedded && tab !== 'conversation'}
+            role={embedded ? 'tabpanel' : undefined}
+            aria-label={embedded ? 'Conversation' : undefined}
+          >
+            {history && (
+              <WorkflowConversation
+                key={
+                  task.id +
+                  ':' +
+                  task.status +
+                  ':' +
+                  (task.latest_run?.stage === 'retro' ? 'retro' : 'workflow')
+                }
+                showApproval={!embedded || focused}
+                focusRequest={focusComposer}
+                task={task}
+                history={history}
+                run={run}
+                routing={routing}
+                active={active}
+                busy={busy}
+                error={error}
+                workspace={
+                  workspace?.preview_loaded === false ? null : workspace
+                }
+                workspaceError={workspaceError}
+                canApprove={canApprove && !missingAgent}
+                approvalHint={
+                  workspaceError ||
+                  (!reviewCurrent
+                    ? workspace
+                      ? 'Workspace changes have made this result stale. Request a new reply before approving.'
+                      : 'Checking the workspace before approval…'
+                    : missingAgent
+                      ? 'The agent for ' +
+                        taskStageLabel(task, next!) +
+                        ' must be configured and installed before continuing.'
+                      : '')
+                }
+                onMessage={(action, message) => act(action, message)}
+                onRetry={() =>
+                  void act(
+                    run?.stage === 'refine' || run?.stage === 'retro'
+                      ? run.stage
+                      : 'retry',
+                  )
+                }
+                onStop={() => void act('cancel')}
+                onRetrospective={() => void act('retro')}
+                onApprove={() =>
+                  void act(
+                    task.status === 'backlog'
+                      ? 'start'
+                      : task.status === 'final_approval'
+                        ? 'final_approve'
+                        : 'approve',
+                  )
+                }
+              />
+            )}
+          </div>
+        </div>
+        {embedded && history && (
+          <DecisionInspector
+            task={task}
+            history={history}
+            onInspectRun={setInspectedRunId}
+            run={
+              history.runs.find((attempt) => attempt.id === inspectedRunId) ??
+              run
+            }
+            routing={routing}
+            historical={Boolean(inspectedRunId && inspectedRunId !== run?.id)}
+            onLatest={() => setInspectedRunId(null)}
+            canApprove={canApprove && !missingAgent}
+            approvalHint={
+              workspaceError ||
+              (!reviewCurrent
+                ? 'Review is unavailable until the current workspace matches this result.'
+                : missingAgent
+                  ? 'Install the next agent before continuing.'
+                  : '')
+            }
+            busy={busy}
+            actionsCurrent={
+              !history.read_only &&
+              !loadError &&
+              history.revision === task.revision &&
+              history.latest_run_id === task.latest_run?.id
+            }
+            onAction={(descriptor) => {
+              if (
+                descriptor.action === 'settings' ||
+                descriptor.label === 'Answer question'
+              ) {
+                setTab('conversation')
+                setFocusComposer((value) => value + 1)
+              } else void act(descriptor.action)
+            }}
+            error={error}
+            onConversation={() => {
+              setTab('conversation')
+              setFocusComposer((value) => value + 1)
+            }}
+            onApprove={() =>
+              void act(
+                task.status === 'backlog'
+                  ? 'start'
+                  : task.status === 'final_approval'
+                    ? 'final_approve'
+                    : 'approve',
+              )
+            }
+          />
+        )}
+      </div>
     </dialog>
   )
 }

@@ -10,6 +10,8 @@ class WorkflowDefinition(models.Model):
     validation = models.JSONField(default=list)
     approval_points = models.JSONField(default=list)
     display_order = models.PositiveSmallIntegerField()
+    definition_version = models.PositiveIntegerField(default=1)
+    execution_profile = models.JSONField(default=dict)
 
     class Meta:
         ordering = ["display_order", "key"]

@@ -15,6 +15,8 @@ const labels = {
 }
 
 function responsibleAgent(task: Task): Agent | null {
+  if (task.status === 'backlog' && task.latest_run?.stage === 'refine')
+    return task.latest_run.agent
   if (task.status === 'backlog') return task.stage_agents.plan ?? null
   if (task.status === 'final_approval')
     return task.latest_run?.agent ?? task.stage_agents.code_review ?? null
@@ -24,13 +26,15 @@ function responsibleAgent(task: Task): Agent | null {
 
 export function taskCardStatus(task: Task) {
   // A previous stage's result must not animate the stage receiving the handoff.
-  const run = task.latest_run?.stage === task.status ? task.latest_run : null
+  const run =
+    task.latest_run?.stage === task.status ||
+    (task.status === 'backlog' && task.latest_run?.stage === 'refine')
+      ? task.latest_run
+      : null
   const state = task.completed_at
     ? 'approved'
     : task.status === 'backlog'
-      ? task.routing_mode
-        ? 'ready'
-        : 'routing_needed'
+      ? (run?.state ?? (task.routing_mode ? 'ready' : 'routing_needed'))
       : task.status === 'final_approval'
         ? 'final_approval'
         : (run?.state ?? 'ready')

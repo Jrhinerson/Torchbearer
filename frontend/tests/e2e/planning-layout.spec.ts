@@ -1,3 +1,4 @@
+import { operationsFixture } from './fixtures/operations'
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
@@ -112,13 +113,25 @@ async function openPlanning(
     workspace_path: 'C:/fixtures/task-workspace',
     branch: 'torchbearer/task',
   }
-  await page.route('**/api/v1/tasks/', (route) =>
-    route.fulfill({ json: [currentTask] }),
+  await page.route('**/api/v1/operations/?**', (route) =>
+    route.fulfill({ json: operationsFixture([currentTask]) }),
   )
-  await page.route(`**/api/v1/tasks/${task.id}/runs/`, (route) =>
-    route.fulfill({ json: { runs: [...attempts].reverse(), decisions: [] } }),
+  await page.route(`**/api/v1/tasks/${task.id}/flow/`, (route) =>
+    route.fulfill({
+      json: {
+        task: operationsFixture([currentTask]).tasks[0],
+        task_id: task.id,
+        revision: currentTask.revision,
+        latest_run_id: attempts.at(-1)?.id,
+        runs: [...attempts].reverse(),
+        decisions: [],
+        nodes: [],
+        edges: [],
+        operations: operationsFixture([currentTask]).tasks[0].operations,
+      },
+    }),
   )
-  await page.route(`**/api/v1/tasks/${task.id}/workspace/`, (route) =>
+  await page.route(`**/api/v1/tasks/${task.id}/workspace/**`, (route) =>
     route.fulfill({
       json: {
         fingerprint: 'snapshot',
@@ -135,7 +148,14 @@ async function openPlanning(
   await page
     .getByRole('button', { name: `Open ${task.title}`, exact: true })
     .click()
-  return page.getByRole('dialog', { name: task.title, exact: true })
+  const workspace = page.getByRole('dialog', { name: task.title, exact: true })
+  await workspace
+    .getByRole('tab', { name: 'Conversation', exact: true })
+    .click()
+  await workspace
+    .getByRole('button', { name: 'Focus workspace', exact: true })
+    .click()
+  return workspace
 }
 
 for (const width of [1280, 390, 320]) {
@@ -354,7 +374,7 @@ for (const width of [1280, 320]) {
     await page.setViewportSize({ width, height: 850 })
     const dialog = await openPlanning(page, 'dark', 'final_approval', true)
     await expect(dialog.locator('.workflow-run')).toHaveCount(3)
-    await expect(dialog.getByText(/^Approved/)).toBeVisible()
+    await expect(dialog.locator('.workflow-completed')).toBeVisible()
     await expect(dialog.getByRole('textbox')).toHaveCount(0)
     await expect(
       dialog.getByRole('button', { name: 'Give final approval' }),

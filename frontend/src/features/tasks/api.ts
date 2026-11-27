@@ -1,4 +1,4 @@
-import { requestJson } from '../../lib/api'
+import { requestJson, requestJsonWithMetadata } from '../../lib/api'
 import type { Project } from '../projects/api'
 
 export type Stage = 'plan' | 'integrate' | 'code_review'
@@ -12,6 +12,7 @@ export interface Repository {
   path: string
 }
 export interface Routing {
+  read_only?: boolean
   agents: {
     id: Agent
     label: string
@@ -49,6 +50,13 @@ export interface Run extends RunSummary {
     summary?: string
     details?: string
     tests?: { command: string; outcome: string; details: string }[]
+    workflow_steps?: {
+      step_id: string
+      outcome: string
+      summary: string
+      test_indexes: number[]
+    }[]
+    artifacts?: { decision: DecisionArtifact | null }
   }
   log: string
   feedback: string
@@ -75,19 +83,41 @@ export interface Decision {
   created_at: string
 }
 export interface RunHistory {
+  read_only?: boolean
   runs: Run[]
   decisions: Decision[]
 }
 export interface WorkspaceChanges {
+  preview_loaded?: boolean
   diff: string
   fingerprint: string
   truncated: boolean
+}
+
+export interface DecisionArtifact {
+  question: string
+  findings: { summary: string; source: string }[]
+  options: { name: string; tradeoffs: string }[]
+  recommendation: string
+  limitations: string
+}
+export interface WorkflowSnapshot {
+  schema_version: number
+  key: string
+  name: string
+  definition_version: number
+  execution_mode: 'legacy' | 'code_change' | 'decision'
+  result_contract: number
+  steps: { id: string; label: string; stage: Stage; conditional: boolean }[]
+  stage_labels: Partial<Record<Stage | 'final_approval', string>>
 }
 
 export interface Task {
   id: string
   title: string
   description: string
+  work_type: string | null
+  workflow_snapshot: WorkflowSnapshot
   project: Project | null
   repository: string | null
   routing_mode: Approach | null
@@ -103,7 +133,109 @@ export interface Task {
   base_commit: string
   created_at: string
   updated_at: string
+  operations?: {
+    group: 'backlog' | 'active' | 'needs_you' | 'done'
+    reason: string
+    state: string
+    agent: Agent | null
+    next_agent: Agent | null
+    running: boolean
+    stage_label: string
+    workflow_name: string
+  }
 }
+
+export interface OperationsOverview {
+  read_only?: boolean
+  tasks: Task[]
+  counts: Record<'backlog' | 'active' | 'needs_you' | 'done', number>
+  agents: (Routing['agents'][number] & { queued: number; running: number })[]
+  worker: Routing['worker']
+  observed_at: string
+  filters: { project: string; q: string }
+}
+
+export const getOperations = (signal?: AbortSignal, query = '', project = '') =>
+  requestJson<OperationsOverview>(
+    `operations/?${new URLSearchParams({ q: query, project })}`,
+    { signal },
+  )
+
+export interface FlowNode {
+  id: string
+  label: string
+  kind: 'stage' | 'gate' | 'procedure'
+  agent: Agent | 'human' | null
+  state: string
+  accepted?: boolean
+  run_id: string | null
+}
+export interface TaskFlowData extends RunHistory {
+  actions: {
+    action: TaskAction | 'cancel' | 'settings'
+    label: string
+    enabled: boolean
+    reason: string
+    requires_fingerprint: boolean
+  }[]
+  task: Task
+  task_id: string
+  revision: number
+  latest_run_id: string | null
+  nodes: FlowNode[]
+  edges: {
+    source: string
+    target: string
+    kind: string
+    decision_id?: number
+  }[]
+  operations: NonNullable<Task['operations']>
+}
+export const getTaskFlow = (id: string, signal?: AbortSignal) =>
+  requestJson<TaskFlowData>(`tasks/${id}/flow/`, { signal })
+export const getTaskFlowUpdate = (
+  id: string,
+  signal: AbortSignal,
+  etag?: string,
+) =>
+  requestJsonWithMetadata<TaskFlowData>(`tasks/${id}/flow/`, {
+    signal,
+    cache: 'no-store',
+    headers: etag ? { 'If-None-Match': etag } : undefined,
+  })
+export const getWorkspaceFingerprint = (id: string, signal: AbortSignal) =>
+  requestJson<{ fingerprint: string }>(`tasks/${id}/workspace/?fingerprint=1`, {
+    signal,
+    cache: 'no-store',
+  })
+
+export interface ActivityEvent {
+  id: string
+  created_at: string
+  kind: string
+  task_id: string
+  task_title: string
+  actor: Agent | 'human'
+  run_id: string | null
+  stage: string
+  action: string
+  revision: number
+}
+export interface ActivityPage {
+  events: ActivityEvent[]
+  next_cursor: string | null
+  observed_at: string
+}
+export const getActivity = (
+  signal: AbortSignal,
+  query: string,
+  project: string,
+  cursor = '',
+) =>
+  requestJson<ActivityPage>(
+    `operations/activity/?${new URLSearchParams({ q: query, project, cursor })}`,
+    { signal },
+  )
 
 export function listTasks(signal?: AbortSignal) {
   return requestJson<Task[]>('tasks/', { signal })
@@ -129,6 +261,7 @@ export function createTask(
   routing_mode: Approach = 'frontier',
   frontier_agent: FrontierAgent | null = 'codex',
   projectId: string | null = null,
+  workType?: string,
 ) {
   return writeJson<Task>('tasks/', 'POST', {
     title: title.trim(),
@@ -137,6 +270,7 @@ export function createTask(
     frontier_agent: routing_mode === 'local_only' ? null : frontier_agent,
     project_id: projectId,
     ...(repository ? { repository } : {}),
+    ...(workType ? { work_type: workType } : {}),
   })
 }
 
@@ -158,6 +292,8 @@ export const updateTaskSettings = (
     repository?: string
     routing_mode?: Approach
     frontier_agent?: FrontierAgent | null
+    work_type?: string
+    refresh_workflow?: boolean
   },
 ) =>
   writeJson<Task>(`tasks/${task.id}/`, 'PATCH', {

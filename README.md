@@ -1,6 +1,6 @@
 # Torchbearer
 
-Torchbearer is a local kanban application that helps individual developers retain ownership of engineering decisions while coordinating coding agents.
+Torchbearer is a local operations board that helps individual developers retain ownership of engineering decisions while coordinating coding agents.
 
 The application uses React and TypeScript for its interface, Python and Django for its backend, and SQLite for persistent local storage.
 
@@ -17,13 +17,25 @@ python scripts/setup.py
 python scripts/dev.py
 ```
 
-Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Code Review, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use an unstarted backlog card's trash icon and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
+Open **http://127.0.0.1:5173**. Operations groups tasks into **Backlog**, **Active**, **Needs you**, and **Done**. Click **New Task** in the header to choose a work type, preview its assigned workflow, and create a task. Tasks remain after refresh or restart. Cancel, Escape, or the close button retains the draft. Expand an unstarted backlog card to use its delete action. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
 
-Use the left sidebar to navigate between **Kanban** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Kanban is the task board, Workflows manages default engineering workflow assignments, and Settings contains account Connections. The current page is highlighted, and each URL supports refresh and browser Back/Forward navigation.
+Use the left sidebar to navigate between **Operations** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Search and project filters update board counts and activity together. Select a started task for its **Flow**, **Conversation**, **Changes**, and evidence inspector; **Focus workspace** expands the same workspace and retains conversation drafts. The activity feed records attempts and human handoffs. Agent rows show CLI availability and queued/running task counts. Each URL supports refresh and browser Back/Forward navigation.
 
 Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations, then starts Django, the agent worker, and Vite together. After a schema change, rerun setup or apply migrations explicitly. Use `--backend-port` and `--frontend-port` with the launcher when the default ports are occupied; separate app instances also need separate data directories.
 
 Vite refreshes frontend edits automatically. Restart the launcher after editing Python code; Django's automatic reloader is disabled so the launcher can reliably manage its process tree. These commands start local development services.
+
+## Populated demo
+
+To inspect a busy board without running agents, launch `python scripts/demo.py`.
+It serves the read-only demo at **http://127.0.0.1:5174** (backend 8001), using a
+fresh temporary database with 40 fictional tasks, varied procedures, recovery states,
+and discovery artifacts. API writes and worker startup are disabled. Stopping the
+demo removes its temporary data; normal application data is separate. Override
+ports with `--frontend-port` and `--backend-port`.
+
+Run its isolated browser acceptance check with `npm run test:e2e:demo` from `frontend/`.
+It captures the actual populated board and verifies phone layouts and read-only behavior.
 
 ## Projects in New Task
 
@@ -69,13 +81,15 @@ Choose any workflow for any work type, then **Save**. **Cancel** restores the sa
 
 Overlapping practices share a workflow: documentation uses **Plan and execute** with documentation checks, API integration uses **Spec-driven development** with contract testing, and architecture and research use **Discovery and design review** with a reviewed decision. Distinct implementation practices retain their own workflows. See [engineering practices](docs/engineering-practices.md#workflow-catalogue) for the consolidation rationale.
 
-This page manages catalogue assignments. Task creation and agent execution do not use these defaults yet; the existing task stages, routing, and history continue to operate independently. Workflow definitions are built-ins; their steps are not editable through this page. Catalogue migrations add missing entries and map retired choices to their consolidated equivalents while preserving other saved assignments.
+New tasks snapshot their selected work type's assigned workflow, including its version, procedure, validation, and outputs. New Task defaults to **Small change / routine maintenance**. Before agent work starts, task settings can change the work type or explicitly **Refresh workflow** from the latest assignment. The snapshot locks when refinement or planning starts; changing a catalogue default never rewrites existing tasks. Workflow definitions remain built-ins.
+
+Code workflows record procedure evidence and actual command results within the existing approval stages. **Discovery and design review** instead produces findings, source references, alternatives, a recommendation, and limitations, followed by independent decision review and explicit human acceptance. Discovery does not edit the repository. Earlier tasks retain a frozen legacy workflow and their original reports; API clients omitting work type continue to create legacy tasks for compatibility. See the [Operations plan](docs/plans/012-operations-board.md) for the implementation sequence.
 
 ## Agent routing
 
 Choose an approach for each task in **New Task**. **Frontier** is the default, with **Codex** selected; **Claude Code** is the other frontier agent. **Hybrid** uses the selected frontier agent for detailed planning and Code Review, while **Pi** implements and tests. **Local Only** routes all three working stages to Pi using its existing model configuration; local inference setup is separate.
 
-Click an unstarted Backlog task's title to open its settings and change routing with **Save routing**, or select/add an execution repository. Cards start collapsed to their title and project on page load or reload; use each card's chevron to expand its description, routing, workflow actions, and footer. New cards also start collapsed. Unassigned tasks show **No project**. Manual expansion stays in place during automatic board updates; reloading the page collapses all cards again. The title opens settings or review in either state. Routing is locked when refinement or planning starts. Each queued attempt records its own agent. Missing installations or execution failures never substitute another agent. Backlog and Final Approval remain human-controlled, with optional refinement and post-approval retrospectives.
+Click an unstarted Backlog task's title to edit its workflow, routing, or execution repository. Cards always show their title, project, workflow, attention reason, responsible agent, and expected route. Use the chevron to expand descriptions, routing details, actions, and footer. Unassigned tasks show **No project**. Expansion survives automatic updates; reloading collapses cards. Routing locks when refinement or planning starts. Each queued attempt records its own agent. Missing installations or execution failures never substitute another agent. Optional refinement and post-approval retrospectives retain their history.
 
 Each card shows its responsible agent's logo at the far right of the title row, including while collapsed. Backlog cards show the planning agent; started cards show the recorded agent for their current stage, and Final Approval retains the reviewing agent's logo. A circular spinner appears directly left of the logo only while a run is executing. When a result awaits review, a task reaches Final Approval, or a run is blocked and needs human input, the spinner gives way to a slow gold glow around the whole card matching the selected navigation border. Queued, failed, cancelled, interrupted, and approved tasks remain still. Hovering the indicator or reading its accessible label identifies the agent and status; reduced-motion preferences replace rotation and pulsing with a steady ring or glow.
 
@@ -85,11 +99,13 @@ Install and authenticate each CLI you want to use, and configure its default mod
 2. Click **Start planning**. Torchbearer creates a branch and worktree from the repository's committed HEAD on first refinement or planning; uncommitted changes and ignored dependencies in the original checkout are not copied.
 3. Open the task to plan through a conversation with the selected agent. Answer its questions, add context, and refine the plan with **Send message** (Enter to send; Shift+Enter adds a line). Messages and replies survive refreshes. Sending a message keeps the task in Plan; **Approve plan & start Integrate** explicitly approves the latest complete plan and starts implementation. The conversation continues through Integrate, Code Review, and Final Approval, preserving earlier messages and reports as the task advances.
 4. Integrate implements the plan, writes tests, and runs validation, reporting actual command outcomes. Approve passing results to start Code Review, which inspects the complete task changes against the approved plan and test evidence. Every successful stage waits for human approval before advancing.
-5. Approve Code Review to continue to Final Approval, then choose **Give final approval**. The task remains in the final column with an Approved badge and its history. Merging and worktree cleanup remain manual.
+5. Approve Code Review to continue to Final Approval, then choose **Give final approval**. The task moves to **Done** with its accepted result and history. Merging and worktree cleanup remain manual.
 
 In Plan, each message queues a read-only reply with the full earlier planning conversation. **Stop reply** stops queued or running work; **Retry reply** retries a failed, stopped, or interrupted reply. You can prepare your next message while the agent is thinking. A failed send keeps your draft for retry. The latest complete plan contains the agreed decisions and is passed in full to implementation; a conversation exceeding the supported context limit blocks clearly instead of silently dropping earlier decisions.
 
-Every started task follows T3 Code's chat layout: a full-height scrolling conversation, compact user messages, Markdown replies, and a rounded composer anchored at the bottom. Stage labels identify each attempt and its agent; test reports, execution logs, code changes, and human decisions remain available in the thread. The composer expands with your draft and shows its target agent, with icon controls for sending and stopping replies. **Jump to latest** returns to the newest reply after scrolling back through the discussion. Approvals remain separate actions above the composer. Backlog retains its creation and settings dialogs.
+The selected task's Flow shows its procedure, responsible agents, human gates, and recorded attempts. Dashed paths describe expected work; completed procedure steps come from the agent's structured report, rather than inferred live activity. Selecting a node opens its evidence in the inspector, including historical attempts. Current approvals remain bound to the latest valid result.
+
+Conversation retains the scrolling chat, Markdown replies, and anchored composer. **Focus workspace** gives it the full-height layout. Stage labels identify each attempt and agent; reports, logs, changes, and human decisions remain available. The composer expands with the draft and identifies its target agent. **Jump to latest** returns to the newest reply. Approvals remain explicit actions in the inspector or above the focused conversation's composer.
 
 In Integrate and Code Review, choose the action in the composer: **Revise** reruns the current stage with your instructions, while **Send back** returns Integrate to Plan or Code Review to Integrate. The send icon and helper text identify the chosen action before submission. Code Review revisions retain their report-only permissions. Final Approval remains human-controlled: approve the result explicitly, or send a change request back to Integrate. Rework must pass implementation validation and Code Review again. **Stop reply** stops the running process tree or removes a queued attempt from execution. Completed tasks preserve their conversation and evidence; an optional retrospective adds read-only agent feedback without reopening implementation. Started tasks retain their history and workspace; only backlog tasks without agent history can be deleted.
 
@@ -105,7 +121,7 @@ Adapters use [Codex non-interactive JSON output](https://learn.chatgpt.com/docs/
 
 ## Engineering practices
 
-Each column applies built-in engineering practices adapted from Matt Pocock's skills. Plan defines acceptance criteria and test boundaries; Integrate implements and validates; Code Review independently checks Standards and Spec and presents the implementation's validation evidence for final approval. **Refine task** optionally starts a read-only discovery session in Backlog; answer its questions in the review dialog and start planning once it is ready. Refinement creates the task workspace, fixes the project and agent choices, and retains its history. Completed tasks offer **Run retrospective** in their history dialog; it suggests follow-up work without changing accepted code or starting more tasks. No global skill installation is required. See [engineering practices](docs/engineering-practices.md) for the stage mapping and adaptations.
+Each execution stage applies built-in engineering practices adapted from Matt Pocock's skills. Plan defines acceptance criteria and test boundaries; Integrate implements and validates; Code Review independently checks Standards and Spec and presents the implementation's validation evidence for final approval. **Refine task** optionally starts a read-only discovery session in Backlog; answer its questions in the review dialog and start planning once it is ready. Refinement creates the task workspace, fixes the project and agent choices, and retains its history. Completed tasks offer **Run retrospective** in their history dialog; it suggests follow-up work without changing accepted code or starting more tasks. No global skill installation is required. See [engineering practices](docs/engineering-practices.md) for the stage mapping and adaptations.
 
 ## Verify changes
 
@@ -142,6 +158,6 @@ Individual API tests: `.venv\Scripts\python.exe -m pytest -q` on Windows, or `.v
 - [Task routing plan](docs/plans/005-task-agent-routing.md): per-task approaches, detailed handoffs, Code Review, migration, and cleanup.
 - [PR description draft](docs/pr-001-foundation.md): behavior, scope, and local validation results.
 
-The application supports reusable saved projects, backlog tasks, per-task agent routing, isolated task worktrees, reviewed stage transitions, execution history, and final human approval. Desktop packaging, automatic merging, custom stage prompts, model selectors, and parallel execution remain future work.
+The application supports an Operations board, frozen task-specific workflows, reviewed discovery decisions, reusable projects, per-task agent routing, isolated task worktrees, retained evidence, and explicit human approval. Desktop packaging, automatic merging, custom stage prompts, model selectors, and parallel execution remain future work.
 
 GitHub Actions is configured for Windows and Linux. All work is committed locally; the user handles pushing and opening a PR after their approval. Hosted CI has not run as part of local implementation.

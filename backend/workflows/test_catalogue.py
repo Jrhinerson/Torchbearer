@@ -46,7 +46,8 @@ def test_workflows_referenced_by_types_cannot_be_deleted(catalogue):
 def test_seed_migration_preserves_existing_task_data():
     executor = MigrationExecutor(connection)
     latest = executor.loader.graph.leaf_nodes()
-    before_seed = [node for node in latest if node[0] != "workflows"]
+    before_seed = [node for node in latest if node[0] not in {"workflows", "tasks"}]
+    before_seed.append(("tasks", "0011_support_actions"))
     before_seed.append(("workflows", "0001_initial"))
     try:
         executor.migrate(before_seed)
@@ -69,7 +70,8 @@ def test_seed_migration_preserves_existing_task_data():
 def test_consolidation_migrates_defaults_and_custom_assignments_once():
     executor = MigrationExecutor(connection)
     latest = executor.loader.graph.leaf_nodes()
-    before = [node for node in latest if node[0] != "workflows"]
+    before = [node for node in latest if node[0] not in {"workflows", "tasks"}]
+    before.append(("tasks", "0011_support_actions"))
     before.append(("workflows", "0002_seed_catalogue"))
     assignments = {
         "documentation": ("test-driven", "docs-as-code", 12),

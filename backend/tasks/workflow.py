@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from projects.models import Project
 from rest_framework.exceptions import APIException, ValidationError
+from workflows.profiles import snapshot_for, workflow_snapshot
 
 from .adapters import RunnerFailure, validate_result
 from .cli import resolve_command
@@ -31,7 +32,7 @@ def validate_review(task, run, fingerprint):
         raise Conflict("Review the latest successful result before approving.")
     if run.stage == "integrate":
         try:
-            validate_result(run.result, "integrate")
+            validate_result(run.result, "integrate", workflow_snapshot(task))
         except RunnerFailure as error:
             raise Conflict(str(error)) from error
     try:
@@ -63,6 +64,14 @@ def update_settings(task_id, *, revision, **settings):
     task = Task.objects.get(pk=task_id)
     if task.completed_at or task.runs.filter(state__in=ACTIVE).exists():
         raise Conflict("Cancel or wait for active work before updating task settings.")
+    refresh_workflow = settings.pop("refresh_workflow", False)
+    if "work_type" in settings or refresh_workflow:
+        if task.status != "backlog" or task.runs.exists():
+            raise Conflict("The workflow is locked after agent work starts.")
+        work_type = settings.get("work_type", task.work_type)
+        if not work_type:
+            raise ValidationError("Choose a work type before refreshing its workflow.")
+        settings["workflow_snapshot"] = snapshot_for(work_type)
     routing = bool({"routing_mode", "frontier_agent"} & settings.keys())
     if (task.status != "backlog" or task.runs.exists()) and (
         not routing or task.routing_mode is not None or "repository" in settings
@@ -197,6 +206,10 @@ def act(task_id, *, action, revision, run_id=None, fingerprint="", feedback=""):
             task=task,
             sequence=(run.sequence + 1 if run else 1),
             stage=execution_stage,
+            input_context={
+                "workflow": workflow_snapshot(task),
+                "result_contract": workflow_snapshot(task).get("result_contract", 1),
+            },
             agent=agent,
             feedback=feedback,
             input_fingerprint=baseline,

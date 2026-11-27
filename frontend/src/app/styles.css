@@ -3,6 +3,7 @@
 @import './styles/base.css';
 @import './styles/components.css';
 @import '../features/workflows/workflows.css';
+@import '../features/tasks/operations.css';
 
 .app-shell {
   display: flex;

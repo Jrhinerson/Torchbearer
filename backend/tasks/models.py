@@ -25,6 +25,10 @@ class Task(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True, max_length=10000)
+    work_type = models.ForeignKey(
+        "workflows.WorkType", null=True, blank=True, on_delete=models.PROTECT
+    )
+    workflow_snapshot = models.JSONField(default=dict)
     repository = models.ForeignKey(Repository, null=True, blank=True, on_delete=models.PROTECT)
     routing_mode = models.CharField(
         max_length=20, choices=Approach.choices, default=Approach.FRONTIER, null=True

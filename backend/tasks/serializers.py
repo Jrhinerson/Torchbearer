@@ -1,6 +1,9 @@
+from django.db import transaction
 from projects.models import Project
 from projects.serializers import ProjectSerializer
 from rest_framework import serializers
+from workflows.models import WorkType
+from workflows.profiles import LEGACY_SNAPSHOT, snapshot_for, workflow_snapshot
 
 from .git import repository_path
 from .models import AgentRun, Decision, Repository, Task
@@ -69,6 +72,11 @@ class RepositorySerializer(serializers.ModelSerializer):
 
 
 class TaskSerializer(serializers.ModelSerializer):
+    workflow_snapshot = serializers.SerializerMethodField()
+
+    def get_workflow_snapshot(self, obj):
+        return workflow_snapshot(obj)
+
     project = ProjectSerializer(read_only=True)
     project_id = serializers.PrimaryKeyRelatedField(
         source="project",
@@ -90,6 +98,24 @@ class TaskSerializer(serializers.ModelSerializer):
         return {stage: agent_for(obj, stage) for stage in [*Stage, *SupportStage]}
 
     def get_latest_run(self, obj):
+        if hasattr(obj, "operation_runs"):
+            run = next(iter(obj.operation_runs), None)
+            return (
+                {
+                    field: getattr(run, field)
+                    for field in (
+                        "id",
+                        "stage",
+                        "agent",
+                        "state",
+                        "sequence",
+                        "error",
+                        "cancel_requested",
+                    )
+                }
+                if run
+                else None
+            )
         return obj.runs.values(
             "id", "stage", "agent", "state", "sequence", "error", "cancel_requested"
         ).first()
@@ -100,6 +126,8 @@ class TaskSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "description",
+            "work_type",
+            "workflow_snapshot",
             "project",
             "project_id",
             "repository",
@@ -118,6 +146,7 @@ class TaskSerializer(serializers.ModelSerializer):
             "base_commit",
         ]
         read_only_fields = [
+            "workflow_snapshot",
             "id",
             "status",
             "revision",
@@ -128,7 +157,22 @@ class TaskSerializer(serializers.ModelSerializer):
             "branch",
             "base_commit",
         ]
-        extra_kwargs = {"frontier_agent": {"required": False}}
+        extra_kwargs = {
+            "frontier_agent": {"required": False},
+            "work_type": {"required": False, "allow_null": False},
+        }
+
+    @transaction.atomic
+    def create(self, validated_data):
+        from copy import deepcopy
+
+        work_type = validated_data.get("work_type")
+        validated_data["workflow_snapshot"] = deepcopy(LEGACY_SNAPSHOT)
+        task = super().create(validated_data)
+        if work_type:
+            task.workflow_snapshot = snapshot_for(work_type)
+            task.save(update_fields=["workflow_snapshot"])
+        return task
 
     def validate(self, data):
         mode = data.get("routing_mode", Approach.FRONTIER)
@@ -177,6 +221,7 @@ class TaskSerializer(serializers.ModelSerializer):
                 "base_commit",
                 "stage_agents",
                 "next_stage",
+                "workflow_snapshot",
             }
             & data.keys()
         ):
@@ -188,6 +233,10 @@ class TaskSerializer(serializers.ModelSerializer):
 
 class TaskSettingsSerializer(serializers.Serializer):
     revision = serializers.IntegerField(min_value=0)
+    work_type = serializers.PrimaryKeyRelatedField(
+        queryset=WorkType.objects.select_related("assigned_workflow"), required=False
+    )
+    refresh_workflow = serializers.BooleanField(required=False)
     repository = serializers.PrimaryKeyRelatedField(
         queryset=Repository.objects.all(), required=False, allow_null=True
     )

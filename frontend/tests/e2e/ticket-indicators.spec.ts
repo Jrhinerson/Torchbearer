@@ -1,3 +1,4 @@
+import { operationsFixture } from './fixtures/operations'
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 import type {
@@ -35,6 +36,17 @@ function task(title: string, overrides: Partial<Task> = {}): Task {
     id: title.replace(/\W/g, '-'),
     title,
     description: 'Details remain available when expanded.',
+    work_type: null,
+    workflow_snapshot: {
+      schema_version: 1,
+      key: 'legacy-standard',
+      name: 'Legacy engineering workflow',
+      definition_version: 1,
+      execution_mode: 'legacy',
+      result_contract: 1,
+      steps: [],
+      stage_labels: {},
+    },
     project: null,
     repository: null,
     routing_mode: 'hybrid',
@@ -60,8 +72,8 @@ function task(title: string, overrides: Partial<Task> = {}): Task {
 
 async function seedBoard(page: Page, initialTasks: Task[]) {
   let tasks = initialTasks
-  await page.route('**/api/v1/tasks/', (route) =>
-    route.fulfill({ json: tasks }),
+  await page.route('**/api/v1/operations/?**', (route) =>
+    route.fulfill({ json: operationsFixture(tasks) }),
   )
   await page.route('**/api/v1/routing/', (route) =>
     route.fulfill({ json: routing }),
@@ -185,7 +197,7 @@ test('switches between queued, running, human input, and completed without reloa
 
   async function refresh(updated: Task) {
     update([updated])
-    const response = page.waitForResponse('**/api/v1/tasks/')
+    const response = page.waitForResponse('**/api/v1/operations/?**')
     await page.clock.runFor(2100)
     await response
   }
@@ -319,6 +331,22 @@ for (const theme of ['dark', 'light'] as const) {
               .getBoundingClientRect()
             return {
               fits: element.scrollWidth <= element.clientWidth,
+              heading: getComputedStyle(
+                element.querySelector('.task-card-heading')!,
+              ).gridTemplateColumns,
+              sizes: [...element.children].map((child) => ({
+                class: child.className,
+                width: child.clientWidth,
+                scroll: child.scrollWidth,
+                right: child.getBoundingClientRect().right,
+              })),
+              overflow: [...element.querySelectorAll('*')]
+                .filter(
+                  (child) =>
+                    child.getBoundingClientRect().right >
+                    element.getBoundingClientRect().right,
+                )
+                .map((child) => child.className),
               titleRight: title.getBoundingClientRect().right,
               firstLineCenter: firstLine.top + firstLine.height / 2,
               logoCenter: logo.top + logo.height / 2,
@@ -330,7 +358,7 @@ for (const theme of ['dark', 'light'] as const) {
               controlHeight: control.height,
             }
           })
-          expect(layout.fits).toBe(true)
+          expect(layout.fits, JSON.stringify(layout)).toBe(true)
           expect(layout.titleRight).toBeLessThanOrEqual(layout.logoLeft)
           expect(layout.spinnerRight).toBeLessThan(layout.logoLeft)
           expect(layout.logoLeft - layout.spinnerRight).toBeLessThanOrEqual(8)
@@ -360,7 +388,7 @@ for (const theme of ['dark', 'light'] as const) {
       const shadow = (await pulseStyle(cardFor(page, long.title))).shadow
       expect(shadow).not.toBe('none')
       const navigationGold = await page
-        .getByRole('link', { name: 'Kanban', exact: true })
+        .getByRole('link', { name: 'Operations', exact: true })
         .evaluate((element) => getComputedStyle(element).borderTopColor)
       expect(shadow).toContain(navigationGold)
       // Preserve a repeatable frame for visual review without fading the text.
