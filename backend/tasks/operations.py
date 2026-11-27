@@ -71,7 +71,16 @@ def owner_for(task, stage):
 def projection(task, worker):
     snapshot = workflow_snapshot(task)
     run = latest_run(task)
-    agent = run.agent if run else owner_for(task, "plan")
+    applicable = run and (
+        run.stage == task.status
+        or (task.status == "backlog" and run.stage == "refine")
+        or task.status == "final_approval"
+    )
+    agent = (
+        run.agent
+        if applicable
+        else owner_for(task, task.status if task.status in Stage.values else "plan")
+    )
     state = run.state if run else "ready"
     if task.completed_at:
         group, reason = "done", "Approved"
@@ -79,7 +88,7 @@ def projection(task, worker):
         group = "active"
         reason = "Stopping" if run.cancel_requested else state.title()
         if not worker["available"]:
-            reason += " Â· worker offline"
+            reason += " · worker offline"
     elif task.routing_mode is None:
         group, reason = "needs_you", "Choose routing"
     elif task.status == "final_approval":
@@ -317,6 +326,16 @@ def flow(task):
     )
     for source, target in zip(nodes, nodes[1:], strict=False):
         edges.append({"source": source["id"], "target": target["id"], "kind": "forward"})
+    work_nodes = [node for node in nodes if node.get("stage", node["id"]) == "integrate"]
+    review_nodes = [node for node in nodes if node.get("stage", node["id"]) == "code_review"]
+    if work_nodes and review_nodes:
+        edges.append(
+            {
+                "source": review_nodes[-1]["id"],
+                "target": work_nodes[0]["id"],
+                "kind": "possible_rework",
+            }
+        )
     for decision in decisions:
         if decision.action == "send_back":
             edges.append(

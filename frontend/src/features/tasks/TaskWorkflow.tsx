@@ -19,7 +19,7 @@ import type {
 import { RepositoryPicker } from './RepositoryPicker'
 import { TaskRoutingEditor } from './TaskRouting'
 import { WorkflowConversation } from './WorkflowConversation'
-import { stageLabels } from './workflowLabels'
+import { taskStageLabel } from './workflowLabels'
 import { TaskFlow } from './TaskFlow'
 import { DecisionInspector } from './DecisionInspector'
 import { TaskWorkflowEditor } from './WorkflowChoice'
@@ -295,6 +295,7 @@ export function WorkflowDialog({
   onInspectRun?: (id: string | null) => void
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
+  const suppressedCloseEvents = useRef(0)
   const closeButton = useRef<HTMLButtonElement>(null)
   const [history, setHistory] = useState<TaskFlowData | null>(null)
   const [workspace, setWorkspace] = useState<WorkspaceChanges | null>(null)
@@ -353,11 +354,14 @@ export function WorkflowDialog({
   useEffect(() => {
     const element = dialog.current
     if (!element) return
-    element.open = false
+    if (element.open) {
+      suppressedCloseEvents.current++
+      element.close()
+    }
     if (!embedded || focused) {
       element.showModal()
       closeButton.current?.focus()
-    } else element.open = true
+    } else element.show()
   }, [embedded, focused])
 
   useEffect(() => {
@@ -449,11 +453,10 @@ export function WorkflowDialog({
       className={`surface surface-overlay task-dialog workflow-dialog planning-dialog ${embedded && !focused ? 'embedded-workspace' : ''}`}
       aria-labelledby="workflow-heading"
       onCancel={(event) => {
-        if (busy || (embedded && focused)) event.preventDefault()
-        if (embedded && focused && !busy) setFocused(false)
+        if (busy) event.preventDefault()
       }}
       onClose={() => {
-        if (embedded && focused) setFocused(false)
+        if (suppressedCloseEvents.current) suppressedCloseEvents.current--
         else onClose()
       }}
     >
@@ -462,7 +465,7 @@ export function WorkflowDialog({
           <p className="planning-context">
             <span>{task.project?.name || 'Task'}</span>
             <span aria-hidden="true">/</span>
-            <span>{stageLabels[task.status]}</span>
+            <span>{taskStageLabel(task, task.status)}</span>
           </p>
           <h2 id="workflow-heading">{task.title}</h2>
           <p className="workflow-hint">
@@ -476,9 +479,7 @@ export function WorkflowDialog({
           className="button button-quiet button-icon close-dialog-button"
           aria-label="Close task review"
           disabled={busy}
-          onClick={() =>
-            embedded && focused ? setFocused(false) : dialog.current?.close()
-          }
+          onClick={() => dialog.current?.close()}
         >
           ×
         </button>
@@ -562,7 +563,9 @@ export function WorkflowDialog({
                 <p>
                   {active
                     ? 'Changes are available after the current attempt finishes.'
-                    : 'Loading code changes?'}
+                    : task.workspace_path
+                      ? 'Loading code changes…'
+                      : 'No task workspace is available.'}
                 </p>
               )}
             </div>
@@ -581,7 +584,7 @@ export function WorkflowDialog({
                   ':' +
                   (task.latest_run?.stage === 'retro' ? 'retro' : 'workflow')
                 }
-                showApproval={!embedded}
+                showApproval={!embedded || focused}
                 task={task}
                 history={history}
                 run={run}
@@ -600,7 +603,7 @@ export function WorkflowDialog({
                       : 'Checking the workspace before approval…'
                     : missingAgent
                       ? 'The agent for ' +
-                        stageLabels[next!] +
+                        taskStageLabel(task, next!) +
                         ' must be configured and installed before continuing.'
                       : '')
                 }

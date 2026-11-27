@@ -153,6 +153,10 @@ export default function Board() {
         ])
         if (!controller.signal.aborted && version === mutation.current) {
           setTasks(updated.tasks)
+          setSelectedFallback(
+            (current) =>
+              updated.tasks.find((task) => task.id === current?.id) ?? current,
+          )
           setOverview(updated)
           publishSummary?.(updated)
           setProjectOptions((current) => {
@@ -305,7 +309,7 @@ export default function Board() {
           </select>
           <button
             type="button"
-            className="button button-secondary new-task-button"
+            className="button button-primary new-task-button"
             aria-busy={loading}
             ref={newTaskButton}
             onClick={openComposer}
@@ -425,11 +429,11 @@ export default function Board() {
                           <article
                             className="surface surface-raised task-card"
                             data-activity={
-                              task.operations?.running
-                                ? 'running'
-                                : task.operations?.group === 'needs_you'
-                                  ? 'awaiting-input'
+                              taskCardStatus(task).activity === 'running'
+                                ? task.operations?.running
+                                  ? 'running'
                                   : 'idle'
+                                : taskCardStatus(task).activity
                             }
                             aria-label={task.title}
                             data-selected={selectedId === task.id}
@@ -492,6 +496,9 @@ export default function Board() {
                               className="task-operation-state"
                               data-group={task.operations?.group}
                             >
+                              {task.operations?.stage_label && (
+                                <span>{task.operations.stage_label} · </span>
+                              )}
                               {task.operations?.reason ??
                                 taskCardStatus(task).label}
                             </p>

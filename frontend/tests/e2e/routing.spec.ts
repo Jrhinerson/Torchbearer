@@ -40,7 +40,14 @@ async function start(page: Page, card: Locator, title: string) {
     .getByRole('button', { name: 'Start planning', exact: true })
     .click()
   await card.getByRole('button', { name: /View run|Review step/ }).click()
-  return page.getByRole('dialog', { name: title, exact: true })
+  const workspace = page.getByRole('dialog', { name: title, exact: true })
+  await workspace
+    .getByRole('tab', { name: 'Conversation', exact: true })
+    .click()
+  await workspace
+    .getByRole('button', { name: 'Focus workspace', exact: true })
+    .click()
+  return workspace
 }
 
 async function advance(review: Locator, name: string) {
@@ -202,10 +209,11 @@ for (const policy of [
     ]
     for (let index = 0; index < stages.length; index++) {
       await expect(
-        review.getByText(
-          `${stages[index]} completed by ${policy.agents[index]}`,
-          { exact: true },
-        ),
+        review
+          .locator('.planning-conversation')
+          .getByText(`${stages[index]} completed by ${policy.agents[index]}`, {
+            exact: true,
+          }),
       ).toBeVisible({ timeout: 20000 })
       await expect(card.getByLabel('Approach')).toHaveCount(0)
       await advance(review, buttons[index])
@@ -217,7 +225,9 @@ for (const policy of [
       review.getByRole('region', { name: 'Implementation validation' }),
     ).toContainText('python -m pytest')
     await advance(review, 'Give final approval')
-    await expect(review.getByText(/^Approved/)).toBeVisible()
+    await expect(
+      review.locator('.planning-conversation').getByText(/^Approved/),
+    ).toBeVisible()
     if (policy.mode === 'hybrid') {
       const tasks = await page.request
         .get('/api/v1/tasks/')
@@ -230,15 +240,21 @@ for (const policy of [
         .getByRole('button', { name: 'Run retrospective', exact: true })
         .click()
       await expect(
-        review.getByText('Retro completed by claude', { exact: true }),
+        review
+          .locator('.planning-conversation')
+          .getByText('Retro completed by claude', { exact: true }),
       ).toBeVisible({ timeout: 20000 })
       await expect(
-        review.getByText(
-          'Suggested follow-up: add an automated regression check.',
-          { exact: true },
-        ),
+        review
+          .locator('.planning-conversation')
+          .getByText(
+            'Suggested follow-up: add an automated regression check.',
+            { exact: true },
+          ),
       ).toBeVisible()
-      await expect(review.getByText(/^Approved/)).toBeVisible()
+      await expect(
+        review.locator('.planning-conversation').getByText(/^Approved/),
+      ).toBeVisible()
       await expect(
         review.getByRole('button', { name: 'Give final approval' }),
       ).toHaveCount(0)
@@ -254,6 +270,10 @@ for (const policy of [
       .click()
     await expect(card).toContainText('Approved')
     await card.getByRole('button', { name: 'View history' }).click()
+    await review.getByRole('tab', { name: 'Conversation', exact: true }).click()
+    await review
+      .getByRole('button', { name: 'Focus workspace', exact: true })
+      .click()
     await expect(review.locator('.workflow-run')).toHaveCount(
       policy.mode === 'hybrid' ? 4 : 3,
     )
@@ -274,12 +294,18 @@ test('refines a Backlog task through questions and carries the answers into Plan
     .click()
   await card.getByRole('button', { name: 'Refine task', exact: true }).click()
   const review = page.getByRole('dialog', { name: title, exact: true })
+  await review.getByRole('tab', { name: 'Conversation', exact: true }).click()
+  await review
+    .getByRole('button', { name: 'Focus workspace', exact: true })
+    .click()
   await expect(
-    review.getByText('Clarify task scope', { exact: true }),
+    review
+      .locator('.planning-conversation')
+      .getByText('Clarify task scope', { exact: true }),
   ).toBeVisible({ timeout: 20000 })
   await expect(
     page
-      .getByRole('region', { name: 'Backlog', exact: true })
+      .getByRole('region', { name: 'Needs you', exact: true })
       .getByRole('article', { name: title }),
   ).toBeVisible()
   await expect(card.getByLabel('Approach', { exact: true })).toHaveCount(0)
@@ -291,11 +317,15 @@ test('refines a Backlog task through questions and carries the answers into Plan
     .getByRole('button', { name: 'Send answers', exact: true })
     .click()
   await expect(
-    review.getByText('Refine completed by codex', { exact: true }),
+    review
+      .locator('.planning-conversation')
+      .getByText('Refine completed by codex', { exact: true }),
   ).toBeVisible({ timeout: 20000 })
   await advance(review, 'Start planning')
   await expect(
-    review.getByText('Plan completed by codex', { exact: true }),
+    review
+      .locator('.planning-conversation')
+      .getByText('Plan completed by codex', { exact: true }),
   ).toBeVisible({ timeout: 20000 })
   const tasks = await page.request
     .get('/api/v1/tasks/')
@@ -338,9 +368,15 @@ test('requires one routing choice before continuing an existing started task', a
   )
   await review.getByRole('button', { name: 'Save routing' }).click()
   await expect(review.getByLabel('Approach')).toHaveCount(0)
+  await review.getByRole('tab', { name: 'Conversation', exact: true }).click()
+  await review
+    .getByRole('button', { name: 'Focus workspace', exact: true })
+    .click()
   await advance(review, 'Retry reply')
   await expect(
-    review.getByText('Plan completed by pi', { exact: true }),
+    review
+      .locator('.planning-conversation')
+      .getByText('Plan completed by pi', { exact: true }),
   ).toBeVisible({ timeout: 20000 })
   await expect(review.getByLabel('Run history')).toHaveCount(0)
   await expect(
@@ -383,7 +419,9 @@ for (const failure of ['validation', 'review']) {
       await advance(review, 'Approve implementation & start Code Review')
       await advance(review, 'Approve code review & continue')
       await advance(review, 'Give final approval')
-      await expect(review.getByText(/^Approved/)).toBeVisible()
+      await expect(
+        review.locator('.planning-conversation').getByText(/^Approved/),
+      ).toBeVisible()
       await expect(review.locator('.workflow-run')).toHaveCount(5)
     }
   })
@@ -399,11 +437,13 @@ test('cancels a running process and preserves its history', async ({
     timeout: 20000,
   })
   await review.getByRole('button', { name: 'Stop reply', exact: true }).click()
-  await expect(review.getByText('Reply stopped.', { exact: true })).toBeVisible(
-    {
-      timeout: 10000,
-    },
-  )
+  await expect(
+    review
+      .locator('.planning-conversation')
+      .getByText('Reply stopped.', { exact: true }),
+  ).toBeVisible({
+    timeout: 10000,
+  })
   await expect(
     review.getByRole('button', { name: 'Retry reply' }),
   ).toBeEnabled()
@@ -426,7 +466,11 @@ test('prevents approval after the reviewed code changes', async ({ page }) => {
     'Changed after review\n',
   )
   await expect(approve).toBeDisabled({ timeout: 10000 })
-  await expect(review.getByText(/made this result stale/)).toBeVisible()
+  await expect(
+    review
+      .locator('.planning-conversation')
+      .getByText(/made this result stale/),
+  ).toBeVisible()
 })
 
 test('revises working stages in the conversation and requests changes from final approval', async ({
@@ -494,7 +538,7 @@ test('revises working stages in the conversation and requests changes from final
     ).toContainText(message)
     await expect(
       page
-        .locator(`.workflow-column[data-stage="${stage.id}"]`)
+        .locator('.workflow-column[data-stage="needs_you"]')
         .getByRole('article', { name: title, exact: true }),
     ).toBeVisible()
     await advance(review, stage.approve)
@@ -521,6 +565,10 @@ test('revises working stages in the conversation and requests changes from final
   await review.getByRole('button', { name: 'Close task review' }).click()
   await page.reload()
   await card.getByRole('button', { name: `Open ${title}`, exact: true }).click()
+  await review.getByRole('tab', { name: 'Conversation', exact: true }).click()
+  await review
+    .getByRole('button', { name: 'Focus workspace', exact: true })
+    .click()
   await expect(review.locator('.workflow-run')).toHaveCount(6)
   await expect(
     review.getByRole('list', { name: 'Task conversation' }),
@@ -620,7 +668,7 @@ for (const width of [1280, 390]) {
       thread().locator('.planning-message-agent').last(),
     ).toContainText(firstMessage)
     await expect(
-      page.locator('.workflow-column[data-stage="plan"]'),
+      page.locator('.workflow-column[data-stage="needs_you"]'),
     ).toContainText(title)
 
     await page.reload()
@@ -629,6 +677,10 @@ for (const width of [1280, 390]) {
       .getByRole('button', { name: `Open ${title}`, exact: true })
       .click()
     review = page.getByRole('dialog', { name: title, exact: true })
+    await review.getByRole('tab', { name: 'Conversation', exact: true }).click()
+    await review
+      .getByRole('button', { name: 'Focus workspace', exact: true })
+      .click()
     await expect(thread().locator('.planning-message-user')).toHaveCount(2)
     await expect(thread()).toContainText(firstMessage)
     await message().fill('Also offer a clear filter button.')
@@ -647,7 +699,9 @@ for (const width of [1280, 390]) {
     expect(overflow).toBe(false)
     await advance(review, 'Approve plan & start Integrate')
     await expect(
-      review.getByText('Integrate completed by pi', { exact: true }),
+      review
+        .locator('.planning-conversation')
+        .getByText('Integrate completed by pi', { exact: true }),
     ).toBeVisible({ timeout: 20000 })
     // The conversation continues into Integrate with every planning turn intact.
     await expect(review.locator('.workflow-run')).toHaveCount(4)

@@ -5,7 +5,10 @@ test('navigates between application pages with browser history', async ({
 }) => {
   await page.goto('/')
   const navigation = page.getByRole('navigation', { name: 'Main navigation' })
-  const kanban = navigation.getByRole('link', { name: 'Kanban', exact: true })
+  const kanban = navigation.getByRole('link', {
+    name: 'Operations',
+    exact: true,
+  })
   const workflows = navigation.getByRole('link', {
     name: 'Workflows',
     exact: true,
@@ -15,13 +18,13 @@ test('navigates between application pages with browser history', async ({
     exact: true,
   })
   await expect(navigation.getByRole('link')).toHaveText([
-    'Kanban',
+    'Operations',
     'Workflows',
     'Settings',
   ])
   await expect(kanban).toHaveAttribute('aria-current', 'page')
   await expect(
-    page.getByRole('region', { name: 'Kanban columns' }),
+    page.getByRole('region', { name: 'Operations columns' }),
   ).toBeVisible()
 
   await workflows.click()
@@ -33,7 +36,7 @@ test('navigates between application pages with browser history', async ({
   await expect(workflows).toHaveAttribute('aria-current', 'page')
   await expect(kanban).not.toHaveAttribute('aria-current')
   await expect(
-    page.getByRole('region', { name: 'Kanban columns' }),
+    page.getByRole('region', { name: 'Operations columns' }),
   ).toHaveCount(0)
   await expect(
     page.getByRole('main', { name: 'Workflows', exact: true }),
@@ -93,7 +96,7 @@ for (const label of ['Workflows', 'Settings']) {
   })
 }
 
-test('keeps left navigation visible and keyboard accessible at 320px', async ({
+test('keeps navigation above the board and keyboard accessible at 320px', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 320, height: 640 })
@@ -107,7 +110,7 @@ test('keeps left navigation visible and keyboard accessible at 320px', async ({
   }
   const navBounds = (await navigation.boundingBox())!
   const mainBounds = (await page.getByRole('main').boundingBox())!
-  expect(navBounds.x + navBounds.width).toBeLessThanOrEqual(mainBounds.x)
+  expect(navBounds.y + navBounds.height).toBeLessThanOrEqual(mainBounds.y)
 
   const workflows = navigation.getByRole('link', {
     name: 'Workflows',

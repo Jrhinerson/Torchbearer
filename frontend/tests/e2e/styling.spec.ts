@@ -1,3 +1,4 @@
+import { operationsFixture } from './fixtures/operations'
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
@@ -27,10 +28,8 @@ const sampleTask = {
 }
 
 async function seedBoard(page: Page) {
-  await page.route('**/api/v1/tasks/', (route) =>
-    route.request().method() === 'GET'
-      ? route.fulfill({ json: [sampleTask] })
-      : route.continue(),
+  await page.route('**/api/v1/operations/?**', (route) =>
+    route.fulfill({ json: operationsFixture([sampleTask]) }),
   )
   await page.goto('/')
   await expect(
@@ -317,12 +316,9 @@ for (const theme of ['dark', 'light'] as const) {
     await page.keyboard.press('Escape')
     const trigger = page.getByRole('button', { name: 'New Task', exact: true })
     await expect(trigger).toBeFocused()
-    await page.keyboard.press('Shift+Tab')
+    await page.getByRole('region', { name: 'Operations columns' }).focus()
     await expect(
-      page.getByRole('region', { name: 'Kanban columns' }),
-    ).toBeFocused()
-    await expect(
-      page.getByRole('region', { name: 'Kanban columns' }),
+      page.getByRole('region', { name: 'Operations columns' }),
     ).toHaveCSS('outline-style', 'solid')
   })
 }

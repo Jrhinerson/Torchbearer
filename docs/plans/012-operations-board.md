@@ -1,6 +1,6 @@
 # Operations board implementation plan
 
-Status: Proposed. Base: `a2e9f18`.
+Status: Implemented and locally verified. Base: `a2e9f18`.
 
 Replace the five-column Kanban view with the approved Operations concept: a compact
 task board, task-specific route previews, an expanded selected-task flow, and an
@@ -375,3 +375,37 @@ and narrow-screen layouts against the approved concept, and record real check
 results before the final local commit. A future release can add live internal-step
 events or parallel execution once those capabilities have a supported runtime
 contract.
+
+## Implementation record
+
+The nine ordered commits implement the Operations overview, selected task flow and
+evidence inspector, frozen workflow profiles, structured procedure evidence,
+decision-only discovery, task workflow selection, and recorded activity. Existing
+conversations, human approval boundaries, support actions, and legacy history are
+retained. Phone navigation moves above Operations content to keep task text usable.
+
+The UI explicitly defaults new tasks to maintenance. For compatibility, API clients
+that omit `work_type` continue to create legacy tasks. Changing a catalogue default
+does not change existing task snapshots. Execution remains sequential, and internal
+procedure progress comes from recorded result reports rather than simulated live
+events. The flow distinguishes planned paths from recorded completion and rework.
+
+Local verification on Windows, 2026-11-27:
+
+- This worktree completed `python scripts/setup.py` with its own `.venv` and migrations.
+- `python scripts/check.py` passed: **299 backend tests**, Ruff, Django checks,
+  migration consistency, frontend formatting/linting, TypeScript, and production build.
+- `python scripts/check_persistence.py` passed with disposable data and fake CLIs,
+  preserving task snapshots, procedure reports, accepted decision artifacts,
+  human decisions, projects, and catalogue assignments across a real server restart.
+- Chromium exercised **93 scenarios**. The complete run passed 92; its old left-side
+  phone-navigation assertion was updated for the new top navigation. The final
+  rerun of all **39 affected board, navigation, Operations, conversation layout,
+  and indicator cases passed**, including that correction, delayed selection
+  responses, failed refresh recovery, and drafts retained while filtering.
+- Final frontend formatting, linting, and production build passed after the selection
+  fix. Desktop and phone screenshots were inspected; browser coverage includes
+  320px layouts, 200% text, keyboard controls, both themes, and reduced motion.
+
+All commits are local. No remote publication or authenticated agent execution was
+used for verification.

@@ -87,13 +87,18 @@ def validate_workflow_report(result, stage, workflow):
             raise ValueError("Unknown, duplicate, or wrong-stage workflow step.")
         reported.add(key)
         outcome = report["outcome"]
-        if outcome not in {
-            "complete",
-            "blocked",
-            "failed",
-            "not_run",
-            "not_applicable",
-        } or not bounded_text(report["summary"], 4000):
+        if (
+            not isinstance(outcome, str)
+            or outcome
+            not in {
+                "complete",
+                "blocked",
+                "failed",
+                "not_run",
+                "not_applicable",
+            }
+            or not bounded_text(report["summary"], 4000)
+        ):
             raise ValueError("Invalid workflow step outcome or explanation.")
         if outcome == "not_applicable" and not steps[key]["conditional"]:
             raise ValueError("A required workflow step cannot be marked not applicable.")

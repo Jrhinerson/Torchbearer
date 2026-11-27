@@ -103,7 +103,10 @@ export default function App() {
             Torchbearer
           </a>
         </header>
-        <div className="app-layout">
+        <div
+          className="app-layout"
+          data-page={page?.href === '/' ? 'operations' : undefined}
+        >
           <aside className="app-sidebar">
             <nav className="app-nav" aria-label="Main navigation">
               {pages.map((item) => (

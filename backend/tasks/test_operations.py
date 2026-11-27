@@ -50,7 +50,7 @@ def test_counts_filters_and_query_count(django_assert_num_queries):
         task = Task.objects.create(title=f"Task {index}")
         AgentRun.objects.create(task=task, stage="plan", agent="pi", state="failed", sequence=1)
     client = APIClient()
-    with django_assert_num_queries(3):
+    with django_assert_num_queries(5):
         data = client.get("/api/v1/operations/?q=Task%201&project=none").json()
     assert len(data["tasks"]) == 3
     assert data["counts"]["needs_you"] == 3
@@ -71,6 +71,13 @@ def test_only_recorded_worker_run_is_running():
     data = client.get("/api/v1/operations/").json()
     assert data["tasks"][0]["operations"]["running"]
     assert next(agent for agent in data["agents"] if agent["id"] == "codex")["running"] == 1
+
+
+def test_handoff_identifies_receiving_agent_instead_of_previous_author():
+    task = Task.objects.create(title="Hand off to Pi", status="integrate", routing_mode="hybrid")
+    AgentRun.objects.create(task=task, stage="plan", agent="codex", state="succeeded", sequence=1)
+    data = APIClient().get("/api/v1/operations/").json()
+    assert data["tasks"][0]["operations"]["agent"] == "pi"
 
 
 def test_flow_does_not_reuse_old_review_after_revision():

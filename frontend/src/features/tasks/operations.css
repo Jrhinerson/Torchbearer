@@ -45,10 +45,7 @@
   background: var(--color-primary);
   color: var(--color-primary-text);
 }
-.operations-board .task-card[data-activity='awaiting-input']::after {
-  box-shadow: none;
-  animation: none;
-}
+
 .task-mini-route li > span:last-child {
   max-width: 100%;
   overflow: hidden;
@@ -158,6 +155,29 @@
 .task-card[data-selected='true'] {
   border-color: var(--color-primary);
 }
+.operations-board .task-collapse-button {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 8px;
+}
+.operations-board .task-collapse-button svg {
+  width: 16px;
+  height: 16px;
+}
+.operations-board .task-agent {
+  gap: 4px;
+}
+.operations-board .task-agent-logo,
+.operations-board .task-agent-unassigned {
+  width: 24px;
+  height: 24px;
+}
+.operations-board .task-agent-spinner {
+  width: 16px;
+  height: 16px;
+}
 .workflow-dialog.embedded-workspace {
   position: relative;
   inset: auto;
@@ -266,20 +286,14 @@
   list-style: none;
 }
 .flow-node {
-  flex: 1 1 6rem;
+  flex: 1 1 8rem;
   min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-control);
   background: var(--color-surface);
   position: relative;
 }
-.flow-node + .flow-node::before {
-  content: '→';
-  color: var(--color-text-muted);
-  position: absolute;
-  left: calc(-1 * var(--space-3));
-  top: 40%;
-}
+
 .flow-node > button {
   display: flex;
   flex-direction: column;
@@ -365,6 +379,26 @@
   }
 }
 @media (max-width: 520px) {
+  .app-layout[data-page='operations'] {
+    flex-direction: column;
+  }
+  .app-layout[data-page='operations'] .app-sidebar {
+    flex: none;
+    max-width: none;
+    width: 100%;
+    padding: 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .app-layout[data-page='operations'] .app-nav {
+    position: static;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  main[aria-label='Operations'],
+  .operations-board .workflow-column,
+  .operations-board .task-card {
+    padding: 12px;
+  }
   .kanban-board.operations-board {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -427,5 +461,64 @@
   }
   .activity-feed time {
     grid-column: 2;
+  }
+}
+
+.workflow-dialog:not(.embedded-workspace) .selected-task-layout {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  flex: 1;
+  min-height: 0;
+}
+.workflow-dialog:not(.embedded-workspace) .selected-task-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  padding: 0;
+}
+.workflow-dialog:not(.embedded-workspace)
+  .selected-task-content
+  > div:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.workflow-dialog:not(.embedded-workspace)
+  .selected-task-content
+  .planning-conversation {
+  height: auto;
+  min-height: 0;
+}
+.workflow-dialog:not(.embedded-workspace) .decision-inspector {
+  display: none;
+}
+.selected-task-content [hidden] {
+  display: none !important;
+}
+
+.flow-map {
+  position: relative;
+  padding-block: var(--space-3) var(--space-8);
+}
+.flow-map .flow-nodes {
+  margin: 0;
+  position: relative;
+  z-index: 1;
+}
+.flow-connectors {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--color-text-muted);
+  overflow: visible;
+  pointer-events: none;
+}
+@media (max-width: 520px) {
+  .flow-connectors {
+    display: none;
   }
 }

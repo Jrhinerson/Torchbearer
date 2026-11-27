@@ -150,6 +150,8 @@ def validate_profile(profile):
         raise ValidationError("Unsupported workflow schema version.")
     if profile.get("execution_mode") not in SUPPORTED_MODES or profile.get("result_contract") != 2:
         raise ValidationError("This workflow execution version is not supported.")
+    if profile.get("definition_version", 1) != 1:
+        raise ValidationError("Unsupported workflow definition version.")
     steps = profile.get("steps")
     if not isinstance(steps, list) or not steps or len(steps) > 40:
         raise ValidationError("The workflow needs a bounded set of steps.")
@@ -168,12 +170,25 @@ def validate_profile(profile):
         ):
             raise ValidationError("The workflow contains an invalid or duplicate step.")
         ids.add(step["id"])
+    if {step["stage"] for step in steps} != {"plan", "integrate", "code_review"}:
+        raise ValidationError("A workflow must cover planning, execution, and review.")
+    labels = profile.get("stage_labels", {})
+    if not isinstance(labels, dict) or any(
+        key not in {"plan", "integrate", "code_review", "final_approval"}
+        or not isinstance(label, str)
+        or not label.strip()
+        or len(label) > 150
+        for key, label in labels.items()
+    ):
+        raise ValidationError("The workflow has invalid stage labels.")
     return profile
 
 
 def snapshot_for(work_type):
     work_type = type(work_type).objects.select_related("assigned_workflow").get(pk=work_type.pk)
     workflow = work_type.assigned_workflow
+    if workflow.definition_version != 1:
+        raise ValidationError("Unsupported workflow definition version.")
     profile = validate_profile(deepcopy(workflow.execution_profile))
     return {
         **profile,

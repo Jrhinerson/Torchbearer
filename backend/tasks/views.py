@@ -42,6 +42,7 @@ class RoutingView(LocalView):
 
 
 class OperationsView(LocalView):
+    @transaction.atomic
     def get(self, request):
         from .operations import overview
 
@@ -56,6 +57,7 @@ class ActivityView(LocalView):
 
 
 class TaskFlowView(LocalView):
+    @transaction.atomic
     def get(self, request, pk):
         from .operations import flow
 
