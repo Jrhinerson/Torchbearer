@@ -91,8 +91,9 @@ export default function WorkflowsPage() {
         )}
       </header>
       <p className="workflows-scope">
-        Manage application-wide defaults for each work type. Task creation and
-        execution do not use these assignments yet.
+        Manage defaults for each work type. New selections use the saved
+        assignment; existing tasks keep their workflow snapshot. Refresh an
+        unstarted task's workflow explicitly to adopt a changed default.
       </p>
       <div className="workflows-tabs" role="tablist" aria-label="Workflows">
         {['assignments', 'map'].map((tab) => (

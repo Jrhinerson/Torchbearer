@@ -46,7 +46,8 @@ def test_reseeding_and_rollback_preserve_user_edits(catalogue):
 def test_graph_upgrade_and_untouched_seed_rollback_preserve_assignments():
     executor = MigrationExecutor(connection)
     latest = executor.loader.graph.leaf_nodes()
-    before = [node for node in latest if node[0] != "workflows"]
+    before = [node for node in latest if node[0] not in {"workflows", "tasks"}]
+    before.append(("tasks", "0011_support_actions"))
     before.append(("workflows", "0003_consolidate_workflows"))
     try:
         executor.migrate(before)

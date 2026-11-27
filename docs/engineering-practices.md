@@ -58,7 +58,8 @@ performance improvement, threat and abuse-case analysis, upgrade compatibility a
 controlled operational rollout, risk-based test coverage, and incident stabilization and
 prevention. These differences are useful instructions within shared Kanban stages.
 
-These catalogue definitions are not yet consumed by task execution. The embedded stage
+Task execution snapshots the selected work type's built-in profile. Editable DAGs
+describe catalogue requirements without changing those execution procedures. The embedded stage
 practices above remain the execution behavior; this consolidation adds no task-level modifiers,
 new board columns, or changes to approval rules.
 

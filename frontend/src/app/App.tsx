@@ -4,11 +4,14 @@ import { locationChanged, navigateTo } from '../lib/navigation'
 import Board from '../features/tasks/Board'
 import WorkflowsPage from '../features/workflows/WorkflowsPage'
 import SettingsPage from '../features/settings/SettingsPage'
+import { AgentActivity } from '../features/tasks/OperationsContext'
+import { OperationsSummaryContext } from '../features/tasks/operationsSummary'
+import type { OperationsOverview } from '../features/tasks/api'
 
 const pages = [
   {
     href: '/',
-    label: 'Kanban',
+    label: 'Operations',
     Component: Board,
     icon: <path d="M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z" />,
   },
@@ -38,6 +41,7 @@ const pages = [
 ]
 
 export default function App() {
+  const [summary, setSummary] = useState<OperationsOverview | null>(null)
   const [pathname, setPathname] = useState(() => window.location.pathname)
   const main = useRef<HTMLElement>(null)
   const previousPath = useRef(pathname)
@@ -81,71 +85,77 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <a
-          href="/"
-          className="brand"
-          aria-label="Torchbearer home"
-          onClick={navigate}
-        >
-          <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" focusable="false">
-              <path d="M12.4 1.5c.5 3.2-3.6 4.2-3.6 6.8 0 1 .4 1.7 1 2.2-.1-2 1.2-2.9 2.5-4.1-.2 2.4 2.7 2.9 2.7 5.1 0 1.8-1.3 3-3 3-3.3 0-5.5-2-5.5-5.1 0-3.2 3.8-4.5 5.9-7.9Z" />
-              <path d="M6.5 15h11l-2.7 4.1h-1.3v3.4h-3v-3.4H9.2L6.5 15Z" />
-            </svg>
-          </span>
-          Torchbearer
-        </a>
-      </header>
-      <div className="app-layout">
-        <aside className="app-sidebar">
-          <nav className="app-nav" aria-label="Main navigation">
-            {pages.map((item) => (
-              <a
-                key={item.href}
-                href={item.href}
-                className="nav-link"
-                aria-current={page === item ? 'page' : undefined}
-                onClick={navigate}
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                  focusable="false"
-                >
-                  {item.icon}
-                </svg>
-                <span>{item.label}</span>
-              </a>
-            ))}
-          </nav>
-        </aside>
-        <div className="app-content">
-          <main
-            ref={main}
-            tabIndex={-1}
-            aria-label={page?.label ?? 'Page not found'}
+    <OperationsSummaryContext.Provider value={setSummary}>
+      <div className="app-shell">
+        <header className="app-header">
+          <a
+            href="/"
+            className="brand"
+            aria-label="Torchbearer home"
+            onClick={navigate}
           >
-            {Page ? (
-              <Page />
-            ) : (
-              <section className="placeholder-page">
-                <h1>Page not found</h1>
-                <p>Choose a page from the navigation to continue.</p>
-              </section>
-            )}
-          </main>
-          <footer className="app-footer">
-            <span>Psalm 119:105</span>
-          </footer>
+            <span className="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 24 24" focusable="false">
+                <path d="M12.4 1.5c.5 3.2-3.6 4.2-3.6 6.8 0 1 .4 1.7 1 2.2-.1-2 1.2-2.9 2.5-4.1-.2 2.4 2.7 2.9 2.7 5.1 0 1.8-1.3 3-3 3-3.3 0-5.5-2-5.5-5.1 0-3.2 3.8-4.5 5.9-7.9Z" />
+                <path d="M6.5 15h11l-2.7 4.1h-1.3v3.4h-3v-3.4H9.2L6.5 15Z" />
+              </svg>
+            </span>
+            Torchbearer
+          </a>
+        </header>
+        <div
+          className="app-layout"
+          data-page={page?.href === '/' ? 'operations' : undefined}
+        >
+          <aside className="app-sidebar">
+            <nav className="app-nav" aria-label="Main navigation">
+              {pages.map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className="nav-link"
+                  aria-current={page === item ? 'page' : undefined}
+                  onClick={navigate}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                    focusable="false"
+                  >
+                    {item.icon}
+                  </svg>
+                  <span>{item.label}</span>
+                </a>
+              ))}
+            </nav>
+            {page?.href === '/' && <AgentActivity summary={summary} />}
+          </aside>
+          <div className="app-content">
+            <main
+              ref={main}
+              tabIndex={-1}
+              aria-label={page?.label ?? 'Page not found'}
+            >
+              {Page ? (
+                <Page />
+              ) : (
+                <section className="placeholder-page">
+                  <h1>Page not found</h1>
+                  <p>Choose a page from the navigation to continue.</p>
+                </section>
+              )}
+            </main>
+            <footer className="app-footer">
+              <span>Psalm 119:105</span>
+            </footer>
+          </div>
         </div>
       </div>
-    </div>
+    </OperationsSummaryContext.Provider>
   )
 }

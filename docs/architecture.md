@@ -5,7 +5,7 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 ## Boundaries
 
 - `frontend/src/app/`: application shell, theme-color synchronization, and layered shared styling. See the [styling system](styling.md) for font, token, and control conventions.
-- `frontend/src/features/tasks/`: five-column board, task-creation popup, and task-specific API operations.
+- `frontend/src/features/tasks/`: Operations board, selected flow/conversation/changes workspace, evidence inspector, activity feed, and task-specific API operations.
 - `frontend/src/features/projects/`: searchable project selection, local-folder browser, cloning and project management inside task creation.
 - `frontend/src/features/settings/`: account Connections, GitHub browser authorization handoff, and pending-login polling.
 - `frontend/src/features/workflows/`: searchable work-type assignments and a lazy-loaded DAG viewer/editor with node requirements, ordered steps, and revision conflict recovery.
@@ -19,17 +19,46 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 
 During development, Vite serves `http://127.0.0.1:5173` and forwards `/api/` to Django at `127.0.0.1:8000`. Both bind to loopback. Frontend code uses relative API URLs so a later desktop wrapper can reuse the interface and local service boundary.
 
-The board presents Backlog, Plan, Integrate, Code Review, and Final Approval in that order. The New Task button opens a native modal with draft retention, saved-project selection, and task routing. Frontier defaults to Codex, with Claude Code also available; Hybrid uses the frontier agent for Plan and Code Review and Pi for Integrate; Local Only uses Pi throughout. Routing is editable until the first agent action. Backlog and Final Approval remain human-controlled, with optional read-only refinement and post-approval retrospective runs that do not advance columns. Cards show execution state and open a review dialog containing results, logs, code changes, human decisions, and approval/rework controls. The board and review poll every two seconds without overlapping requests; failed polls preserve the last known state and retry. Accessible labels stay inside positioned column containers to prevent narrow-screen overflow.
+The Operations board derives Backlog, Active, Needs you, and Done from persisted tasks, attempts, and worker status without changing execution-stage identifiers. A shared backend projection supplies cards, filtered counts, and agent activity. New Task retains its native modal and draft retention, adding work-type selection and workflow preview. Frontier defaults to Codex; Hybrid uses the frontier agent for Plan and Code Review and Pi for Integrate; Local Only uses Pi throughout. Routing and workflow snapshots lock at the first agent action.
+
+Selecting a started task opens an embedded workspace with Flow, Conversation, Changes, and an evidence inspector. Focus mode expands the same mounted native dialog and conversation, preserving drafts. Flow renders procedure steps, human gates, planned paths, and recorded rework; procedure completion comes from result evidence, not inferred internal agent activity. Historical evidence stays inspectable, while approvals require the current revision, latest run, valid result, and workspace fingerprint. The board polls every two seconds without overlapping requests; selected detail refreshes from that poll and uses abort/version guards against stale responses. Failed polls retain the last known state.
+
+The Activity view combines persisted queued, started, finished, and human decision events in a bounded SQL union. Signed cursors encode a snapshot cutoff and a total ordering of timestamp, event kind, and source ID. Search/project filters match the board, and selecting an activity event opens its task and source attempt. The worker still executes one attempt at a time.
 
 Task cards contain read-only task context and workflow actions. Clicking an unstarted Backlog task's title opens its routing and repository settings in a native dialog; titles on started tasks open the review dialog. Legacy tasks that still need an initial routing choice configure it inside that review dialog. Routing fields and repository selection/registration controls are kept off the cards, and dismissing settings returns keyboard focus to the task title.
 
-Each card has an independent expand/collapse button with `aria-expanded` and `aria-controls`. Cards start collapsed on page load or reload, including newly created cards. Collapsing keeps the title and project visible (or “No project” when unassigned) and hides the description, routing summary, workflow actions, footer, and errors. Hidden details remain mounted so pending operations and their state are retained. The board tracks expanded task IDs in page-session state independently of fetched task data, preserving manual expansion during polling and column transitions; a page reload starts with an empty set again.
+Each card has an independent expand/collapse button with `aria-expanded` and `aria-controls`. Cards start collapsed, retaining the title, project, workflow, current stage, attention reason, agent, and expected route. Descriptions, routing details, actions, footer, and errors expand on demand. Hidden details remain mounted to retain pending state. Expansion survives polling and group transitions; a page reload collapses cards again. On phones, Operations moves navigation above the content and stacks board groups vertically. The inspector stacks below the flow on narrower screens.
 
 ## API contract
+
+Selected flow requests support `ETag` / `If-None-Match` and return 304 without
+loading and serializing full history when unchanged. The token covers task revision,
+project/snapshot metadata, the latest attempt state, bounded latest log content,
+and worker availability. Heartbeat timestamps do not invalidate it. History-changing
+services must increment the task revision; historical attempts remain immutable.
+The client retains evidence and drafts across 304 responses and retries failed polls.
+
+`GET /api/v1/tasks/<uuid>/workspace/?fingerprint=1` checks current workspace validity
+without constructing a diff. These checks continue on settled-task polls, including
+when flow data is unchanged, so external edits still disable approval. Full previews
+load when Conversation or Changes is opened and are reused only while the fingerprint
+matches. The action service independently checks the fingerprint at approval time.
+
+The inspector uses recorded action descriptors for retry, support-stage recovery,
+and cancellation. It displays source error/details and focuses the existing composer
+for answers or revisions. Historical attempts do not expose current mutation controls.
+
+The optional demo launcher seeds 40 deterministic fictional tasks into a fresh
+temporary database. `TORCHBEARER_DEMO=1` requires a separate data directory, middleware
+rejects API mutations, and worker construction refuses execution. The launcher starts
+no worker. Demo workspace previews are synthetic and labeled as demo evidence.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
 | GET | `/api/v1/health/` | Service health, independent of task data. |
+| GET | `/api/v1/operations/` | Consistent filtered task projection, counts, agent activity, worker status, and observation time. |
+| GET | `/api/v1/operations/activity/` | Filtered lifecycle and human-decision events with signed cursor pagination. |
+| GET | `/api/v1/tasks/<uuid>/flow/` | Task snapshot, procedure/gate nodes, paths, source attempts, decisions, and action descriptors at the current revision. |
 | GET | `/api/v1/csrf/` | CSRF token and corresponding cookie for the local browser. |
 | GET | `/api/v1/tasks/` | All tasks, newest first. |
 | POST | `/api/v1/tasks/` | Validate and create a backlog task. |
@@ -81,16 +110,24 @@ Migration `0003_consolidate_workflows` folds `docs-as-code` into `plan-execute`,
 
 Assignment PATCH accepts only `assigned_workflow` and `revision`. A conditional update increments the revision atomically; stale requests return 409 without changing the saved assignment. Unknown workflow keys return 400 and missing work types return 404. Writes require the same CSRF bootstrap as task and project changes. The client keeps unsaved selections during filtering, failed saves, and conflict recovery; reloading a conflicting assignment updates the saved value and revision while preserving the draft for explicit review and saving.
 
-These records configure application-wide catalogue defaults. Tasks currently have no work-type reference and the execution engine does not consume these definitions; task routing, stage transitions, approval rules, and historical reports remain independent. The management page states this scope explicitly.
+`WorkflowDefinition` stores a definition version and validated execution profile. New UI tasks select a protected work-type reference and atomically snapshot the assigned definition, procedures, outputs, validation, and work-type identity. Unstarted tasks can change type or explicitly refresh the snapshot through a revision-checked update. Catalogue assignment changes affect future selections and refreshes only. Existing tasks receive frozen legacy snapshots without changing their stages, attempts, or decisions; older API clients omitting work type keep the legacy contract.
+
+Profiles describe procedures within Plan, Integrate, and Code Review; they do not create a separate agent process per step. The shared execution policy determines write, shell, and command-evidence requirements across prompts, adapter permissions, validation, and worker fingerprint checks. Profiled results add bounded `workflow_steps` and `artifacts` to the existing result envelope for Codex, Claude Code, and Pi. Reports reject unknown/duplicate steps, wrong-stage evidence, missing required steps, invalid command references, and unsupported contracts.
+
+Discovery uses a read-only investigation in the Integrate stage and independent decision review in Code Review. Its artifact contains the question, sourced findings, alternatives/tradeoffs, recommendation, and limitations. It requires human approval at the same stage boundaries and explicit final acceptance, with no passing-shell-command requirement. Code-change profiles retain implementation validation requirements. Legacy results remain readable without inventing procedure evidence.
 
 `WorkflowDefinition` also stores nullable graph JSON, an independent graph revision,
 and its update timestamp. Migration `0005_plan_execute_graph` authors only Plan and
 execute; other maps are intentionally absent until individually reviewed. Its seed
 only populates an unmapped row, and its reverse clears only the untouched initial
-revision. A graph is authoritative when present: the list serializer projects its
+revision. A graph is authoritative for the map and catalogue display when present: the list serializer projects its
 topologically ordered descriptions, outputs, validation checks, and approval points,
 including conditional applicability, into the legacy catalogue fields. Persisted
-flat lists remain the fallback for unmapped workflows, not a second editable source.
+flat lists remain the fallback for unmapped workflows. Task snapshots continue to
+freeze the built-in execution profile and its associated instructions, checks, and
+outputs; map edits do not rewrite execution procedures or existing snapshots.
+Migration `0006_merge_graph_and_profiles` joins the independent graph and profile
+migration histories without additional data writes.
 
 The graph contract is independent of React Flow: schema version, declared entry,
 stable node/requirement/edge IDs, node descriptions and outputs, typed requirement

@@ -10,6 +10,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 from common import PYTHON, ROOT, require_environment, run
 from dev import stop_process
@@ -42,6 +43,27 @@ def main():
     )
     with tempfile.TemporaryDirectory(prefix="torchbearer-restart-") as data_dir:
         env = {**os.environ, "TORCHBEARER_DATA_DIR": data_dir}
+        repository = Path(data_dir) / "fixture repository"
+        repository.mkdir()
+        (repository / "README.md").write_text("Persistence fixture\n", encoding="utf-8")
+        for arguments in [
+            ["init", "-b", "main"],
+            ["add", "README.md"],
+            [
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                "Fixture",
+            ],
+        ]:
+            subprocess.run(["git", *arguments], cwd=repository, check=True, capture_output=True)
+        for agent in ["codex", "claude", "pi"]:
+            env[f"TORCHBEARER_{agent.upper()}_COMMAND"] = json.dumps(
+                [str(PYTHON), str(ROOT / "backend/tasks/fixtures/fake_cli.py"), agent, "implement"]
+            )
         run([str(PYTHON), "backend/manage.py", "migrate", "--noinput"], env=env)
         opener = urllib.request.build_opener(
             urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
@@ -70,7 +92,7 @@ def main():
                 token = json.load(response)["csrfToken"]
             project_request = urllib.request.Request(
                 f"{url}/api/v1/projects/",
-                data=json.dumps({"name": "Persistent project", "path": str(ROOT)}).encode(),
+                data=json.dumps({"name": "Persistent project", "path": str(repository)}).encode(),
                 headers={"Content-Type": "application/json", "X-CSRFToken": token},
                 method="POST",
             )
@@ -85,6 +107,7 @@ def main():
                         "routing_mode": "hybrid",
                         "frontier_agent": "claude",
                         "project_id": project["id"],
+                        "work_type": "bug",
                     }
                 ).encode(),
                 headers={"Content-Type": "application/json", "X-CSRFToken": token},
@@ -124,6 +147,58 @@ def main():
             with opener.open(graph_request, timeout=3) as response:
                 assert response.status == 200
                 saved_graph = json.load(response)
+
+            def post(endpoint, payload):
+                request = urllib.request.Request(
+                    f"{url}/api/v1/{endpoint}",
+                    data=json.dumps(payload).encode(),
+                    headers={"Content-Type": "application/json", "X-CSRFToken": token},
+                    method="POST",
+                )
+                with opener.open(request, timeout=5) as response:
+                    return json.load(response)
+
+            discovery = post(
+                "tasks/",
+                {
+                    "title": "Persist an accepted decision",
+                    "project_id": project["id"],
+                    "work_type": "research",
+                },
+            )
+            post(
+                f"tasks/{discovery['id']}/actions/",
+                {"action": "start", "revision": discovery["revision"]},
+            )
+            for _ in range(3):
+                run([str(PYTHON), "backend/manage.py", "runagentworker", "--once"], env=env)
+                with opener.open(f"{url}/api/v1/tasks/{discovery['id']}/", timeout=5) as response:
+                    discovery = json.load(response)
+                with opener.open(
+                    f"{url}/api/v1/tasks/{discovery['id']}/runs/", timeout=5
+                ) as response:
+                    history = json.load(response)
+                attempt = history["runs"][0]
+                assert attempt["state"] == "succeeded", attempt["error"]
+                discovery = post(
+                    f"tasks/{discovery['id']}/actions/",
+                    {
+                        "action": "approve",
+                        "revision": discovery["revision"],
+                        "run_id": attempt["id"],
+                        "fingerprint": attempt["review_fingerprint"],
+                    },
+                )
+            discovery = post(
+                f"tasks/{discovery['id']}/actions/",
+                {
+                    "action": "final_approve",
+                    "revision": discovery["revision"],
+                    "run_id": attempt["id"],
+                    "fingerprint": attempt["review_fingerprint"],
+                },
+            )
+            accepted_history = history
         finally:
             stop_process(process)
 
@@ -131,11 +206,25 @@ def main():
         try:
             with opener.open(f"{url}/api/v1/tasks/", timeout=3) as response:
                 tasks = json.load(response)
-            assert len(tasks) == 1
+            assert len(tasks) == 2
+            restored_discovery = next(task for task in tasks if task["id"] == discovery["id"])
+            assert restored_discovery["completed_at"] == discovery["completed_at"]
+            assert restored_discovery["workflow_snapshot"] == discovery["workflow_snapshot"]
+            with opener.open(f"{url}/api/v1/tasks/{discovery['id']}/runs/", timeout=5) as response:
+                restored_history = json.load(response)
+            assert restored_history["runs"] == accepted_history["runs"]
+            assert restored_history["runs"][1]["result"]["artifacts"]["decision"]["options"]
+            assert restored_history["runs"][1]["result"]["workflow_steps"]
+            assert any(
+                decision["action"] == "final_approve" for decision in restored_history["decisions"]
+            )
+            tasks = [task for task in tasks if task["id"] == saved["id"]]
             assert tasks[0]["id"] == saved["id"]
             assert tasks[0]["title"] == saved["title"]
             assert tasks[0]["routing_mode"] == "hybrid"
             assert tasks[0]["frontier_agent"] == "claude"
+            assert tasks[0]["workflow_snapshot"] == saved["workflow_snapshot"]
+            assert tasks[0]["workflow_snapshot"]["key"] == "diagnose-regression"
             assert tasks[0]["stage_agents"] == {
                 "plan": "claude",
                 "integrate": "pi",
@@ -155,7 +244,10 @@ def main():
                 assert json.load(response) == saved_graph
         finally:
             stop_process(process)
-    print("PASS: SQLite retained tasks, projects, assignments, and edited DAGs across a restart.")
+    print(
+        "PASS: SQLite retained tasks, snapshots, step evidence, accepted decisions, projects, "
+        "workflow defaults, and edited DAGs across a backend restart."
+    )
 
 
 if __name__ == "__main__":

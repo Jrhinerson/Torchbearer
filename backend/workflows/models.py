@@ -13,6 +13,8 @@ class WorkflowDefinition(models.Model):
     graph_revision = models.PositiveIntegerField(default=0)
     graph_updated_at = models.DateTimeField(null=True, blank=True)
     display_order = models.PositiveSmallIntegerField()
+    definition_version = models.PositiveIntegerField(default=1)
+    execution_profile = models.JSONField(default=dict)
 
     class Meta:
         ordering = ["display_order", "key"]

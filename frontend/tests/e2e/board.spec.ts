@@ -11,25 +11,23 @@ async function openComposer(page: Page) {
   return dialog
 }
 
-test('shows five workflow columns and creates a task through the popup', async ({
+test('shows four operations groups and creates a task through the popup', async ({
   page,
 }, testInfo) => {
   const title = `Define acceptance criteria ${Date.now()}`
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 2 })).toHaveText([
-    'Backlog',
-    'Plan',
-    'Integrate',
-    'Code Review',
-    'Final Approval',
-  ])
+  await expect(
+    page
+      .getByRole('region', { name: 'Operations columns' })
+      .getByRole('heading', { level: 2 }),
+  ).toHaveText(['Backlog', 'Active', 'Needs you', 'Done'])
   await expect(
     page.getByRole('heading', { name: 'Build with intention.' }),
   ).toHaveCount(0)
   await expect(page.getByRole('dialog')).not.toBeVisible()
   const backlog = page.getByRole('region', { name: 'Backlog', exact: true })
   await expect(
-    backlog.getByRole('button', { name: 'New Task', exact: true }),
+    page.getByRole('button', { name: 'New Task', exact: true }),
   ).toBeVisible()
   const dialog = await openComposer(page)
   await dialog.getByLabel('Title', { exact: false }).fill(title)
@@ -134,7 +132,7 @@ for (const width of [1280, 390]) {
 
     const refreshed = page.waitForResponse(
       (response) =>
-        response.url().endsWith('/api/v1/tasks/') &&
+        response.url().includes('/api/v1/operations/?') &&
         response.request().method() === 'GET',
     )
     await card
@@ -196,7 +194,7 @@ for (const width of [1280, 390]) {
     ).toBeVisible()
     const expandedRefresh = page.waitForResponse(
       (response) =>
-        response.url().endsWith('/api/v1/tasks/') &&
+        response.url().includes('/api/v1/operations/?') &&
         response.request().method() === 'GET',
     )
     await expandedRefresh
@@ -237,7 +235,7 @@ test('preserves the popup and draft when creation fails', async ({ page }) => {
 })
 
 test('recovers from a failed initial connection', async ({ page }) => {
-  await page.route('**/api/v1/tasks/', (route) => route.abort('failed'))
+  await page.route('**/api/v1/operations/?**', (route) => route.abort('failed'))
   await page.goto('/')
   await expect(page.getByRole('alert')).toContainText(
     'Could not reach the local service',
@@ -245,7 +243,7 @@ test('recovers from a failed initial connection', async ({ page }) => {
   await expect(
     page.getByRole('button', { name: 'New Task', exact: true }),
   ).toBeDisabled()
-  await page.unroute('**/api/v1/tasks/')
+  await page.unroute('**/api/v1/operations/?**')
   await page.getByRole('button', { name: 'Try again' }).click()
   await expect(
     page.getByRole('button', { name: 'New Task', exact: true }),
@@ -277,17 +275,17 @@ test('fits the popup and scrolls board columns on a narrow screen', async ({
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true)
-  const scrollRegion = page.getByRole('region', { name: 'Kanban columns' })
+  const scrollRegion = page.getByRole('region', { name: 'Operations columns' })
   expect(
     await scrollRegion.evaluate(
       (element) => element.scrollWidth > element.clientWidth,
     ),
-  ).toBe(true)
+  ).toBe(false)
   await page
-    .getByRole('heading', { name: 'Final Approval', exact: true })
+    .getByRole('heading', { name: 'Done', exact: true })
     .scrollIntoViewIfNeeded()
   await expect(
-    page.getByRole('heading', { name: 'Final Approval', exact: true }),
+    page.getByRole('heading', { name: 'Done', exact: true }),
   ).toBeInViewport()
   await page.screenshot({
     path: testInfo.outputPath('board-mobile.png'),

@@ -9,6 +9,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_DIR = BASE_DIR.parent
 DATA_DIR = Path(os.environ.get("TORCHBEARER_DATA_DIR", PROJECT_DIR / ".local")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+DEMO_MODE = os.environ.get("TORCHBEARER_DEMO", "0") == "1"
+if DEMO_MODE and (
+    "TORCHBEARER_DATA_DIR" not in os.environ or DATA_DIR == (PROJECT_DIR / ".local").resolve()
+):
+    raise RuntimeError("Demo mode requires a separate TORCHBEARER_DATA_DIR.")
 TORCHBEARER_RUN_TIMEOUT = max(1, int(os.environ.get("TORCHBEARER_RUN_TIMEOUT", "1800")))
 # Public publisher configuration. Device OAuth never requires an embedded app secret/private key.
 TORCHBEARER_GITHUB_CLIENT_ID = os.environ.get(
@@ -32,6 +37,7 @@ INSTALLED_APPS = [
     "workflows",
 ]
 MIDDLEWARE = [
+    "config.demo.DemoReadOnlyMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",

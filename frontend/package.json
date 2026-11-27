@@ -11,7 +11,8 @@
     "test:e2e": "playwright test",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e:demo": "playwright test --config playwright.demo.config.ts"
   },
   "engines": {
     "node": ">=24"

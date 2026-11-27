@@ -27,6 +27,8 @@ class WorkflowDefinitionSerializer(serializers.ModelSerializer):
             "validation",
             "approval_points",
             "has_graph",
+            "definition_version",
+            "execution_profile",
         ]
 
 

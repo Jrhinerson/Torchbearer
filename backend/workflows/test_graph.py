@@ -146,6 +146,8 @@ def test_graph_detail_and_list_projections(client, catalogue, example_graph):
     assert detail["graph"] == example_graph and detail["revision"] == 4
     summary = client.get(reverse("workflow-list")).json()[0]
     assert summary["has_graph"] and summary["steps"] == ["Complete start.", "Complete finish."]
+    assert summary["definition_version"] == 1
+    assert summary["execution_profile"]["steps"][0]["id"] == "scope"
     assert "graph" not in summary
     assert client.get(reverse("workflow-graph", kwargs={"key": "missing"})).status_code == 404
     unmapped = client.get(reverse("workflow-graph", kwargs={"key": "spec-driven"})).json()

@@ -36,6 +36,8 @@ def test_save_updates_one_definition_and_compatibility_projection(client):
     saved = WorkflowDefinition.objects.get(pk="plan-execute")
     assert saved.graph_updated_at > original.graph_updated_at
     assert saved.steps == original.steps  # Flat storage is only the unmapped fallback.
+    assert saved.execution_profile == original.execution_profile
+    assert saved.definition_version == original.definition_version
     summary = client.get(reverse("workflow-list")).json()[0]
     assert summary["steps"][2] == data["graph"]["nodes"][2]["description"]
     assert list(WorkType.objects.values()) == assignments
