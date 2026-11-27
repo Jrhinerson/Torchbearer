@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listWorkflows, listWorkTypes } from './api'
 import type { WorkflowDefinition, WorkType } from './api'
-import { WorkflowDetails } from './WorkflowDetails'
+import { WorkTypeCard } from './WorkTypeCard'
 
 interface Catalogue {
   workflows: WorkflowDefinition[]
@@ -111,44 +111,26 @@ export default function WorkflowsPage() {
             </p>
           )}
           <ul className="work-types-list" aria-label="Work types">
-            {catalogue.workTypes.map((workType, index) => {
-              const workflow = workflows.get(workType.assigned_workflow)
-              return (
-                <li key={workType.key} hidden={!matches(workType)}>
-                  <article
-                    className="surface work-type-card"
-                    aria-labelledby={`work-type-${workType.key}`}
-                  >
-                    <div className="work-type-main">
-                      <div>
-                        <span className="work-type-number" aria-hidden="true">
-                          {String(index + 1).padStart(2, '0')}
-                        </span>
-                        <h2 id={`work-type-${workType.key}`}>
-                          {workType.name}
-                        </h2>
-                        <p className="work-type-description">
-                          {workType.description}
-                        </p>
-                      </div>
-                      <div className="work-type-assignment">
-                        <span className="field-label">Assigned workflow</span>
-                        <p className="work-type-current">
-                          {workflow?.name ?? 'Workflow unavailable'}
-                        </p>
-                        <span className="badge">
-                          {workType.assigned_workflow ===
-                          workType.recommended_workflow
-                            ? 'Recommended'
-                            : 'Custom assignment'}
-                        </span>
-                      </div>
-                    </div>
-                    {workflow && <WorkflowDetails workflow={workflow} />}
-                  </article>
-                </li>
-              )
-            })}
+            {catalogue.workTypes.map((workType, index) => (
+              <li key={workType.key} hidden={!matches(workType)}>
+                <WorkTypeCard
+                  workType={workType}
+                  index={index}
+                  workflows={catalogue.workflows}
+                  onUpdate={(updated) =>
+                    setCatalogue(
+                      (current) =>
+                        current && {
+                          ...current,
+                          workTypes: current.workTypes.map((item) =>
+                            item.key === updated.key ? updated : item,
+                          ),
+                        },
+                    )
+                  }
+                />
+              </li>
+            ))}
           </ul>
         </>
       )}

@@ -7,10 +7,12 @@ Torchbearer runs on one developer's computer. React presents the task backlog, D
 - `frontend/src/app/`: application shell, theme-color synchronization, and layered shared styling. See the [styling system](styling.md) for font, token, and control conventions.
 - `frontend/src/features/tasks/`: five-column board, task-creation popup, and task-specific API operations.
 - `frontend/src/features/projects/`: searchable project selection, local-folder browser, cloning and project management inside task creation.
+- `frontend/src/features/workflows/`: searchable work-type catalogue, workflow details, and saved assignment management.
 - `frontend/src/lib/api.ts`: same-origin requests and useful HTTP/connection errors.
 - `backend/config/`: local settings, routing, health, and CSRF bootstrap.
 - `backend/tasks/`: task models, serializers, views, migrations, and API tests.
 - `backend/projects/`: stored projects, local directory and Git operations, serializers, views, migrations and API tests.
+- `backend/workflows/`: built-in engineering workflow definitions, work types, revision-checked assignments, and catalogue migrations.
 - `scripts/`: setup, process management, verification, and isolated test services.
 
 During development, Vite serves `http://127.0.0.1:5173` and forwards `/api/` to Django at `127.0.0.1:8000`. Both bind to loopback. Frontend code uses relative API URLs so a later desktop wrapper can reuse the interface and local service boundary.
@@ -32,6 +34,9 @@ Each card has an independent expand/collapse button with `aria-expanded` and `ar
 | DELETE | `/api/v1/tasks/<uuid>/` | Delete a backlog task; return 204, 404 if missing, or 409 if already started. |
 | GET/PATCH | `/api/v1/tasks/<uuid>/` | Read a task; revision-checked PATCH of repository and routing in Backlog, or an initial routing choice for an inactive legacy task. |
 | GET | `/api/v1/routing/` | Agent classifications, supported task approaches, and worker availability. |
+| GET | `/api/v1/workflows/` | Ordered built-in workflow definitions, steps, outputs, validation, and approval points. |
+| GET | `/api/v1/work-types/` | Ordered work types with their recommended and assigned workflow keys and revisions. |
+| GET/PATCH | `/api/v1/work-types/<key>/` | Read a work type or change its assigned workflow using its expected revision. |
 | GET/POST | `/api/v1/repositories/` | List or register validated local Git repository roots. |
 | POST | `/api/v1/tasks/<uuid>/actions/` | Apply a revision-checked human transition and queue its run when applicable. |
 | GET | `/api/v1/tasks/<uuid>/runs/` | Attempt results, bounded live logs, and human decision history. |
@@ -58,6 +63,14 @@ Cloning runs Git without a shell, with noninteractive credentials, disabled Git 
 Django REST Framework serializers validate request data. Write requests explicitly use Django CSRF protection even for anonymous requests, and the React client retrieves a token before modifying tasks or projects. Directory browsing also uses a CSRF-protected POST to keep local filesystem listings behind the same verification. The interface displays validation or connection errors and preserves an unsuccessful draft.
 
 Backlog tasks without agent history retain Delete with confirmation and failure recovery. Started tasks retain their workspace and history and cannot be deleted through the API. Repository and routing changes require the expected revision and are atomically limited to Backlog so they cannot race a start action. An unfinished legacy task without routing can make its initial choice outside Backlog only when no attempt is queued or running; subsequent changes are locked.
+
+## Workflow catalogue assignments
+
+The catalogue contains 19 work types and 18 reusable workflow definitions. Stable slug keys identify both. Each work type has protected references to its recommended and assigned workflows, a revision, and an update timestamp. Workflow definitions and work-type metadata are read-only through the API; any catalogue workflow can be assigned to any type. Frozen data migrations add missing records without overwriting existing assignments.
+
+Assignment PATCH accepts only `assigned_workflow` and `revision`. A conditional update increments the revision atomically; stale requests return 409 without changing the saved assignment. Unknown workflow keys return 400 and missing work types return 404. Writes require the same CSRF bootstrap as task and project changes. The client keeps unsaved selections during filtering, failed saves, and conflict recovery; reloading a conflicting assignment updates the saved value and revision while preserving the draft for explicit review and saving.
+
+These records configure application-wide catalogue defaults. Tasks currently have no work-type reference and the execution engine does not consume these definitions; task routing, stage transitions, approval rules, and historical reports remain independent. The management page states this scope explicitly.
 
 ## Workflow and workspaces
 

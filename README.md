@@ -19,7 +19,7 @@ python scripts/dev.py
 
 Open **http://127.0.0.1:5173**. The board has Backlog, Plan, Integrate, Code Review, and Final Approval columns. Click **New Task** inside Backlog to open the creation popup; saved tasks appear in Backlog and remain after a refresh or restart. Cancel, Escape, or the close button dismisses the popup and retains the draft. Use an unstarted backlog card's trash icon and confirm to permanently remove it. Ctrl+C stops all services; Ctrl+Break is also supported on Windows. Start Django and the worker without Vite with `python scripts/dev.py --backend-only`.
 
-Use the left sidebar to navigate between **Kanban** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Kanban is the existing board; Workflows and Settings are placeholder pages for future development. The current page is highlighted, and each URL supports refresh and browser Back/Forward navigation.
+Use the left sidebar to navigate between **Kanban** (`/`), **Workflows** (`/workflows`), and **Settings** (`/settings`). Kanban is the task board, Workflows manages default engineering workflow assignments, and Settings is a placeholder for future development. The current page is highlighted, and each URL supports refresh and browser Back/Forward navigation.
 
 Setup creates `.venv/`, installs the pinned Python requirements and frontend lockfile, and applies migrations without replacing existing data. Startup checks ports and unapplied migrations, then starts Django, the agent worker, and Vite together. After a schema change, rerun setup or apply migrations explicitly. Use `--backend-port` and `--frontend-port` with the launcher when the default ports are occupied; separate app instances also need separate data directories.
 
@@ -47,6 +47,14 @@ Project names default to the folder name. Adding a project selects it while keep
 The backend listens at `127.0.0.1:8000`. Vite forwards `/api/` requests to it; its own port is fixed at `5173`. The service health endpoint is `/api/v1/health/`.
 
 SQLite files, environment files containing secrets, dependency directories, builds, and test artifacts are ignored by Git. Data persists on disk rather than in browser state. To back up backlog records and routing configuration, stop the application and copy `.local/torchbearer.sqlite3`. Started tasks also need their worktrees and the original repositories' Git metadata; back up those together with the database to preserve executable workspaces.
+
+## Workflow assignments
+
+Open **Workflows** to manage application-wide defaults for 19 work types and 18 built-in engineering workflows. Search by work-type name, description, or assigned workflow. Each card shows its saved assignment and recommended workflow; expand **Workflow details** to inspect the selected workflow's steps, expected outputs, validation requirements, and approval points.
+
+Choose any workflow for any work type, inspect the preview, then **Save**. **Cancel** restores the saved selection. **Use recommended workflow** prepares the original recommendation; choose **Save** to apply it. Assignments persist in SQLite across refreshes and backend restarts. Failed saves retain the selection for retry. If another tab changed an assignment, **Reload assignment** retrieves the latest saved value while keeping the chosen selection for review before saving again.
+
+This page manages catalogue assignments. Task creation and agent execution do not use these defaults yet; the existing task stages, routing, and history continue to operate independently. Workflow definitions are inspectable built-ins; their steps are not editable through this page. Catalogue migrations add missing entries without overwriting saved assignments.
 
 ## Agent routing
 

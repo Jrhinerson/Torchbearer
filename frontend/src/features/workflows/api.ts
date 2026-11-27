@@ -27,3 +27,22 @@ export function listWorkflows(signal?: AbortSignal) {
 export function listWorkTypes(signal?: AbortSignal) {
   return requestJson<WorkType[]>('work-types/', { signal })
 }
+
+export function getWorkType(key: string) {
+  return requestJson<WorkType>(`work-types/${encodeURIComponent(key)}/`)
+}
+
+export async function saveAssignment(workType: WorkType, workflow: string) {
+  const { csrfToken } = await requestJson<{ csrfToken: string }>('csrf/')
+  return requestJson<WorkType>(
+    `work-types/${encodeURIComponent(workType.key)}/`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+      body: JSON.stringify({
+        assigned_workflow: workflow,
+        revision: workType.revision,
+      }),
+    },
+  )
+}

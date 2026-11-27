@@ -1323,6 +1323,7 @@ main {
 @media (max-width: 47.5rem) {
   .app-sidebar {
     flex-basis: 6rem;
+    max-width: 30vw;
     padding-inline: var(--space-1);
   }
   .nav-link {
