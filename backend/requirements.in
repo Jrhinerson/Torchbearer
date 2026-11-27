@@ -1,6 +1,7 @@
 # Update deliberately, then regenerate requirements.txt with pip freeze in a clean venv.
 Django>=5.2.8,<5.3
 djangorestframework>=3.16,<4
+keyring>=25.7,<26
 pytest>=8,<10
 pytest-django>=4.11,<5
 ruff>=0.14,<1

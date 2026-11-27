@@ -3,11 +3,17 @@
 import os
 from pathlib import Path
 
+from .github_app import GITHUB_CLIENT_ID
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROJECT_DIR = BASE_DIR.parent
 DATA_DIR = Path(os.environ.get("TORCHBEARER_DATA_DIR", PROJECT_DIR / ".local")).resolve()
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 TORCHBEARER_RUN_TIMEOUT = max(1, int(os.environ.get("TORCHBEARER_RUN_TIMEOUT", "1800")))
+# Public publisher configuration. Device OAuth never requires an embedded app secret/private key.
+TORCHBEARER_GITHUB_CLIENT_ID = os.environ.get(
+    "TORCHBEARER_GITHUB_CLIENT_ID", GITHUB_CLIENT_ID
+).strip()
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "torchbearer-local-development-key-only")
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
