@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow map concept screenshots</title>
+<style>
+:root { color-scheme: light dark; font-family: var(--font-sans, system-ui, sans-serif); }
+html, body { margin: 0; background: transparent; color: var(--foreground, CanvasText); }
+main { min-width: 0; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+button { min-height: 40px; padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer; border: 1px solid var(--border, ButtonBorder); border-radius: var(--radius, 8px); color: var(--secondary-foreground, ButtonText); background: var(--secondary, ButtonFace); }
+button[aria-selected="true"] { background: var(--primary, Highlight); color: var(--primary-foreground, HighlightText); border-color: var(--primary, Highlight); }
+button:focus-visible { outline: 2px solid var(--ring, Highlight); outline-offset: 3px; }
+figure { margin: 0; }
+figure[hidden] { display: none; }
+img { display: block; width: 100%; height: auto; border-radius: var(--radius, 8px); }
+figcaption { margin-top: 10px; font-size: 13px; line-height: 1.5; color: var(--muted-foreground, GrayText); }
+</style>
+</head>
+<body>
+<main aria-label="Generated workflow map concept screenshots">
+<div class="tabs" role="tablist" aria-label="Screenshot view">
+<button id="tab-overview" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0" data-panel="panel-overview">1. Overview</button>
+<button id="tab-requirements" role="tab" aria-selected="false" aria-controls="panel-requirements" tabindex="-1" data-panel="panel-requirements">2. Node requirements</button>
+<button id="tab-edit" role="tab" aria-selected="false" aria-controls="panel-edit" tabindex="-1" data-panel="panel-edit">3. Edit workflow</button>
+</div>
+<figure id="panel-overview" role="tabpanel" aria-labelledby="tab-overview" tabindex="0">
+<img src="./01-overview.png" width="1568" height="1003" alt="Generated overview of the Torchbearer Workflow map tab, showing the four Plan and execute nodes with forward transitions, requirements, expected outputs and human approvals.">
+<figcaption>Concept 1: one selected DAG, with requirements on each node and conditions on the arrows.</figcaption>
+</figure>
+<figure id="panel-requirements" role="tabpanel" aria-labelledby="tab-requirements" tabindex="0" hidden>
+<img src="./02-node-requirements.png" width="1568" height="1003" alt="Generated workflow map with Validate selected and a right-side inspector showing relevant checks, evidence, conditional documentation verification and the next transition.">
+<figcaption>Concept 2: selecting a node reveals its full requirements, applicable checks, expected output and next step.</figcaption>
+</figure>
+<figure id="panel-edit" role="tabpanel" aria-labelledby="tab-edit" tabindex="0" hidden>
+<img src="./03-edit-workflow.png" width="1568" height="1003" alt="Generated edit mode showing the Validate node's title, description, requirement forms and transition label, with Save workflow and Cancel actions.">
+<figcaption>Concept 3: edit one DAG in a local draft, then save or cancel the changes.</figcaption>
+</figure>
+</main>
+<script>
+const tabs = [...document.querySelectorAll('[role="tab"]')];
+function selectTab(tab, moveFocus = false) {
+  tabs.forEach(item => {
+    const selected = item === tab;
+    item.setAttribute('aria-selected', String(selected));
+    item.tabIndex = selected ? 0 : -1;
+    document.getElementById(item.dataset.panel).hidden = !selected;
+  });
+  if (moveFocus) tab.focus();
+}
+tabs.forEach((tab, index) => {
+  tab.addEventListener('click', () => selectTab(tab));
+  tab.addEventListener('keydown', event => {
+    let next;
+    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+    if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = tabs.length - 1;
+    if (next === undefined) return;
+    event.preventDefault();
+    selectTab(tabs[next], true);
+  });
+});
+</script>
+</body>
+</html>
